@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GuardianGrid — ANPR Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#080c10; --surface:#0e1419; --surface2:#151c24;
+    --border:rgba(255,255,255,0.07);
+    --accent:#00e5a0; --accent2:#0097ff;
+    --entry:#00e5a0; --exit:#ff4757;
+    --warn:#ffb800; --text:#e8edf2; --muted:#5a6a7a;
+    --mono:'Space Mono',monospace; --sans:'DM Sans',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;overflow-x:hidden;}
+  body::before{content:'';position:fixed;inset:0;z-index:0;
+    background-image:linear-gradient(rgba(0,229,160,0.03) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,229,160,0.03) 1px,transparent 1px);
+    background-size:40px 40px;pointer-events:none;}
+  .shell{position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:0 24px 60px;}
+
+  header{display:flex;align-items:center;justify-content:space-between;padding:28px 0 32px;border-bottom:1px solid var(--border);margin-bottom:32px;}
+  .logo{display:flex;align-items:center;gap:14px;}
+  .logo-icon{width:40px;height:40px;border:1.5px solid var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;}
+  .logo-icon svg{width:22px;height:22px;stroke:var(--accent);fill:none;stroke-width:2;}
+  .logo-text{font-family:var(--mono);font-size:15px;font-weight:700;letter-spacing:0.08em;}
+  .logo-sub{font-size:11px;color:var(--muted);letter-spacing:0.12em;text-transform:uppercase;margin-top:2px;}
+  .live-badge{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;color:var(--accent);border:1px solid rgba(0,229,160,0.25);padding:6px 14px;border-radius:20px;}
+  .live-dot{width:7px;height:7px;background:var(--accent);border-radius:50%;animation:pulse 1.5s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.4;transform:scale(0.8)}}
+
+  /* Upload bars */
+  .upload-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:32px;}
+  .upload-bar{background:var(--surface);border:1.5px dashed rgba(0,229,160,0.2);border-radius:12px;padding:16px 20px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:border-color 0.2s,background 0.2s;}
+  .upload-bar:hover{border-color:rgba(0,229,160,0.5);background:var(--surface2);}
+  .upload-bar svg{width:20px;height:20px;stroke:var(--accent);fill:none;stroke-width:2;flex-shrink:0;}
+  .upload-bar-text{font-size:13px;color:var(--muted);}
+  .upload-bar-text strong{color:var(--accent);font-weight:500;}
+  .upload-bar input{display:none;}
+  .upload-filename{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;}
+
+  /* Stats */
+  .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:28px;}
+  .stat{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px;position:relative;overflow:hidden;}
+  .stat::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
+  .stat.green::after{background:var(--entry);}
+  .stat.red::after{background:var(--exit);}
+  .stat.blue::after{background:var(--accent2);}
+  .stat.yellow::after{background:var(--warn);}
+  .stat.purple::after{background:#b36eff;}
+  .stat-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;}
+  .stat-value{font-family:var(--mono);font-size:26px;font-weight:700;line-height:1;}
+  .stat-sub{font-size:11px;color:var(--muted);margin-top:5px;}
+
+  /* Tabs */
+  .tabs{display:flex;gap:4px;margin-bottom:20px;border-bottom:1px solid var(--border);padding-bottom:0;}
+  .tab{padding:10px 20px;font-size:13px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;transition:color 0.15s,border-color 0.15s;}
+  .tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+
+  /* Table card */
+  .table-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;}
+  .table-header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);}
+  .table-title{font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);}
+  .search-box{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:13px;color:var(--text);font-family:var(--sans);width:200px;outline:none;}
+  .search-box:focus{border-color:rgba(0,229,160,0.4);}
+  .search-box::placeholder{color:var(--muted);}
+  table{width:100%;border-collapse:collapse;}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:10px 20px;text-align:left;border-bottom:1px solid var(--border);font-weight:500;}
+  td{padding:12px 20px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:13px;}
+  tr:last-child td{border-bottom:none;}
+  tr:hover td{background:rgba(255,255,255,0.02);}
+  .plate-mono{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--accent);letter-spacing:0.06em;}
+  .event-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;}
+  .badge-entry{background:rgba(0,229,160,0.12);color:var(--entry);}
+  .badge-exit{background:rgba(255,71,87,0.12);color:var(--exit);}
+  .type-badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:500;}
+  .badge-white{background:rgba(232,237,242,0.1);color:#c8d4df;}
+  .badge-yellow{background:rgba(255,184,0,0.12);color:var(--warn);}
+  .badge-green{background:rgba(0,229,160,0.12);color:var(--accent);}
+  .badge-black{background:rgba(255,71,87,0.12);color:var(--exit);}
+  .conf-bar{display:flex;align-items:center;gap:8px;}
+  .conf-track{width:60px;height:4px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden;}
+  .conf-fill{height:100%;border-radius:2px;}
+  .duration-pill{background:var(--surface2);border-radius:20px;padding:2px 8px;font-family:var(--mono);font-size:11px;color:var(--muted);}
+  .empty-state{text-align:center;padding:60px 20px;color:var(--muted);font-size:14px;}
+
+  /* Charts row */
+  .charts-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:28px;}
+  .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;}
+  .card-title{font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:16px;}
+  .bar-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .bar-label{font-size:12px;color:var(--text);width:140px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--mono);}
+  .bar-track{flex:1;height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden;}
+  .bar-fill{height:100%;border-radius:3px;transition:width 0.8s ease;}
+  .bar-count{font-family:var(--mono);font-size:12px;color:var(--muted);width:28px;text-align:right;}
+
+  @media(max-width:700px){
+    .stats{grid-template-columns:1fr 1fr;}
+    .charts-row{grid-template-columns:1fr;}
+    .upload-row{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <header>
+    <div class="logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M18 10h.01M8 14h8"/></svg>
+      </div>
+      <div>
+        <div class="logo-text">GUARDIAN GRID</div>
+        <div class="logo-sub">ANPR Security Dashboard</div>
+      </div>
+    </div>
+    <div class="live-badge"><div class="live-dot"></div>LIVE MONITORING</div>
+  </header>
+
+  <!-- Upload bars -->
+  <div class="upload-row">
+    <label class="upload-bar" id="uploadBar1">
+      <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+      <div class="upload-bar-text">Load <strong>webcam_detections.csv</strong></div>
+      <input type="file" id="csvDetections" accept=".csv">
+      <span class="upload-filename" id="name1"></span>
+    </label>
+    <label class="upload-bar" id="uploadBar2">
+      <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+      <div class="upload-bar-text">Load <strong>entry_exit_log.csv</strong></div>
+      <input type="file" id="csvEntryExit" accept=".csv">
+      <span class="upload-filename" id="name2"></span>
+    </label>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat green">
+      <div class="stat-label">Total Entries</div>
+      <div class="stat-value" id="statEntries">0</div>
+      <div class="stat-sub">vehicles in</div>
+    </div>
+    <div class="stat red">
+      <div class="stat-label">Total Exits</div>
+      <div class="stat-value" id="statExits">0</div>
+      <div class="stat-sub">vehicles out</div>
+    </div>
+    <div class="stat blue">
+      <div class="stat-label">Unique Plates</div>
+      <div class="stat-value" id="statUnique">0</div>
+      <div class="stat-sub">distinct vehicles</div>
+    </div>
+    <div class="stat yellow">
+      <div class="stat-label">Avg Duration</div>
+      <div class="stat-value" id="statDuration">—</div>
+      <div class="stat-sub">minutes parked</div>
+    </div>
+    <div class="stat purple">
+      <div class="stat-label">Last Seen</div>
+      <div class="stat-value" id="statLast" style="font-size:15px;padding-top:4px;">—</div>
+      <div class="stat-sub" id="statLastTime">no data</div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="card-title">Most Frequent Vehicles</div>
+      <div id="topPlates"><div style="color:var(--muted);font-size:13px;">Load a CSV to see data</div></div>
+    </div>
+    <div class="chart-card">
+      <div class="card-title">Entry vs Exit by Hour</div>
+      <div id="hourChart"><div style="color:var(--muted);font-size:13px;">Load entry_exit_log.csv to see data</div></div>
+    </div>
+  </div>
+
+  <!-- Tabs + Table -->
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('entryexit')">Entry / Exit Log</div>
+    <div class="tab" onclick="switchTab('detections')">All Detections</div>
+  </div>
+
+  <div id="panelEntryexit">
+    <div class="table-card">
+      <div class="table-header">
+        <div class="table-title">Entry / Exit Events</div>
+        <input class="search-box" id="searchEE" placeholder="Search plate, state…" oninput="filterEE()">
+      </div>
+      <table>
+        <thead><tr>
+          <th>#</th><th>Event</th><th>Plate Number</th>
+          <th>State</th><th>Type</th><th>Duration</th>
+          <th>Confidence</th><th>Timestamp</th>
+        </tr></thead>
+        <tbody id="eeBody">
+          <tr><td colspan="8"><div class="empty-state">Load entry_exit_log.csv above to see events</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="panelDetections" style="display:none;">
+    <div class="table-card">
+      <div class="table-header">
+        <div class="table-title">All Detections</div>
+        <input class="search-box" id="searchDet" placeholder="Search plate, state…" oninput="filterDet()">
+      </div>
+      <table>
+        <thead><tr>
+          <th>#</th><th>Plate Number</th><th>Plate Type</th>
+          <th>State</th><th>Confidence</th><th>Timestamp</th>
+        </tr></thead>
+        <tbody id="detBody">
+          <tr><td colspan="6"><div class="empty-state">Load webcam_detections.csv above to see data</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let eeRows  = [];
+let detRows = [];
+
+// ── Tab switch ──
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    t.classList.toggle('active', (i===0&&tab==='entryexit')||(i===1&&tab==='detections'));
+  });
+  document.getElementById('panelEntryexit').style.display  = tab==='entryexit'  ? '' : 'none';
+  document.getElementById('panelDetections').style.display = tab==='detections' ? '' : 'none';
+}
+
+// ── CSV loaders ──
+function loadCSV(inputId, nameId, callback) {
+  const input = document.getElementById(inputId);
+  input.addEventListener('change', function() {
+    const file = this.files[0]; if(!file) return;
+    document.getElementById(nameId).textContent = file.name;
+    const reader = new FileReader();
+    reader.onload = e => callback(e.target.result);
+    reader.readAsText(file);
+  });
+}
+
+loadCSV('csvDetections', 'name1', text => {
+  detRows = parseCSV(text);
+  renderDetections(detRows);
+  updateStats();
+  renderTopPlates();
+});
+
+loadCSV('csvEntryExit', 'name2', text => {
+  eeRows = parseCSV(text);
+  renderEE(eeRows);
+  updateStats();
+  renderHourChart();
+});
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  if(lines.length < 2) return [];
+  const headers = lines[0].split(',').map(h => h.trim().replace(/"/g,'').toLowerCase());
+  return lines.slice(1).map(line => {
+    const vals = line.split(',').map(v => v.trim().replace(/"/g,''));
+    const row = {};
+    headers.forEach((h,i) => row[h] = vals[i]||'');
+    return row;
+  }).filter(r => Object.values(r).some(v=>v));
+}
+
+// ── Stats ──
+function updateStats() {
+  const entries  = eeRows.filter(r => (r.event_type||'').toUpperCase()==='ENTRY').length;
+  const exits    = eeRows.filter(r => (r.event_type||'').toUpperCase()==='EXIT').length;
+  const allPlates= [...eeRows.map(r=>r.plate_number), ...detRows.map(r=>r.plate_number)];
+  const unique   = new Set(allPlates.filter(Boolean)).size;
+  const durations= eeRows.filter(r=>r.event_type==='EXIT').map(r=>parseFloat(r.duration_minutes)).filter(n=>!isNaN(n)&&n>0);
+  const avgDur   = durations.length ? (durations.reduce((a,b)=>a+b,0)/durations.length).toFixed(1) : null;
+  const allRows  = [...eeRows, ...detRows].sort((a,b)=>(b.timestamp||'').localeCompare(a.timestamp||''));
+  const latest   = allRows[0];
+
+  document.getElementById('statEntries').textContent  = entries;
+  document.getElementById('statExits').textContent    = exits;
+  document.getElementById('statUnique').textContent   = unique;
+  document.getElementById('statDuration').textContent = avgDur ? avgDur+'m' : '—';
+  if(latest) {
+    document.getElementById('statLast').textContent     = latest.plate_number||'—';
+    document.getElementById('statLastTime').textContent = (latest.timestamp||'').substring(0,16);
+  }
+}
+
+// ── Top plates bar chart ──
+function renderTopPlates() {
+  const counts = {};
+  [...detRows,...eeRows].forEach(r => {
+    const p = r.plate_number||'';
+    if(p) counts[p] = (counts[p]||0)+1;
+  });
+  const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const max = sorted[0]?.[1]||1;
+  document.getElementById('topPlates').innerHTML = sorted.map(([plate,count]) => `
+    <div class="bar-row">
+      <div class="bar-label">${plate}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${Math.round(count/max*100)}%;background:var(--accent)"></div></div>
+      <div class="bar-count">${count}</div>
+    </div>`).join('') || '<div style="color:var(--muted);font-size:13px;">No data</div>';
+}
+
+// ── Hour chart ──
+function renderHourChart() {
+  const hours = Array(24).fill(0).map((_,i)=>({hour:i,entry:0,exit:0}));
+  eeRows.forEach(r => {
+    const ts = r.timestamp||'';
+    const h  = parseInt(ts.substring(11,13));
+    if(!isNaN(h)) {
+      if((r.event_type||'').toUpperCase()==='ENTRY') hours[h].entry++;
+      else hours[h].exit++;
+    }
+  });
+  const active = hours.filter(h=>h.entry+h.exit>0);
+  if(!active.length) {
+    document.getElementById('hourChart').innerHTML = '<div style="color:var(--muted);font-size:13px;">No data yet</div>';
+    return;
+  }
+  const max = Math.max(...hours.map(h=>h.entry+h.exit),1);
+  document.getElementById('hourChart').innerHTML = active.map(h => `
+    <div class="bar-row">
+      <div class="bar-label">${String(h.hour).padStart(2,'0')}:00</div>
+      <div class="bar-track" style="position:relative;">
+        <div class="bar-fill" style="width:${Math.round(h.entry/max*100)}%;background:var(--entry);position:absolute;top:0;left:0;"></div>
+        <div class="bar-fill" style="width:${Math.round(h.exit/max*100)}%;background:var(--exit);margin-left:${Math.round(h.entry/max*100)}%;position:absolute;top:0;"></div>
+      </div>
+      <div class="bar-count" style="color:var(--entry)">${h.entry}</div>
+    </div>`).join('');
+}
+
+// ── Entry/Exit table ──
+function renderEE(rows) {
+  if(!rows.length) {
+    document.getElementById('eeBody').innerHTML = `<tr><td colspan="8"><div class="empty-state">No events yet</div></td></tr>`;
+    return;
+  }
+  const confColor = c => c>=80?'#00e5a0':c>=55?'#ffb800':'#ff4757';
+  document.getElementById('eeBody').innerHTML = rows.slice().reverse().map((r,i) => {
+    const isEntry = (r.event_type||'').toUpperCase()==='ENTRY';
+    const conf    = parseFloat(r.confidence)||0;
+    const dur     = parseFloat(r.duration_minutes)||0;
+    return `<tr>
+      <td style="color:var(--muted);font-family:var(--mono);font-size:12px">${rows.length-i}</td>
+      <td><span class="event-badge ${isEntry?'badge-entry':'badge-exit'}">${isEntry?'▲ ENTRY':'▼ EXIT'}</span></td>
+      <td><span class="plate-mono">${r.plate_number||'—'}</span></td>
+      <td style="color:var(--muted)">${r.state_name||'—'}</td>
+      <td><span class="type-badge badge-white">${r.plate_label||'—'}</span></td>
+      <td>${dur>0?`<span class="duration-pill">${dur}m</span>`:'<span style="color:var(--muted)">—</span>'}</td>
+      <td>
+        <div class="conf-bar">
+          <div class="conf-track"><div class="conf-fill" style="width:${Math.min(100,conf)}%;background:${confColor(conf)}"></div></div>
+          <span style="font-family:var(--mono);font-size:12px;color:${confColor(conf)}">${Math.round(conf)}%</span>
+        </div>
+      </td>
+      <td style="color:var(--muted);font-size:12px">${(r.timestamp||'').substring(0,16)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Detections table ──
+function renderDetections(rows) {
+  if(!rows.length) {
+    document.getElementById('detBody').innerHTML = `<tr><td colspan="6"><div class="empty-state">No detections yet</div></td></tr>`;
+    return;
+  }
+  const confColor = c => c>=80?'#00e5a0':c>=55?'#ffb800':'#ff4757';
+  const badgeClass = t => ({'white':'badge-white','yellow':'badge-yellow','green':'badge-green','black':'badge-black'}[t]||'badge-white');
+  const typeLabel  = t => ({'white':'Private','yellow':'Commercial','green':'Electric','black':'Taxi'}[t]||t||'—');
+  document.getElementById('detBody').innerHTML = rows.slice().reverse().map((r,i) => {
+    const conf = parseFloat(r.confidence)||0;
+    const type = (r.plate_type||'white').toLowerCase();
+    return `<tr>
+      <td style="color:var(--muted);font-family:var(--mono);font-size:12px">${rows.length-i}</td>
+      <td><span class="plate-mono">${r.plate_number||r.plate_raw||'—'}</span></td>
+      <td><span class="type-badge ${badgeClass(type)}">${typeLabel(type)}</span></td>
+      <td style="color:var(--muted)">${r.state_name||'—'}</td>
+      <td>
+        <div class="conf-bar">
+          <div class="conf-track"><div class="conf-fill" style="width:${Math.min(100,conf)}%;background:${confColor(conf)}"></div></div>
+          <span style="font-family:var(--mono);font-size:12px;color:${confColor(conf)}">${Math.round(conf)}%</span>
+        </div>
+      </td>
+      <td style="color:var(--muted);font-size:12px">${(r.timestamp||'').substring(0,16)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function filterEE() {
+  const q = document.getElementById('searchEE').value.toLowerCase();
+  renderEE(eeRows.filter(r =>
+    (r.plate_number||'').toLowerCase().includes(q)||
+    (r.state_name||'').toLowerCase().includes(q)||
+    (r.event_type||'').toLowerCase().includes(q)
+  ));
+}
+
+function filterDet() {
+  const q = document.getElementById('searchDet').value.toLowerCase();
+  renderDetections(detRows.filter(r =>
+    (r.plate_number||'').toLowerCase().includes(q)||
+    (r.state_name||'').toLowerCase().includes(q)
+  ));
+}
+</script>
+</body>
+</html>

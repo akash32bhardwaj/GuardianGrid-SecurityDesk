@@ -1,0 +1,17 @@
+# Indian ANPR — Python dependencies
+# Install with:  pip install -r requirements.txt
+
+# Core vision & OCR
+opencv-python>=4.8.0
+easyocr>=1.7.1
+numpy>=1.24.0
+
+# API server
+flask>=3.0.0
+flask-cors>=4.0.0
+
+# Progress bars (bulk processor)
+tqdm>=4.66.0
+
+# Optional: GPU acceleration (uncomment if you have CUDA)
+# torch>=2.0.0+cu118  --extra-index-url https://download.pytorch.org/whl/cu118
