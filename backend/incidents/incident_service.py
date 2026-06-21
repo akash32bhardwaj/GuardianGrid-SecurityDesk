@@ -1,7 +1,8 @@
-from backend.incidents.incident_models import update_incident
 from backend.incidents.incident_models import (
     create_incident,
-    get_all_incidents
+    get_all_incidents,
+    update_incident,
+    add_note
 )
 
 
@@ -19,6 +20,7 @@ def create_new_incident(data):
 def list_incidents():
     return get_all_incidents()
 
+
 def update_existing_incident(
     incident_id,
     data
@@ -26,4 +28,16 @@ def update_existing_incident(
     return update_incident(
         incident_id,
         data
+    )
+
+
+def add_incident_note(
+    incident_id,
+    operator,
+    message
+):
+    return add_note(
+        incident_id,
+        operator,
+        message
     )

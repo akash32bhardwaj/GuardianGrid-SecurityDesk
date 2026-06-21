@@ -3,7 +3,8 @@ from flask import request, jsonify
 from backend.incidents.incident_service import (
     create_new_incident,
     list_incidents,
-    update_existing_incident
+    update_existing_incident,
+    add_incident_note
 )
 
 
@@ -37,6 +38,31 @@ def register_incident_routes(app):
         incident = update_existing_incident(
             incident_id,
             data
+        )
+
+        if not incident:
+            return jsonify({
+                "success": False,
+                "message": "Incident not found"
+            }), 404
+
+        return jsonify({
+            "success": True,
+            "incident": incident
+        })
+
+    @app.route(
+        "/api/incidents/<incident_id>/notes",
+        methods=["POST"]
+    )
+    def add_note_route(incident_id):
+
+        data = request.get_json()
+
+        incident = add_incident_note(
+            incident_id,
+            data.get("operator"),
+            data.get("message")
         )
 
         if not incident:
