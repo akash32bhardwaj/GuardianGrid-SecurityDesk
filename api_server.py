@@ -24,6 +24,7 @@ from flask_cors import CORS
 from core.anpr_engine import ANPREngine, PlateResult, PlateVoter
 from resident_db import db as resident_db	
 from config import ADMIN_USERNAME, ADMIN_PASSWORD
+from backend.auth.auth_routes import register_auth_routes
 
 try:
     from whatsapp_alerts import send_vehicle_alert
@@ -55,6 +56,13 @@ app = Flask(
     static_folder=str(FRONTEND_DIR) if FRONTEND_DIR.exists() else None,
 )
 CORS(app)
+
+register_auth_routes(app)
+
+print("\nREGISTERED ROUTES:")
+for rule in app.url_map.iter_rules():
+    print(rule)
+print()
 
 # ── Authentication API ─────────────────────────────────────
 
