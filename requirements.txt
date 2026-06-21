@@ -15,3 +15,5 @@ tqdm>=4.66.0
 
 # Optional: GPU acceleration (uncomment if you have CUDA)
 # torch>=2.0.0+cu118  --extra-index-url https://download.pytorch.org/whl/cu118
+
+psycopg2-binary>=2.9.9

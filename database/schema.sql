@@ -113,3 +113,33 @@ CREATE TABLE cameras (
     status VARCHAR(50) DEFAULT 'ACTIVE',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE alerts (
+    id SERIAL PRIMARY KEY,
+    society_id INTEGER REFERENCES societies(id),
+    alert_type VARCHAR(100),
+    severity VARCHAR(50),
+    camera_name VARCHAR(255),
+    snapshot_path TEXT,
+    ai_confidence NUMERIC(5,2),
+    status VARCHAR(50) DEFAULT 'PENDING',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    reviewed_at TIMESTAMP,
+    reviewed_by INTEGER
+);
+
+ALTER TABLE users
+ADD COLUMN is_active BOOLEAN DEFAULT TRUE;
+
+ALTER TABLE users
+ADD COLUMN last_login TIMESTAMP;
+
+ALTER TABLE users
+ADD COLUMN full_name VARCHAR(255);
+
+ALTER TABLE users
+ADD COLUMN email VARCHAR(255);
+
+ALTER TABLE users
+ADD COLUMN phone VARCHAR(50);
+
