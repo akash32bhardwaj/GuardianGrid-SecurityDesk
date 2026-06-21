@@ -17,7 +17,7 @@ import argparse
 from pathlib import Path
 from datetime import datetime
 from collections import deque
-
+from backend.incidents.incident_routes import register_incident_routes
 from flask import Flask, Response, jsonify, send_file, abort, send_from_directory, request
 from flask_cors import CORS
 
@@ -57,7 +57,9 @@ app = Flask(
 )
 CORS(app)
 
+
 register_auth_routes(app)
+register_incident_routes(app)
 
 print("\nREGISTERED ROUTES:")
 for rule in app.url_map.iter_rules():
