@@ -18,11 +18,12 @@ from pathlib import Path
 from datetime import datetime
 from collections import deque
 
-from flask import Flask, Response, jsonify, send_file, abort, send_from_directory
+from flask import Flask, Response, jsonify, send_file, abort, send_from_directory, request
 from flask_cors import CORS
 
 from core.anpr_engine import ANPREngine, PlateResult, PlateVoter
-from resident_db import db as resident_db
+from resident_db import db as resident_db	
+from config import ADMIN_USERNAME, ADMIN_PASSWORD
 
 try:
     from whatsapp_alerts import send_vehicle_alert
@@ -54,6 +55,34 @@ app = Flask(
     static_folder=str(FRONTEND_DIR) if FRONTEND_DIR.exists() else None,
 )
 CORS(app)
+
+# ── Authentication API ─────────────────────────────────────
+
+@app.route("/api/login", methods=["POST"])
+def login():
+    data = request.get_json()
+
+    username = data.get("username", "").strip()
+    password = data.get("password", "")
+
+    if (
+        username == ADMIN_USERNAME and
+        password == ADMIN_PASSWORD
+    ):
+        return jsonify({
+            "success": True,
+            "token": f"gg-{username}-{int(time.time())}",
+            "user": {
+                "id": username,
+                "name": "GuardianGrid Administrator",
+                "role": "admin"
+            }
+        })
+
+    return jsonify({
+        "success": False,
+        "error": "Invalid username or password"
+    }), 401
 
 # ── Shared state ─────────────────────────────────────────────────
 lock = threading.Lock()
