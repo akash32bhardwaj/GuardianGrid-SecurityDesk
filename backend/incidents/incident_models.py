@@ -10,7 +10,8 @@ def create_incident(
     description,
     severity,
     camera_name,
-    operator=None
+    operator=None,
+    evidence_image=None
 ):
 
     incident_id = f"INC-{len(INCIDENTS)+1:04d}"
@@ -25,6 +26,8 @@ def create_incident(
 
         "severity": severity,
         "camera_name": camera_name,
+     
+        "evidence_image": evidence_image,
 
         "operator": operator,
 

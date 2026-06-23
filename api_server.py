@@ -25,6 +25,15 @@ from core.anpr_engine import ANPREngine, PlateResult, PlateVoter
 from resident_db import db as resident_db	
 from config import ADMIN_USERNAME, ADMIN_PASSWORD
 from backend.auth.auth_routes import register_auth_routes
+from backend.incidents.incident_service import create_new_incident
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Paragraph,
+    Spacer
+)
+
+from reportlab.lib.styles import getSampleStyleSheet
+from flask import send_file
 
 try:
     from whatsapp_alerts import send_vehicle_alert
@@ -103,6 +112,15 @@ latest_detection = {
     "timestamp": "", "event": "",
 }
 
+latest_resident = {}
+
+@app.route("/resident_lookup")
+def resident_lookup():
+
+    return jsonify(
+        latest_resident
+    )
+
 vehicle_stats = {
     "entries": 0, "exits": 0,
     "cars": 0, "motorcycles": 0, "buses": 0, "trucks": 0,
@@ -110,6 +128,7 @@ vehicle_stats = {
 }
 
 vehicle_log: deque = deque(maxlen=50)
+activity_feed: deque = deque(maxlen=100)
 vehicle_db:  dict  = {}
 last_seen:   dict  = {}
 entry_times: dict  = {}
@@ -171,6 +190,11 @@ def process_entry_exit(result: PlateResult, snapshot_path: str = ""):
             "image":      Path(snapshot_path).name if snapshot_path else "",
         }
         vehicle_log.appendleft(record)
+        activity_feed.appendleft({
+            "time": now.isoformat(),
+            "event": f"{event_type}: {plate}",
+            "type": "vehicle"
+        })
         vehicle_db[plate] = record
         latest_detection.update({
             "plate":      plate,
@@ -181,6 +205,66 @@ def process_entry_exit(result: PlateResult, snapshot_path: str = ""):
             "timestamp":  now.isoformat(),
             "event":      event_type,
         })
+        resident_info = resident_db.lookup(plate)
+
+        if resident_info:
+
+            latest_resident.update({
+                "plate": plate,
+                "name": resident_info.resident_name,
+                "flat": resident_info.flat_number,
+                "phone": resident_info.phone,
+                "status": resident_info.status
+            })
+
+        else:
+
+             latest_resident.update({
+                 "plate": plate,
+                 "name": "Unknown Vehicle",
+                 "flat": "-",
+                 "phone": "-",
+                 "status": "UNKNOWN"
+            })
+
+        if not resident_info:
+
+            print("SNAPSHOT PATH =", snapshot_path)
+
+            activity_feed.appendleft({
+                "time": now.isoformat(),
+                "event": f"UNKNOWN VEHICLE: {plate}",
+                "type": "warning"
+})
+
+            create_new_incident({
+                "title": "Unknown Vehicle Detected",
+                "description": f"Vehicle {plate} entered the premises but is not registered.",
+                "severity": "MEDIUM",
+                "camera_name": "Entry Gate"
+            })
+
+        elif resident_info.status == "BLACKLISTED":
+
+            print("SNAPSHOT PATH =", snapshot_path)
+
+            activity_feed.appendleft({
+                "time": now.isoformat(),
+                "event": f"BLACKLISTED ALERT: {plate}",
+                "type": "critical"
+            })
+
+            create_new_incident({
+                "title": "BLACKLISTED VEHICLE DETECTED",
+                "description":
+                    f"Vehicle {plate} belongs to "
+                    f"{resident_info.resident_name}. "
+                    f"Reason: {resident_info.notes}",
+                "severity": "HIGH",
+                "camera_name": "Entry Gate",
+                "evidence_image":
+                    Path(snapshot_path).name if snapshot_path else None
+            })
 
     # ── Fire WhatsApp alert (outside lock, background thread) ──────
     if WHATSAPP_AVAILABLE:
@@ -330,6 +414,11 @@ def vehicle_stats_route():
     with lock:
         return jsonify(dict(vehicle_stats))
 
+@app.route("/activity_feed")
+def activity_feed_route():
+    with lock:
+        return jsonify(list(activity_feed))
+
 @app.route("/vehicle_log")
 def vehicle_log_route():
     with lock:
@@ -366,6 +455,72 @@ def video_feed():
             time.sleep(0.03)
     return Response(generate(),
                     mimetype="multipart/x-mixed-replace; boundary=frame")
+
+@app.route("/generate_report")
+def generate_report():
+
+    filename = "GuardianGrid_Report.pdf"
+
+    doc = SimpleDocTemplate(filename)
+
+    styles = getSampleStyleSheet()
+
+    with lock:
+
+        entries = vehicle_stats["entries"]
+        exits = vehicle_stats["exits"]
+
+        total_events = len(vehicle_log)
+
+        blacklist_count = len([
+            x for x in activity_feed
+            if x.get("type") == "critical"
+        ])
+
+    content = [
+
+        Paragraph(
+            "S&N GuardianGrid Technologies",
+            styles["Title"]
+        ),
+
+        Spacer(1, 12),
+
+        Paragraph(
+            f"Generated: {datetime.now().strftime('%d-%m-%Y %H:%M')}",
+            styles["Normal"]
+        ),
+
+        Spacer(1, 12),
+
+        Paragraph(
+            f"Vehicles Entered: {entries}",
+            styles["Normal"]
+        ),
+
+        Paragraph(
+            f"Vehicles Exited: {exits}",
+            styles["Normal"]
+        ),
+
+        Paragraph(
+            f"Vehicle Events: {total_events}",
+            styles["Normal"]
+        ),
+
+        Paragraph(
+            f"Blacklisted Alerts: {blacklist_count}",
+            styles["Normal"]
+        )
+
+    ]
+
+    doc.build(content)
+
+    return send_file(
+        filename,
+        as_attachment=True
+    )
 
 
 # ── Serve React frontend ──────────────────────────────────────────
