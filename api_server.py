@@ -51,7 +51,7 @@ EXIT_MINUTES = 5
 # Voting config — accumulate readings before confirming a plate.
 # Window is wide because each detection can take 1-3s on CPU.
 VOTE_WINDOW_SECONDS = 8.0
-VOTE_MIN_SAMPLES    = 2
+VOTE_MIN_SAMPLES    = 3
 
 # ── Where the built React app lives ─────────────────────────────
 # After running "npm run build" in your React project,
@@ -129,6 +129,7 @@ vehicle_stats = {
 
 vehicle_log: deque = deque(maxlen=50)
 activity_feed: deque = deque(maxlen=100)
+notification_feed: deque = deque(maxlen=100)
 vehicle_db:  dict  = {}
 last_seen:   dict  = {}
 entry_times: dict  = {}
@@ -235,7 +236,14 @@ def process_entry_exit(result: PlateResult, snapshot_path: str = ""):
                 "time": now.isoformat(),
                 "event": f"UNKNOWN VEHICLE: {plate}",
                 "type": "warning"
-})
+            })
+
+            notification_feed.appendleft({
+                "time": now.isoformat(),
+                "title": "UNKNOWN VEHICLE DETECTED",
+                "message": plate,
+                "severity": "MEDIUM"
+            })
 
             create_new_incident({
                 "title": "Unknown Vehicle Detected",
@@ -252,6 +260,13 @@ def process_entry_exit(result: PlateResult, snapshot_path: str = ""):
                 "time": now.isoformat(),
                 "event": f"BLACKLISTED ALERT: {plate}",
                 "type": "critical"
+            })
+
+            notification_feed.appendleft({
+                "time": now.isoformat(),
+                "title": "BLACKLISTED VEHICLE",
+                "message": plate,
+                "severity": "HIGH"
             })
 
             create_new_incident({
@@ -418,6 +433,14 @@ def vehicle_stats_route():
 def activity_feed_route():
     with lock:
         return jsonify(list(activity_feed))
+
+@app.route("/notifications")
+def notifications_route():
+
+    with lock:
+        return jsonify(
+            list(notification_feed)
+        )
 
 @app.route("/vehicle_log")
 def vehicle_log_route():

@@ -224,6 +224,28 @@ def correct_plate_text(raw: str) -> tuple:
 
     return best_result, best_format, best_score
 
+def is_valid_indian_plate(text):
+
+    text = re.sub(r"[^A-Z0-9]", "", text.upper())
+
+    if len(text) < 8:
+        return False
+
+    if len(text) > 12:
+        return False
+
+    # Must contain at least 2 digits
+    digit_count = sum(c.isdigit() for c in text)
+
+    if digit_count < 2:
+        return False
+
+    # First 2 chars should be letters
+    if not text[:2].isalpha():
+        return False
+
+    return True
+
 
 def classify_plate_color(roi: np.ndarray):
     hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
@@ -412,7 +434,7 @@ class ANPREngine:
                         continue
 
                     corrected, fmt, fmt_score = correct_plate_text(text)
-                    if len(corrected) < 6:
+                    if not is_valid_indian_plate(corrected):
                         continue
 
                     total_score = conf + fmt_score
