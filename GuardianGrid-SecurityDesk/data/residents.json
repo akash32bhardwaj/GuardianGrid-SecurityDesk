@@ -1,0 +1,41 @@
+{
+  "PB08EY5332": {
+    "plate_number": "PB08EY5332",
+    "resident_name": "Akash Singh",
+    "flat_number": "302",
+    "block": "B",
+    "phone": "98765-43210",
+    "vehicle_type": "Car",
+    "vehicle_model": "Hyundai i20",
+    "vehicle_color": "White",
+    "status": "KNOWN",
+    "notes": "",
+    "added_on": "2026-06-09"
+  },
+  "PB10AB2025": {
+    "plate_number": "PB10AB2025",
+    "resident_name": "Gurpreet Kaur",
+    "flat_number": "105",
+    "block": "A",
+    "phone": "98100-12345",
+    "vehicle_type": "Car",
+    "vehicle_model": "Maruti Swift",
+    "vehicle_color": "Silver",
+    "status": "KNOWN",
+    "notes": "",
+    "added_on": "2026-06-09"
+  },
+  "DL3CAB5678": {
+    "plate_number": "DL3CAB5678",
+    "resident_name": "Rajesh Kumar",
+    "flat_number": "201",
+    "block": "C",
+    "phone": "99999-88888",
+    "vehicle_type": "Car",
+    "vehicle_model": "Honda City",
+    "vehicle_color": "Black",
+    "status": "BLACKLISTED",
+    "notes": "Unpaid dues",
+    "added_on": "2026-06-09"
+  }
+}
