@@ -413,8 +413,12 @@ def camera_thread(camera_index: int):
 # ── API Routes ────────────────────────────────────────────────────
 @app.route("/api/health")
 def health():
-    return jsonify({"status": "ok", "camera": camera_running,
-                    "timestamp": datetime.now().isoformat()})
+    return jsonify({
+        "status": "ok", 
+        "camera": camera_running,
+        "database": "PostgreSQL" if resident_db.use_pg else "JSON Fallback",
+        "timestamp": datetime.now().isoformat()
+    })
 
 @app.route("/api/migrate_db")
 def migrate_db():
