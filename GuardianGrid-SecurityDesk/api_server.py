@@ -416,6 +416,15 @@ def health():
     return jsonify({"status": "ok", "camera": camera_running,
                     "timestamp": datetime.now().isoformat()})
 
+@app.route("/api/migrate_db")
+def migrate_db():
+    try:
+        from database.migrate_residents import migrate
+        migrate()
+        return jsonify({"success": True, "message": "Migration attempted. Check server logs for details."})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
 @app.route("/alerts")
 def alerts():
     with lock:
