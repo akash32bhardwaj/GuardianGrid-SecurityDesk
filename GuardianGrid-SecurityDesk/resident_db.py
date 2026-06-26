@@ -1,18 +1,4 @@
-"""
-resident_db.py — GuardianGrid Resident Vehicle Database
----------------------------------------------------------
-Manages resident vehicle data for residential societies.
-
-Features:
-  - Import residents from Excel sheet
-  - Lookup plate number → resident details instantly
-  - Mark vehicles as known/unknown/blacklisted
-  - Export resident data back to Excel
-
-Excel format expected:
-  | plate_number | resident_name | flat_number | block | phone | vehicle_type | vehicle_model | notes |
-"""
-
+﻿import os
 import json
 import csv
 import logging
@@ -20,6 +6,9 @@ from pathlib import Path
 from datetime import datetime
 from dataclasses import dataclass, field, asdict
 from typing import Optional
+
+# Import DB if available
+from database.db import get_connection, DATABASE_URL, init_db
 
 logger = logging.getLogger(__name__)
 
@@ -69,47 +58,101 @@ class Resident:
 class ResidentDatabase:
     def __init__(self):
         self._db: dict = {}    # plate_number -> Resident
+        self.use_pg = bool(DATABASE_URL)
+        if self.use_pg:
+            init_db()
         self._load()
 
     # ── Persistence ──────────────────────────────────────────
     def _load(self):
-        if DB_FILE.exists():
+        if self.use_pg:
+            self._db.clear()
             try:
-                with open(DB_FILE, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                for plate, record in data.items():
-                    self._db[plate] = Resident(**record)
-                logger.info(f"Loaded {len(self._db)} residents from database.")
+                conn = get_connection()
+                with conn.cursor() as cur:
+                    cur.execute("SELECT plate_number, resident_name, flat_number, block, phone, vehicle_type, vehicle_model, vehicle_color, status, notes, added_on FROM resident_vehicles")
+                    for row in cur.fetchall():
+                        r = Resident(*row)
+                        self._db[r.plate_number] = r
+                conn.close()
+                logger.info(f"Loaded {len(self._db)} residents from PostgreSQL.")
             except Exception as e:
-                logger.error(f"Could not load resident DB: {e}")
+                logger.error(f"Could not load resident DB from PG: {e}")
+        else:
+            if DB_FILE.exists():
+                try:
+                    with open(DB_FILE, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    for plate, record in data.items():
+                        self._db[plate] = Resident(**record)
+                    logger.info(f"Loaded {len(self._db)} residents from JSON database.")
+                except Exception as e:
+                    logger.error(f"Could not load resident DB from JSON: {e}")
 
     def _save(self):
-        with open(DB_FILE, "w", encoding="utf-8") as f:
-            json.dump(
-                {plate: r.to_dict() for plate, r in self._db.items()},
-                f, indent=2, ensure_ascii=False
-            )
+        if not self.use_pg:
+            with open(DB_FILE, "w", encoding="utf-8") as f:
+                json.dump(
+                    {plate: r.to_dict() for plate, r in self._db.items()},
+                    f, indent=2, ensure_ascii=False
+                )
+
+    def _pg_upsert(self, resident: Resident):
+        if not self.use_pg:
+            return
+        conn = get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(\"""
+                    INSERT INTO resident_vehicles 
+                    (plate_number, resident_name, flat_number, block, phone, vehicle_type, vehicle_model, vehicle_color, status, notes, added_on)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (plate_number) DO UPDATE SET
+                    resident_name=EXCLUDED.resident_name,
+                    flat_number=EXCLUDED.flat_number,
+                    block=EXCLUDED.block,
+                    phone=EXCLUDED.phone,
+                    vehicle_type=EXCLUDED.vehicle_type,
+                    vehicle_model=EXCLUDED.vehicle_model,
+                    vehicle_color=EXCLUDED.vehicle_color,
+                    status=EXCLUDED.status,
+                    notes=EXCLUDED.notes,
+                    added_on=EXCLUDED.added_on
+                \""", (
+                    resident.plate_number, resident.resident_name, resident.flat_number,
+                    resident.block, resident.phone, resident.vehicle_type, resident.vehicle_model,
+                    resident.vehicle_color, resident.status, resident.notes, resident.added_on
+                ))
+            conn.commit()
+        except Exception as e:
+            logger.error(f"Error saving to PG: {e}")
+        finally:
+            conn.close()
+
+    def _pg_delete(self, plate: str):
+        if not self.use_pg:
+            return
+        conn = get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM resident_vehicles WHERE plate_number = %s", (plate,))
+            conn.commit()
+        except Exception as e:
+            logger.error(f"Error deleting from PG: {e}")
+        finally:
+            conn.close()
 
     # ── Core operations ───────────────────────────────────────
     def lookup(self, plate: str) -> Optional[Resident]:
-        """Look up a plate number. Returns Resident or None."""
         clean = plate.upper().replace(" ", "")
-        # Exact match
         if clean in self._db:
             return self._db[clean]
-        # Partial match
         for stored_plate, resident in self._db.items():
             if clean in stored_plate or stored_plate in clean:
                 return resident
         return None
 
     def fuzzy_lookup(self, plate: str, max_distance: int = 1) -> Optional[Resident]:
-        """
-        Find a resident whose plate is within `max_distance` edits
-        of the given plate (same length only — handles single
-        character OCR mix-ups like 0/O/D, B/8, etc).
-        Returns the Resident if exactly one close match is found.
-        """
         clean = plate.upper().replace(" ", "")
         if clean in self._db:
             return self._db[clean]
@@ -125,23 +168,23 @@ class ResidentDatabase:
         if len(candidates) == 1:
             return candidates[0][1]
         if len(candidates) > 1:
-            # Multiple close matches — too ambiguous, don't guess
             candidates.sort(key=lambda c: c[0])
             if candidates[0][0] < candidates[1][0]:
                 return candidates[0][1]
         return None
 
     def add(self, resident: Resident):
-        """Add or update a resident."""
         clean = resident.plate_number.upper().replace(" ", "")
         resident.plate_number = clean
         self._db[clean] = resident
+        self._pg_upsert(resident)
         self._save()
 
     def remove(self, plate: str) -> bool:
         clean = plate.upper().replace(" ", "")
         if clean in self._db:
             del self._db[clean]
+            self._pg_delete(clean)
             self._save()
             return True
         return False
@@ -157,14 +200,9 @@ class ResidentDatabase:
         if r:
             r.status = "BLACKLISTED"
             r.notes  = reason
-            self._save()
+            self.add(r)
 
-    # ── Excel import ──────────────────────────────────────────
     def import_from_excel(self, filepath: str) -> dict:
-        """
-        Import residents from Excel file.
-        Returns {"imported": N, "skipped": N, "errors": [...]}
-        """
         if not EXCEL_AVAILABLE:
             return {"error": "openpyxl not installed. Run: pip install openpyxl"}
 
@@ -182,27 +220,20 @@ class ResidentDatabase:
         if not rows:
             return {"error": "Excel file is empty"}
 
-        # Auto-detect headers
         headers = [str(h).lower().strip() if h else "" for h in rows[0]]
 
-        # Header mapping — flexible column names
         col_map = {
-            "plate_number":  ["plate", "plate_number", "vehicle_number",
-                               "registration", "reg_no", "number_plate"],
-            "resident_name": ["name", "resident_name", "owner", "resident",
-                               "full_name", "owner_name"],
-            "flat_number":   ["flat", "flat_number", "flat_no", "unit",
-                               "apartment", "house_no", "unit_no"],
+            "plate_number":  ["plate", "plate_number", "vehicle_number", "registration", "reg_no", "number_plate"],
+            "resident_name": ["name", "resident_name", "owner", "resident", "full_name", "owner_name"],
+            "flat_number":   ["flat", "flat_number", "flat_no", "unit", "apartment", "house_no", "unit_no"],
             "block":         ["block", "tower", "wing", "sector"],
-            "phone":         ["phone", "mobile", "contact", "phone_number",
-                               "mobile_number"],
+            "phone":         ["phone", "mobile", "contact", "phone_number", "mobile_number"],
             "vehicle_type":  ["type", "vehicle_type", "vehicle"],
             "vehicle_model": ["model", "vehicle_model", "car_model"],
             "vehicle_color": ["color", "colour", "vehicle_color"],
             "notes":         ["notes", "remarks", "comment"],
         }
 
-        # Find column indices
         col_idx = {}
         for field_name, aliases in col_map.items():
             for alias in aliases:
@@ -211,10 +242,7 @@ class ResidentDatabase:
                     break
 
         if "plate_number" not in col_idx:
-            return {
-                "error": "Could not find plate number column. "
-                         "Please name it 'plate' or 'plate_number'."
-            }
+            return {"error": "Could not find plate number column. Please name it 'plate' or 'plate_number'."}
 
         imported = 0
         skipped  = 0
@@ -260,7 +288,6 @@ class ResidentDatabase:
             "errors":   errors,
         }
 
-    # ── Excel export ──────────────────────────────────────────
     def export_to_excel(self, filepath: str = "data/residents_export.xlsx"):
         if not EXCEL_AVAILABLE:
             return {"error": "openpyxl not installed"}
@@ -276,7 +303,6 @@ class ResidentDatabase:
         ]
         ws.append(headers)
 
-        # Style header row
         from openpyxl.styles import Font, PatternFill
         for cell in ws[1]:
             cell.font = Font(bold=True, color="FFFFFF")
@@ -289,7 +315,6 @@ class ResidentDatabase:
                 r.vehicle_color, r.status, r.notes, r.added_on
             ])
 
-        # Auto-width columns
         for col in ws.columns:
             max_len = max(len(str(c.value or "")) for c in col)
             ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 30)
@@ -297,7 +322,6 @@ class ResidentDatabase:
         wb.save(filepath)
         return {"exported": len(self._db), "file": filepath}
 
-    # ── CSV import (fallback if no Excel) ─────────────────────
     def import_from_csv(self, filepath: str) -> dict:
         path = Path(filepath)
         if not path.exists():
@@ -330,47 +354,10 @@ class ResidentDatabase:
 
         return {"imported": imported, "skipped": skipped}
 
-
 # ── Global instance ───────────────────────────────────────────────
 db = ResidentDatabase()
-
 
 # ── Standalone test ───────────────────────────────────────────────
 if __name__ == "__main__":
     print("Testing Resident Database...")
-
-    # Add sample residents
-    db.add(Resident(
-        plate_number="PB08EY5332", resident_name="Akash Singh",
-        flat_number="302", block="B", phone="98765-43210",
-        vehicle_type="Car", vehicle_model="Hyundai i20",
-        vehicle_color="White"
-    ))
-    db.add(Resident(
-        plate_number="PB10AB2025", resident_name="Gurpreet Kaur",
-        flat_number="105", block="A", phone="98100-12345",
-        vehicle_type="Car", vehicle_model="Maruti Swift",
-        vehicle_color="Silver"
-    ))
-    db.add(Resident(
-        plate_number="DL3CAB5678", resident_name="Rajesh Kumar",
-        flat_number="201", block="C", phone="99999-88888",
-        vehicle_type="Car", vehicle_model="Honda City",
-        vehicle_color="Black", status="BLACKLISTED",
-        notes="Unpaid dues"
-    ))
-
-    print(f"\nTotal residents: {db.count()}")
-
-    # Test lookup
-    result = db.lookup("PB08EY5332")
-    if result:
-        print(f"\nLookup PB08EY5332:")
-        print(f"  Name  : {result.resident_name}")
-        print(f"  Flat  : {result.display_name}")
-        print(f"  Phone : {result.phone}")
-        print(f"  Car   : {result.vehicle_color} {result.vehicle_model}")
-        print(f"  Status: {result.status}")
-
-    print("\nDatabase test complete! ✅")
-    print(f"Data saved to: {DB_FILE}")
+    print(f"Total residents: {db.count()}")
