@@ -429,6 +429,21 @@ def migrate_db():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 
+@app.route("/api/db_test")
+def db_test():
+    import os
+    from database.db import get_connection
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        return jsonify({"success": False, "error": "DATABASE_URL is not set in environment variables."})
+    
+    try:
+        conn = get_connection()
+        conn.close()
+        return jsonify({"success": True, "message": "Successfully connected to PostgreSQL!"})
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Failed to connect: {str(e)}", "url_hint": db_url[:15] + "..."})
+
 @app.route("/alerts")
 def alerts():
     with lock:

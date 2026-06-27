@@ -1,4 +1,4 @@
-﻿import os
+import os
 import json
 import csv
 import logging
@@ -103,7 +103,7 @@ class ResidentDatabase:
         conn = get_connection()
         try:
             with conn.cursor() as cur:
-                cur.execute(\"""
+                cur.execute("""
                     INSERT INTO resident_vehicles 
                     (plate_number, resident_name, flat_number, block, phone, vehicle_type, vehicle_model, vehicle_color, status, notes, added_on)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -118,7 +118,7 @@ class ResidentDatabase:
                     status=EXCLUDED.status,
                     notes=EXCLUDED.notes,
                     added_on=EXCLUDED.added_on
-                \""", (
+                """, (
                     resident.plate_number, resident.resident_name, resident.flat_number,
                     resident.block, resident.phone, resident.vehicle_type, resident.vehicle_model,
                     resident.vehicle_color, resident.status, resident.notes, resident.added_on
