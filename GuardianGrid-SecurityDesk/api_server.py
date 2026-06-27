@@ -26,6 +26,7 @@ from resident_db import db as resident_db
 from config import ADMIN_USERNAME, ADMIN_PASSWORD
 from backend.auth.auth_routes import register_auth_routes
 from backend.incidents.incident_service import create_new_incident
+from resident_routes import resident_bp
 from reportlab.platypus import (
     SimpleDocTemplate,
     Paragraph,
@@ -69,7 +70,7 @@ CORS(app)
 
 register_auth_routes(app)
 register_incident_routes(app)
-
+app.register_blueprint(resident_bp)
 print("\nREGISTERED ROUTES:")
 for rule in app.url_map.iter_rules():
     print(rule)

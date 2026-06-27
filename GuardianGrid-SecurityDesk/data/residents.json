@@ -37,5 +37,31 @@
     "status": "BLACKLISTED",
     "notes": "Unpaid dues",
     "added_on": "2026-06-09"
+  },
+  "TEST1234": {
+    "plate_number": "TEST1234",
+    "resident_name": "AI Agent Test",
+    "flat_number": "",
+    "block": "",
+    "phone": "",
+    "vehicle_type": "Car",
+    "vehicle_model": "",
+    "vehicle_color": "",
+    "status": "KNOWN",
+    "notes": "",
+    "added_on": "2026-06-27"
+  },
+  "PB021539": {
+    "plate_number": "PB021539",
+    "resident_name": "joban",
+    "flat_number": "2488",
+    "block": "c BLOCK",
+    "phone": "8559018574",
+    "vehicle_type": "Motorcycle",
+    "vehicle_model": "2013",
+    "vehicle_color": "BLACK",
+    "status": "KNOWN",
+    "notes": "SS",
+    "added_on": "2026-06-28"
   }
 }
