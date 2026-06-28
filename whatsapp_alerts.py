@@ -3,10 +3,15 @@ whatsapp_alerts.py — GuardianGrid WhatsApp Notifications
 -----------------------------------------------------------
 Sends WhatsApp alerts via Twilio when vehicles are detected.
 
-3 Priority Levels:
-  🟢 KNOWN       — Normal message to flat owner ("Your vehicle entered")
-  🟡 UNKNOWN     — Warning to security guard ("Unregistered vehicle")
-  🔴 BLACKLISTED — URGENT alert to security guard ("⚠️ FLAGGED VEHICLE")
+Routing is controlled by alert_settings.py (Smart Alert Routing):
+  🟢 KNOWN       — to resident's own phone (if they opted in)
+                   + to security head ONLY if "notify_known" enabled
+  🟡 UNKNOWN     — to security head (if "notify_unknown" enabled)
+  🔴 BLACKLISTED — to security head ALWAYS (cannot be disabled)
+  🔴 THREAT      — to security head ALWAYS (cannot be disabled)
+
+Quiet Hours pause UNKNOWN/KNOWN alerts overnight but never
+block BLACKLISTED or THREAT alerts.
 
 Usage:
   from whatsapp_alerts import send_vehicle_alert
@@ -28,6 +33,9 @@ except ImportError:
     CONFIG_LOADED = False
     logger.warning("whatsapp_config.py not found — WhatsApp alerts disabled")
 
+# ── Load smart alert routing settings ───────────────────────────
+from alert_settings import settings
+
 # ── Try importing Twilio ────────────────────────────────────────
 try:
     from twilio.rest import Client
@@ -44,6 +52,21 @@ def _format_known_message(plate, event, resident, time_str):
     return (
         f"{icon} *GuardianGrid Alert*\n\n"
         f"Your vehicle has {direction} the premises.\n\n"
+        f"🚗 *Plate:* {plate}\n"
+        f"📍 *Flat:* {resident.get('flat_number','—')}"
+        f"{' · Block ' + resident.get('block','') if resident.get('block') else ''}\n"
+        f"🕐 *Time:* {time_str}\n\n"
+        f"_S&N GuardianGrid Security System_"
+    )
+
+
+def _format_known_security_message(plate, event, resident, time_str):
+    """Sent to security head for KNOWN vehicles, only if they opted in."""
+    icon = "🟢" if event == "ENTRY" else "🔵"
+    direction = "entered" if event == "ENTRY" else "exited"
+    return (
+        f"{icon} *GuardianGrid — Resident Vehicle*\n\n"
+        f"{resident.get('resident_name','Resident')}'s vehicle has {direction}.\n\n"
         f"🚗 *Plate:* {plate}\n"
         f"📍 *Flat:* {resident.get('flat_number','—')}"
         f"{' · Block ' + resident.get('block','') if resident.get('block') else ''}\n"
@@ -106,6 +129,9 @@ def _send_whatsapp(to: str, message: str) -> dict:
     if "PASTE_YOUR" in cfg.TWILIO_ACCOUNT_SID:
         return {"success": False, "error": "Twilio credentials not configured yet"}
 
+    if not to or "XXXXXXXXXX" in to:
+        return {"success": False, "error": "Recipient number not configured"}
+
     try:
         client = Client(cfg.TWILIO_ACCOUNT_SID, cfg.TWILIO_AUTH_TOKEN)
         msg = client.messages.create(
@@ -120,12 +146,31 @@ def _send_whatsapp(to: str, message: str) -> dict:
         return {"success": False, "error": str(e)}
 
 
+def _security_number() -> str:
+    """Security head's number — dashboard setting overrides config default."""
+    configured = settings.get("security_whatsapp", "").strip()
+    if configured:
+        return configured
+    return getattr(cfg, "SECURITY_WHATSAPP", "") if CONFIG_LOADED else ""
+
+
+def _resident_number(resident_info: dict) -> str:
+    phone = (resident_info or {}).get("phone", "").strip()
+    if not phone:
+        return getattr(cfg, "DEFAULT_OWNER_WHATSAPP", "") if CONFIG_LOADED else ""
+    if phone.startswith("+"):
+        return f"whatsapp:{phone}"
+    digits = phone.replace("-", "").replace(" ", "")
+    return f"whatsapp:+91{digits}"
+
+
 # ── Main alert function — called from api_server.py ──────────────
 def send_vehicle_alert(plate: str, event: str,
                        resident_info: dict = None,
                        snapshot_path: str = "") -> dict:
     """
-    Send WhatsApp alert based on vehicle status.
+    Send WhatsApp alert(s) based on vehicle status and Smart Alert
+    Routing settings (alert_settings.py).
 
     Args:
       plate: Plate number (e.g. "PB08EY5332")
@@ -133,7 +178,7 @@ def send_vehicle_alert(plate: str, event: str,
       resident_info: dict from resident_db lookup (or None/unknown)
       snapshot_path: path to snapshot image (not sent in sandbox mode)
 
-    Returns: dict with results for each message sent
+    Returns: dict with results for each message sent/skipped
     """
     if not CONFIG_LOADED:
         return {"sent": False, "reason": "config not loaded"}
@@ -143,54 +188,77 @@ def send_vehicle_alert(plate: str, event: str,
 
     status = (resident_info or {}).get("status", "UNKNOWN")
     found  = (resident_info or {}).get("found", False)
+    sec_no = _security_number()
 
-    # ── 🔴 BLACKLISTED — highest priority ──────────────────────
+    # ── 🔴 BLACKLISTED — always alerts security, ignores quiet hours ──
     if found and status == "BLACKLISTED":
-        msg = _format_blacklist_message(plate, event, resident_info, time_str)
-        r = _send_whatsapp(cfg.SECURITY_WHATSAPP, msg)
-        results.append({"to": "security", "type": "BLACKLISTED", **r})
+        if settings.should_alert_security("BLACKLISTED"):
+            msg = _format_blacklist_message(plate, event, resident_info, time_str)
+            r = _send_whatsapp(sec_no, msg)
+            results.append({"to": "security", "type": "BLACKLISTED", **r})
+        else:
+            results.append({"to": "security", "type": "BLACKLISTED",
+                           "success": False, "error": "routing disabled (unexpected)"})
 
     # ── 🟢 KNOWN resident ────────────────────────────────────────
     elif found and status == "KNOWN":
-        if cfg.ALERT_ON_KNOWN_VEHICLES:
+        # 1. To the resident themselves — respects their personal opt-out
+        if resident_info.get("notify_enabled", True):
             msg = _format_known_message(plate, event, resident_info, time_str)
-            # Send to resident's own phone if available
-            phone = resident_info.get("phone", "").strip()
-            if phone:
-                to = f"whatsapp:+91{phone.replace('-','').replace(' ','')}" \
-                     if not phone.startswith("+") else f"whatsapp:{phone}"
-                r = _send_whatsapp(to, msg)
-                results.append({"to": "resident", "type": "KNOWN", **r})
-            else:
-                r = _send_whatsapp(cfg.DEFAULT_OWNER_WHATSAPP, msg)
-                results.append({"to": "default_owner", "type": "KNOWN", **r})
+            to  = _resident_number(resident_info)
+            r   = _send_whatsapp(to, msg)
+            results.append({"to": "resident", "type": "KNOWN", **r})
+        else:
+            results.append({"to": "resident", "type": "KNOWN",
+                           "success": False, "error": "resident opted out"})
+
+        # 2. To security head — OFF by default (notification fatigue fix)
+        if settings.should_alert_security("KNOWN"):
+            msg2 = _format_known_security_message(plate, event, resident_info, time_str)
+            r2   = _send_whatsapp(sec_no, msg2)
+            results.append({"to": "security", "type": "KNOWN", **r2})
+        else:
+            results.append({"to": "security", "type": "KNOWN",
+                           "success": False, "error": "routing disabled or quiet hours"})
 
     # ── 🟡 UNKNOWN vehicle ───────────────────────────────────────
     else:
-        msg = _format_unknown_message(plate, event, time_str)
-        r = _send_whatsapp(cfg.SECURITY_WHATSAPP, msg)
-        results.append({"to": "security", "type": "UNKNOWN", **r})
+        if settings.should_alert_security("UNKNOWN"):
+            msg = _format_unknown_message(plate, event, time_str)
+            r = _send_whatsapp(sec_no, msg)
+            results.append({"to": "security", "type": "UNKNOWN", **r})
+        else:
+            results.append({"to": "security", "type": "UNKNOWN",
+                           "success": False, "error": "routing disabled or quiet hours"})
 
     return {"sent": True, "results": results}
 
 
 def send_threat_alert(threat_type: str, severity: str,
                       description: str) -> dict:
-    """Send WhatsApp alert for AI threat detection (weapon, crowd, etc)."""
+    """Send WhatsApp alert for AI threat detection — ALWAYS sent,
+    ignores quiet hours, cannot be disabled from settings."""
     if not CONFIG_LOADED:
         return {"sent": False, "reason": "config not loaded"}
 
+    if not settings.should_alert_security("THREAT"):
+        # Should never happen (THREAT is force-enabled) but guard anyway
+        return {"sent": False, "reason": "routing disabled"}
+
     time_str = datetime.now().strftime("%d %b %Y, %I:%M %p")
     msg = _format_threat_message(threat_type, severity, description, time_str)
-    r = _send_whatsapp(cfg.SECURITY_WHATSAPP, msg)
+    r = _send_whatsapp(_security_number(), msg)
     return {"sent": True, "result": r}
 
 
 # ── Standalone test ────────────────────────────────────────────────
 if __name__ == "__main__":
-    print("Testing WhatsApp alerts...")
+    print("Testing WhatsApp alerts with Smart Alert Routing...")
     print(f"Config loaded: {CONFIG_LOADED}")
     print(f"Twilio available: {TWILIO_AVAILABLE}")
+    print(f"\nCurrent routing settings:")
+    for k, v in settings.get_all().items():
+        print(f"  {k:22} = {v}")
 
     if not CONFIG_LOADED:
         print("\n❌ Create whatsapp_config.py first!")
@@ -200,7 +268,7 @@ if __name__ == "__main__":
         print("\n❌ Please fill in your Twilio credentials in whatsapp_config.py")
         exit()
 
-    print("\nSending test alert (KNOWN resident)...")
+    print("\nSending test alert (KNOWN resident, ENTRY)...")
     result = send_vehicle_alert(
         plate="PB08EY5332",
         event="ENTRY",
@@ -208,7 +276,7 @@ if __name__ == "__main__":
             "found": True, "status": "KNOWN",
             "resident_name": "Akash Singh",
             "flat_number": "302", "block": "B",
-            "phone": "",   # leave empty to send to DEFAULT_OWNER_WHATSAPP
+            "phone": "", "notify_enabled": True,
         }
     )
     print(result)

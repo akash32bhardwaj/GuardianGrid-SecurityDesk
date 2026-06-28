@@ -151,6 +151,8 @@ def process_entry_exit(result: PlateResult, snapshot_path: str = ""):
     if not plate:
         return
     now = datetime.now()
+    event_type    = None
+    resident_dict = None
     with lock:
         last = last_seen.get(plate)
         if last and (now - last).total_seconds() < DEBOUNCE_SEC:
@@ -209,7 +211,6 @@ def process_entry_exit(result: PlateResult, snapshot_path: str = ""):
         resident_info = resident_db.lookup(plate)
 
         if resident_info:
-
             latest_resident.update({
                 "plate": plate,
                 "name": resident_info.resident_name,
@@ -217,9 +218,16 @@ def process_entry_exit(result: PlateResult, snapshot_path: str = ""):
                 "phone": resident_info.phone,
                 "status": resident_info.status
             })
-
+            resident_dict = {
+                "found":         True,
+                "status":        resident_info.status,
+                "resident_name": resident_info.resident_name,
+                "flat_number":   resident_info.flat_number,
+                "block":         resident_info.block,
+                "phone":         resident_info.phone,
+                "notes":         resident_info.notes,
+            }
         else:
-
              latest_resident.update({
                  "plate": plate,
                  "name": "Unknown Vehicle",
@@ -227,6 +235,7 @@ def process_entry_exit(result: PlateResult, snapshot_path: str = ""):
                  "phone": "-",
                  "status": "UNKNOWN"
             })
+             resident_dict = {"found": False, "status": "UNKNOWN"}
 
         if not resident_info:
 
@@ -282,21 +291,7 @@ def process_entry_exit(result: PlateResult, snapshot_path: str = ""):
             })
 
     # ── Fire WhatsApp alert (outside lock, background thread) ──────
-    if WHATSAPP_AVAILABLE:
-        resident_info = resident_db.lookup(plate)
-        if resident_info:
-            resident_dict = {
-                "found":         True,
-                "status":        resident_info.status,
-                "resident_name": resident_info.resident_name,
-                "flat_number":   resident_info.flat_number,
-                "block":         resident_info.block,
-                "phone":         resident_info.phone,
-                "notes":         resident_info.notes,
-            }
-        else:
-            resident_dict = {"found": False, "status": "UNKNOWN"}
-
+    if WHATSAPP_AVAILABLE and event_type:
         threading.Thread(
             target=send_vehicle_alert,
             kwargs={
@@ -307,6 +302,7 @@ def process_entry_exit(result: PlateResult, snapshot_path: str = ""):
             },
             daemon=True
         ).start()
+        print(f"[WHATSAPP] Firing — {event_type} | {plate} | {resident_dict.get('status','UNKNOWN')}")
 
 
 # ── Camera thread ─────────────────────────────────────────────────

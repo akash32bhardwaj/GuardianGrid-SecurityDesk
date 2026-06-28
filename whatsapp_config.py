@@ -12,10 +12,8 @@ https://console.twilio.com
 
 # ── Twilio Credentials ──────────────────────────────────────────
 # Find these on your Twilio Console dashboard (top of page)
-import os
-
-TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
-TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
+TWILIO_ACCOUNT_SID = "AC6a3ce7b874761b8e3ac4d472a5b40192"     # starts with AC...
+TWILIO_AUTH_TOKEN  = "486d44cfdc74729d61a397c4203a9dac"      # click "show" to reveal
 
 # ── Twilio WhatsApp Sandbox Number ──────────────────────────────
 # This is usually the same for everyone during sandbox testing
