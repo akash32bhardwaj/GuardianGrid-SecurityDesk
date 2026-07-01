@@ -26,6 +26,10 @@ from resident_db import db as resident_db
 from config import ADMIN_USERNAME, ADMIN_PASSWORD
 from backend.auth.auth_routes import register_auth_routes
 from backend.incidents.incident_service import create_new_incident
+from rtmp_proxy import (
+    init_rtsp_cams,
+    rtmp_feed
+)
 from reportlab.platypus import (
     SimpleDocTemplate,
     Paragraph,
@@ -475,6 +479,10 @@ def video_feed():
     return Response(generate(),
                     mimetype="multipart/x-mixed-replace; boundary=frame")
 
+@app.route("/cam/<int:cam_id>")
+def camera_stream(cam_id):
+    return rtmp_feed(cam_id)
+
 @app.route("/generate_report")
 def generate_report():
 
@@ -580,6 +588,8 @@ if __name__ == "__main__":
                          args=(args.camera,), daemon=True).start()
         print(f"[INFO] Camera {args.camera} starting...")
         time.sleep(2)
+    # Start RTSP camera engine
+    init_rtsp_cams(app)
 
     print(f"\n{'='*50}")
     print(f"  GuardianGrid is RUNNING")
