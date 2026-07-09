@@ -1,0 +1,947 @@
+timestamp,plate_number,plate_type,plate_label,state_code,state_name,series,confidence,frame_saved
+2026-06-07T01:18:26.199630,22 BH 6517 A,white,Private,BH,Unknown,BH Series,94.38,output\webcam\22BH6517A_20260607_011826.jpg
+2026-06-07T01:18:26.199630,22 BH 6517 A,white,Private,BH,Unknown,BH Series,94.38,output\webcam\22BH6517A_20260607_011829.jpg
+2026-06-07T01:18:26.199630,22 BH 6517 A,white,Private,BH,Unknown,BH Series,94.38,output\webcam\22BH6517A_20260607_011832.jpg
+2026-06-07T01:18:32.984267,22BH6S,white,Private,,Unknown,Unknown,76.88,output\webcam\22BH6S_20260607_011833.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_011834.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_011837.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_011840.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_011843.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_011846.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_011849.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_011852.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_011855.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_011858.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_011901.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_011904.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_011907.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_011911.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_011914.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_011917.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_011920.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_011923.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_011926.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_011929.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_011932.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_011935.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_011938.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_011942.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_011945.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_011948.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_011951.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_011954.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_011957.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012000.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012003.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012006.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012009.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012013.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012016.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012019.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012022.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012025.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012028.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012031.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012034.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012037.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012040.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012043.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012047.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012050.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012053.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012056.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012059.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012102.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012105.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012108.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012111.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012114.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012117.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012120.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012123.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012126.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012129.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012132.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012135.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012138.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012141.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012145.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012148.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012151.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012154.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012157.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012200.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012203.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012206.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012209.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012212.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012215.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012218.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012221.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012224.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012227.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012231.jpg
+2026-06-07T01:18:34.039728,LLDN0J,white,Private,LL,Unknown,Old format,50.25,output\webcam\LLDN0J_20260607_012234.jpg
+2026-06-07T01:22:35.493223,HR 98 AA 7177,yellow,Commercial,HR,Haryana,Old format,88.9,output\webcam\HR98AA7177_20260607_012235.jpg
+2026-06-07T01:22:35.493223,HR 98 AA 7177,yellow,Commercial,HR,Haryana,Old format,88.9,output\webcam\HR98AA7177_20260607_012238.jpg
+2026-06-07T01:22:35.493223,HR 98 AA 7177,yellow,Commercial,HR,Haryana,Old format,88.9,output\webcam\HR98AA7177_20260607_012241.jpg
+2026-06-07T01:22:42.628456,HR 98 AA 7777,black,Taxi / Rental,HR,Haryana,Old format,87.9,output\webcam\HR98AA7777_20260607_012242.jpg
+2026-06-07T01:22:42.628456,HR 98 AA 7777,black,Taxi / Rental,HR,Haryana,Old format,87.9,output\webcam\HR98AA7777_20260607_012245.jpg
+2026-06-07T01:22:42.628456,HR 98 AA 7777,black,Taxi / Rental,HR,Haryana,Old format,87.9,output\webcam\HR98AA7777_20260607_012248.jpg
+2026-06-07T01:22:42.628456,HR 98 AA 7777,black,Taxi / Rental,HR,Haryana,Old format,87.9,output\webcam\HR98AA7777_20260607_012251.jpg
+2026-06-07T01:22:42.628456,HR 98 AA 7777,black,Taxi / Rental,HR,Haryana,Old format,87.9,output\webcam\HR98AA7777_20260607_012254.jpg
+2026-06-07T01:22:42.628456,HR 98 AA 7777,black,Taxi / Rental,HR,Haryana,Old format,87.9,output\webcam\HR98AA7777_20260607_012257.jpg
+2026-06-07T01:22:42.628456,HR 98 AA 7777,black,Taxi / Rental,HR,Haryana,Old format,87.9,output\webcam\HR98AA7777_20260607_012300.jpg
+2026-06-07T01:22:42.628456,HR 98 AA 7777,black,Taxi / Rental,HR,Haryana,Old format,87.9,output\webcam\HR98AA7777_20260607_012304.jpg
+2026-06-07T01:22:42.628456,HR 98 AA 7777,black,Taxi / Rental,HR,Haryana,Old format,87.9,output\webcam\HR98AA7777_20260607_012307.jpg
+2026-06-07T01:22:42.628456,HR 98 AA 7777,black,Taxi / Rental,HR,Haryana,Old format,87.9,output\webcam\HR98AA7777_20260607_012310.jpg
+2026-06-07T01:22:42.628456,HR 98 AA 7777,black,Taxi / Rental,HR,Haryana,Old format,87.9,output\webcam\HR98AA7777_20260607_012313.jpg
+2026-06-07T01:22:42.628456,HR 98 AA 7777,black,Taxi / Rental,HR,Haryana,Old format,87.9,output\webcam\HR98AA7777_20260607_012316.jpg
+2026-06-07T01:23:17.407162,KA 19 PE 4U8,white,Private,KA,Karnataka,Old format,38.98,output\webcam\KA19PE4U8_20260607_012317.jpg
+2026-06-07T01:23:17.407162,KA 19 PE 4U8,white,Private,KA,Karnataka,Old format,38.98,output\webcam\KA19PE4U8_20260607_012320.jpg
+2026-06-07T01:23:17.407162,KA 19 PE 4U8,white,Private,KA,Karnataka,Old format,38.98,output\webcam\KA19PE4U8_20260607_012323.jpg
+2026-06-07T01:23:17.407162,KA 19 PE 4U8,white,Private,KA,Karnataka,Old format,38.98,output\webcam\KA19PE4U8_20260607_012326.jpg
+2026-06-07T01:23:17.407162,KA 19 PE 4U8,white,Private,KA,Karnataka,Old format,38.98,output\webcam\KA19PE4U8_20260607_012329.jpg
+2026-06-07T01:23:17.407162,KA 19 PE 4U8,white,Private,KA,Karnataka,Old format,38.98,output\webcam\KA19PE4U8_20260607_012332.jpg
+2026-06-07T01:23:17.407162,KA 19 PE 4U8,white,Private,KA,Karnataka,Old format,38.98,output\webcam\KA19PE4U8_20260607_012335.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012337.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012340.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012343.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012346.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012350.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012353.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012356.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012359.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012402.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012405.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012408.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012411.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012414.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012417.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012420.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012423.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012426.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012429.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012433.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012436.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012439.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012442.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012445.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012448.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012451.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012454.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012457.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012500.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012503.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012506.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012509.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012512.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012515.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012519.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012522.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012525.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012528.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012531.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012534.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012537.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012540.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012543.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012546.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012549.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012552.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012555.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012558.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012601.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012604.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012607.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012610.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012613.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012616.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012619.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012622.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012625.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012629.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012632.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012635.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012638.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012641.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012644.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012647.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012650.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012653.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012656.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012659.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012702.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012706.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012709.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012712.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012715.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012718.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012721.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012724.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012727.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012730.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012733.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012736.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012739.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012742.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012745.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012749.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012752.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012755.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012758.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012801.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012804.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012807.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012810.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012813.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012816.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012819.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012823.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012826.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012829.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012832.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012835.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012838.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012841.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012844.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012847.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012850.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012853.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012856.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012859.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012902.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012906.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012909.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012912.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012915.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012918.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012921.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012924.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012927.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012930.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012933.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012936.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012940.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012943.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012946.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012949.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012952.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012955.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_012958.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013001.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013004.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013008.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013011.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013014.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013017.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013020.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013023.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013026.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013029.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013032.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013035.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013038.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013041.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013044.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013047.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013050.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013054.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013057.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013100.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013103.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013106.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013109.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013112.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013115.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013118.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013121.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013124.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013128.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013131.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013134.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013137.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013140.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013143.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013146.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013149.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013152.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013155.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013159.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013202.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013205.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013208.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013211.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013214.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013217.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013220.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013223.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013226.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013230.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013233.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013236.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013239.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013242.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013245.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013248.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013251.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013254.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013257.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013300.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013303.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013306.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013309.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013312.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013316.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013319.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013322.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013325.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013328.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013331.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013334.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013337.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013340.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013343.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013347.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013350.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013353.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013356.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013359.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013402.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013405.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013408.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013411.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013414.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013417.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013420.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013423.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013426.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013430.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013433.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013436.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013439.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013442.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013445.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013448.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013451.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013454.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013457.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013500.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013504.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013507.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013510.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013513.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013516.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013519.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013522.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013525.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013528.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013531.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013534.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013538.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013541.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013544.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013547.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013550.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013553.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013556.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013559.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013602.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013605.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013608.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013611.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013614.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013617.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013620.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013623.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013627.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013630.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013633.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013636.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013639.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013642.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013645.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013648.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013651.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013654.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013657.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013700.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013703.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013706.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013709.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013713.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013716.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013719.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013722.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013725.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013728.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013731.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013734.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013737.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013740.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013744.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013747.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013750.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013753.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013756.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013759.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013802.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013805.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013808.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013811.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013814.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013817.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013820.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013823.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013827.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013830.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013833.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013836.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013839.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013842.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013845.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013848.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013851.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013854.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013857.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013901.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013904.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013907.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013910.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013913.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013916.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013919.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013922.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013925.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013928.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013931.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013934.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013937.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013940.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013943.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013946.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013949.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013953.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013956.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_013959.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014002.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014005.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014008.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014011.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014014.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014017.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014020.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014023.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014026.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014029.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014032.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014036.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014039.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014042.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014045.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014048.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014051.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014054.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014057.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014100.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014103.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014106.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014109.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014112.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014115.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014118.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014122.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014125.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014128.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014131.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014134.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014137.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014140.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014143.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014146.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014149.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014152.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014155.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014158.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014201.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014205.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014208.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014211.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014214.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014217.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014220.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014223.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014226.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014229.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014232.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014235.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014238.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014241.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014244.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014247.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014250.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014253.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014256.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014259.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014303.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014306.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014309.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014312.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014315.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014318.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014321.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014324.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014327.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014330.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014334.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014337.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014340.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014343.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014346.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014349.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014352.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014355.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014358.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014401.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014404.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014407.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014410.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014413.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014416.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014420.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014423.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014426.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014429.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014432.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014435.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014438.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014441.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014444.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014447.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014450.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014453.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014456.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014459.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014502.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014506.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014509.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014512.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014515.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014518.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014521.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014524.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014527.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014530.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014534.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014537.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014540.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014543.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014546.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014549.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014552.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014555.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014558.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014601.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014604.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014608.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014611.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014614.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014617.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014620.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014623.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014626.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014629.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014632.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014635.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014639.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014642.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014645.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014648.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014651.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014654.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014657.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014700.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014703.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014706.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014709.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014713.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014716.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014719.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014722.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014725.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014728.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014731.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014734.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014737.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014740.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014744.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014747.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014750.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014753.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014756.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014759.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014802.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014805.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014808.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014811.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014814.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014818.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014821.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014824.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014827.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014830.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014833.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014836.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014839.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014842.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014845.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014848.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014851.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014854.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014857.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014901.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014904.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014907.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014910.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014913.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014916.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014919.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014922.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014925.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014928.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014931.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014935.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014938.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014941.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014944.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014947.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014950.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014953.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014956.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_014959.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015002.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015006.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015009.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015012.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015015.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015018.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015021.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015024.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015027.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015030.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015033.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015037.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015040.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015043.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015046.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015049.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015052.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015055.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015058.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015101.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015104.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015107.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015111.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015114.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015117.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015120.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015123.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015126.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015129.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015132.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015135.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015138.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015141.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015144.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015147.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015150.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015154.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015157.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015200.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015203.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015206.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015209.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015212.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015215.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015218.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015221.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015225.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015228.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015231.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015234.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015237.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015240.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015243.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015246.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015249.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015252.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015255.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015259.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015302.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015305.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015308.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015311.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015314.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015317.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015320.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015323.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015326.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015329.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015332.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015335.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015338.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015341.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015344.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015347.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015350.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015354.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015357.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015400.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015403.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015406.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015409.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015412.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015415.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015418.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015421.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015424.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015427.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015430.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015433.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015436.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015440.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015443.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015446.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015449.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015452.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015455.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015458.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015501.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015504.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015507.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015511.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015514.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015517.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015520.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015523.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015526.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015529.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015532.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015535.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015538.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015541.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015544.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015547.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015550.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015553.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015557.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015600.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015603.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015606.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015609.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015612.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015615.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015618.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015621.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015624.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015628.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015631.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015634.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015637.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015640.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015643.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015646.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015649.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015652.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015655.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015658.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015702.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015705.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015708.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015711.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015714.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015717.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015720.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015723.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015726.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015729.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015732.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015735.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015738.jpg
+2026-06-07T01:23:37.869469,22 BH 6517 A,white,Private,BH,Unknown,BH Series,64.85,output\webcam\22BH6517A_20260607_015741.jpg
+2026-06-07T01:57:43.849603,WB 06 F5 977,black,Taxi / Rental,WB,West Bengal,Old format,47.73,output\webcam\WB06F5977_20260607_015743.jpg
+2026-06-07T01:57:43.849603,WB 06 F5 977,black,Taxi / Rental,WB,West Bengal,Old format,47.73,output\webcam\WB06F5977_20260607_015746.jpg
+2026-06-07T01:57:43.849603,WB 06 F5 977,black,Taxi / Rental,WB,West Bengal,Old format,47.73,output\webcam\WB06F5977_20260607_015750.jpg
+2026-06-07T01:57:43.849603,WB 06 F5 977,black,Taxi / Rental,WB,West Bengal,Old format,47.73,output\webcam\WB06F5977_20260607_015753.jpg
+2026-06-07T01:57:43.849603,WB 06 F5 977,black,Taxi / Rental,WB,West Bengal,Old format,47.73,output\webcam\WB06F5977_20260607_015756.jpg
+2026-06-07T01:57:43.849603,WB 06 F5 977,black,Taxi / Rental,WB,West Bengal,Old format,47.73,output\webcam\WB06F5977_20260607_015759.jpg
+2026-06-07T01:57:43.849603,WB 06 F5 977,black,Taxi / Rental,WB,West Bengal,Old format,47.73,output\webcam\WB06F5977_20260607_015802.jpg
+2026-06-07T01:57:43.849603,WB 06 F5 977,black,Taxi / Rental,WB,West Bengal,Old format,47.73,output\webcam\WB06F5977_20260607_015805.jpg
+2026-06-07T01:57:43.849603,WB 06 F5 977,black,Taxi / Rental,WB,West Bengal,Old format,47.73,output\webcam\WB06F5977_20260607_015808.jpg
+2026-06-07T01:57:43.849603,WB 06 F5 977,black,Taxi / Rental,WB,West Bengal,Old format,47.73,output\webcam\WB06F5977_20260607_015811.jpg
+2026-06-07T01:57:43.849603,WB 06 F5 977,black,Taxi / Rental,WB,West Bengal,Old format,47.73,output\webcam\WB06F5977_20260607_015814.jpg
+2026-06-07T01:58:16.531947,334F16,black,Taxi / Rental,,Unknown,Unknown,90.89,output\webcam\334F16_20260607_015816.jpg
+2026-06-07T01:58:16.531947,334F16,black,Taxi / Rental,,Unknown,Unknown,90.89,output\webcam\334F16_20260607_015819.jpg
+2026-06-07T01:58:16.531947,334F16,black,Taxi / Rental,,Unknown,Unknown,90.89,output\webcam\334F16_20260607_015822.jpg
+2026-06-07T01:58:16.531947,334F16,black,Taxi / Rental,,Unknown,Unknown,90.89,output\webcam\334F16_20260607_015825.jpg
+2026-06-07T01:58:16.531947,334F16,black,Taxi / Rental,,Unknown,Unknown,90.89,output\webcam\334F16_20260607_015828.jpg
+2026-06-07T01:58:16.531947,334F16,black,Taxi / Rental,,Unknown,Unknown,90.89,output\webcam\334F16_20260607_015831.jpg
+2026-06-07T01:58:16.531947,334F16,black,Taxi / Rental,,Unknown,Unknown,90.89,output\webcam\334F16_20260607_015834.jpg
+2026-06-07T01:58:16.531947,334F16,black,Taxi / Rental,,Unknown,Unknown,90.89,output\webcam\334F16_20260607_015837.jpg
+2026-06-07T01:58:38.399617,AB 01 C1 234,black,Taxi / Rental,AB,Unknown,Old format,72.82,output\webcam\AB01C1234_20260607_015838.jpg
+2026-06-07T01:58:38.399617,AB 01 C1 234,black,Taxi / Rental,AB,Unknown,Old format,72.82,output\webcam\AB01C1234_20260607_015841.jpg
+2026-06-07T01:58:38.399617,AB 01 C1 234,black,Taxi / Rental,AB,Unknown,Old format,72.82,output\webcam\AB01C1234_20260607_015844.jpg
+2026-06-07T01:58:38.399617,AB 01 C1 234,black,Taxi / Rental,AB,Unknown,Old format,72.82,output\webcam\AB01C1234_20260607_015847.jpg
+2026-06-07T01:58:49.345898,AB 01 C1 234,black,Taxi / Rental,AB,Unknown,Old format,97.84,output\webcam\AB01C1234_20260607_015850.jpg
+2026-06-07T01:58:49.345898,AB 01 C1 234,black,Taxi / Rental,AB,Unknown,Old format,97.84,output\webcam\AB01C1234_20260607_015853.jpg
+2026-06-07T01:58:49.345898,AB 01 C1 234,black,Taxi / Rental,AB,Unknown,Old format,97.84,output\webcam\AB01C1234_20260607_015856.jpg
+2026-06-07T01:58:49.345898,AB 01 C1 234,black,Taxi / Rental,AB,Unknown,Old format,97.84,output\webcam\AB01C1234_20260607_015859.jpg
+2026-06-07T01:58:49.345898,AB 01 C1 234,black,Taxi / Rental,AB,Unknown,Old format,97.84,output\webcam\AB01C1234_20260607_015902.jpg
+2026-06-07T02:20:38.947885,BH6517A,white,Private,BH,Unknown,Old format,77.46,output\webcam\BH6517A_20260607_022039.jpg
+2026-06-07T02:20:38.947885,BH6517A,white,Private,BH,Unknown,Old format,77.46,output\webcam\BH6517A_20260607_022042.jpg
+2026-06-07T02:20:38.947885,BH6517A,white,Private,BH,Unknown,Old format,77.46,output\webcam\BH6517A_20260607_022045.jpg
+2026-06-07T02:20:38.947885,BH6517A,white,Private,BH,Unknown,Old format,77.46,output\webcam\BH6517A_20260607_022048.jpg
+2026-06-07T02:20:38.947885,BH6517A,white,Private,BH,Unknown,Old format,77.46,output\webcam\BH6517A_20260607_022051.jpg
+2026-06-07T02:20:38.947885,BH6517A,white,Private,BH,Unknown,Old format,77.46,output\webcam\BH6517A_20260607_022054.jpg
+2026-06-07T02:20:38.947885,BH6517A,white,Private,BH,Unknown,Old format,77.46,output\webcam\BH6517A_20260607_022057.jpg
+2026-06-07T02:20:38.947885,BH6517A,white,Private,BH,Unknown,Old format,77.46,output\webcam\BH6517A_20260607_022100.jpg
+2026-06-07T02:21:00.645167,HB06F5,white,Private,HB,Unknown,Old format,90.8,output\webcam\HB06F5_20260607_022100.jpg
+2026-06-07T02:21:00.645167,HB06F5,white,Private,HB,Unknown,Old format,90.8,output\webcam\HB06F5_20260607_022103.jpg
+2026-06-07T02:21:00.645167,HB06F5,white,Private,HB,Unknown,Old format,90.8,output\webcam\HB06F5_20260607_022106.jpg
+2026-06-07T02:21:00.645167,HB06F5,white,Private,HB,Unknown,Old format,90.8,output\webcam\HB06F5_20260607_022110.jpg
+2026-06-07T02:21:00.645167,HB06F5,white,Private,HB,Unknown,Old format,90.8,output\webcam\HB06F5_20260607_022113.jpg
+2026-06-07T02:21:00.645167,HB06F5,white,Private,HB,Unknown,Old format,90.8,output\webcam\HB06F5_20260607_022116.jpg
+2026-06-07T02:21:00.645167,HB06F5,white,Private,HB,Unknown,Old format,90.8,output\webcam\HB06F5_20260607_022119.jpg
+2026-06-07T02:21:00.645167,HB06F5,white,Private,HB,Unknown,Old format,90.8,output\webcam\HB06F5_20260607_022122.jpg
+2026-06-07T02:21:23.298669,NB06F59,white,Private,NB,Unknown,Old format,98.98,output\webcam\NB06F59_20260607_022123.jpg
+2026-06-07T02:21:23.298669,NB06F59,white,Private,NB,Unknown,Old format,98.98,output\webcam\NB06F59_20260607_022126.jpg
+2026-06-07T02:22:22.559935,RJ IL CV O002,white,Private,RJ,Rajasthan,Old format,38.49,output\webcam\RJILCVO002_20260607_022222.jpg
+2026-06-07T02:22:22.559935,RJ IL CV O002,white,Private,RJ,Rajasthan,Old format,38.49,output\webcam\RJILCVO002_20260607_022225.jpg
+2026-06-07T02:22:22.559935,RJ IL CV O002,white,Private,RJ,Rajasthan,Old format,38.49,output\webcam\RJILCVO002_20260607_022228.jpg
+2026-06-07T02:22:22.559935,RJ IL CV O002,white,Private,RJ,Rajasthan,Old format,38.49,output\webcam\RJILCVO002_20260607_022231.jpg
+2026-06-07T02:22:22.559935,RJ IL CV O002,white,Private,RJ,Rajasthan,Old format,38.49,output\webcam\RJILCVO002_20260607_022234.jpg
+2026-06-07T02:22:22.559935,RJ IL CV O002,white,Private,RJ,Rajasthan,Old format,38.49,output\webcam\RJILCVO002_20260607_022237.jpg
+2026-06-07T02:22:22.559935,RJ IL CV O002,white,Private,RJ,Rajasthan,Old format,38.49,output\webcam\RJILCVO002_20260607_022240.jpg
+2026-06-07T02:22:22.559935,RJ IL CV O002,white,Private,RJ,Rajasthan,Old format,38.49,output\webcam\RJILCVO002_20260607_022244.jpg
+2026-06-07T02:22:44.537869,CR JI 4C YO002,white,Private,CR,Unknown,Old format,31.79,output\webcam\CRJI4CYO002_20260607_022244.jpg
+2026-06-07T02:22:44.537869,CR JI 4C YO002,white,Private,CR,Unknown,Old format,31.79,output\webcam\CRJI4CYO002_20260607_022247.jpg
+2026-06-07T02:22:44.537869,CR JI 4C YO002,white,Private,CR,Unknown,Old format,31.79,output\webcam\CRJI4CYO002_20260607_022250.jpg
+2026-06-07T02:22:44.537869,CR JI 4C YO002,white,Private,CR,Unknown,Old format,31.79,output\webcam\CRJI4CYO002_20260607_022253.jpg
+2026-06-07T02:22:44.537869,CR JI 4C YO002,white,Private,CR,Unknown,Old format,31.79,output\webcam\CRJI4CYO002_20260607_022256.jpg
+2026-06-07T02:22:44.537869,CR JI 4C YO002,white,Private,CR,Unknown,Old format,31.79,output\webcam\CRJI4CYO002_20260607_022259.jpg
+2026-06-07T02:22:44.537869,CR JI 4C YO002,white,Private,CR,Unknown,Old format,31.79,output\webcam\CRJI4CYO002_20260607_022302.jpg
+2026-06-07T02:22:44.537869,CR JI 4C YO002,white,Private,CR,Unknown,Old format,31.79,output\webcam\CRJI4CYO002_20260607_022306.jpg
+2026-06-07T02:22:44.537869,CR JI 4C YO002,white,Private,CR,Unknown,Old format,31.79,output\webcam\CRJI4CYO002_20260607_022309.jpg
+2026-06-07T02:22:44.537869,CR JI 4C YO002,white,Private,CR,Unknown,Old format,31.79,output\webcam\CRJI4CYO002_20260607_022312.jpg
+2026-06-07T02:22:44.537869,CR JI 4C YO002,white,Private,CR,Unknown,Old format,31.79,output\webcam\CRJI4CYO002_20260607_022315.jpg
+2026-06-07T02:29:37.730564,HR 67 A9 100,white,Private,HR,Haryana,Old format,63.72,output\webcam\HR67A9100_20260607_022937.jpg
+2026-06-07T02:29:37.730564,HR 67 A9 100,white,Private,HR,Haryana,Old format,63.72,output\webcam\HR67A9100_20260607_022940.jpg
+2026-06-07T02:29:37.730564,HR 67 A9 100,white,Private,HR,Haryana,Old format,63.72,output\webcam\HR67A9100_20260607_022943.jpg
+2026-06-07T02:29:37.730564,HR 67 A9 100,white,Private,HR,Haryana,Old format,63.72,output\webcam\HR67A9100_20260607_022946.jpg
+2026-06-07T02:29:37.730564,HR 67 A9 100,white,Private,HR,Haryana,Old format,63.72,output\webcam\HR67A9100_20260607_022949.jpg
+2026-06-07T02:29:37.730564,HR 67 A9 100,white,Private,HR,Haryana,Old format,63.72,output\webcam\HR67A9100_20260607_022952.jpg
+2026-06-07T02:29:37.730564,HR 67 A9 100,white,Private,HR,Haryana,Old format,63.72,output\webcam\HR67A9100_20260607_022955.jpg
+2026-06-07T02:29:37.730564,HR 67 A9 100,white,Private,HR,Haryana,Old format,63.72,output\webcam\HR67A9100_20260607_022958.jpg
+2026-06-07T02:29:37.730564,HR 67 A9 100,white,Private,HR,Haryana,Old format,63.72,output\webcam\HR67A9100_20260607_023002.jpg
+2026-06-07T02:29:37.730564,HR 67 A9 100,white,Private,HR,Haryana,Old format,63.72,output\webcam\HR67A9100_20260607_023005.jpg
+2026-06-07T02:29:37.730564,HR 67 A9 100,white,Private,HR,Haryana,Old format,63.72,output\webcam\HR67A9100_20260607_023008.jpg
+2026-06-07T02:29:37.730564,HR 67 A9 100,white,Private,HR,Haryana,Old format,63.72,output\webcam\HR67A9100_20260607_023011.jpg
+2026-06-07T02:29:37.730564,HR 67 A9 100,white,Private,HR,Haryana,Old format,63.72,output\webcam\HR67A9100_20260607_023014.jpg
+2026-06-07T02:29:37.730564,HR 67 A9 100,white,Private,HR,Haryana,Old format,63.72,output\webcam\HR67A9100_20260607_023017.jpg
+2026-06-07T02:29:37.730564,HR 67 A9 100,white,Private,HR,Haryana,Old format,63.72,output\webcam\HR67A9100_20260607_023020.jpg
+2026-06-07T02:29:37.730564,HR 67 A9 100,white,Private,HR,Haryana,Old format,63.72,output\webcam\HR67A9100_20260607_023023.jpg
+2026-06-07T02:29:37.730564,HR 67 A9 100,white,Private,HR,Haryana,Old format,63.72,output\webcam\HR67A9100_20260607_023026.jpg
+2026-06-07T02:29:37.730564,HR 67 A9 100,white,Private,HR,Haryana,Old format,63.72,output\webcam\HR67A9100_20260607_023029.jpg
+2026-06-07T02:29:37.730564,HR 67 A9 100,white,Private,HR,Haryana,Old format,63.72,output\webcam\HR67A9100_20260607_023032.jpg
+2026-06-07T02:29:37.730564,HR 67 A9 100,white,Private,HR,Haryana,Old format,63.72,output\webcam\HR67A9100_20260607_023035.jpg
+2026-06-07T02:30:36.930022,KA013C,white,Private,KA,Karnataka,Old format,75.34,output\webcam\KA013C_20260607_023036.jpg
+2026-06-07T02:30:36.930022,KA013C,white,Private,KA,Karnataka,Old format,75.34,output\webcam\KA013C_20260607_023039.jpg
+2026-06-07T02:30:36.930022,KA013C,white,Private,KA,Karnataka,Old format,75.34,output\webcam\KA013C_20260607_023043.jpg
+2026-06-07T02:30:44.812030,FK A0 13 C5758,white,Private,FK,Unknown,Old format,55.23,output\webcam\FKA013C5758_20260607_023044.jpg
+2026-06-07T02:30:44.812030,FK A0 13 C5758,white,Private,FK,Unknown,Old format,55.23,output\webcam\FKA013C5758_20260607_023047.jpg
+2026-06-07T02:30:44.812030,FK A0 13 C5758,white,Private,FK,Unknown,Old format,55.23,output\webcam\FKA013C5758_20260607_023050.jpg
+2026-06-07T02:30:44.812030,FK A0 13 C5758,white,Private,FK,Unknown,Old format,55.23,output\webcam\FKA013C5758_20260607_023053.jpg
+2026-06-07T02:30:44.812030,FK A0 13 C5758,white,Private,FK,Unknown,Old format,55.23,output\webcam\FKA013C5758_20260607_023056.jpg
+2026-06-07T02:30:44.812030,FK A0 13 C5758,white,Private,FK,Unknown,Old format,55.23,output\webcam\FKA013C5758_20260607_023100.jpg
+2026-06-07T02:30:44.812030,FK A0 13 C5758,white,Private,FK,Unknown,Old format,55.23,output\webcam\FKA013C5758_20260607_023103.jpg
+2026-06-07T02:30:44.812030,FK A0 13 C5758,white,Private,FK,Unknown,Old format,55.23,output\webcam\FKA013C5758_20260607_023106.jpg
+2026-06-07T02:30:44.812030,FK A0 13 C5758,white,Private,FK,Unknown,Old format,55.23,output\webcam\FKA013C5758_20260607_023109.jpg
+2026-06-07T02:30:44.812030,FK A0 13 C5758,white,Private,FK,Unknown,Old format,55.23,output\webcam\FKA013C5758_20260607_023112.jpg
+2026-06-07T02:30:44.812030,FK A0 13 C5758,white,Private,FK,Unknown,Old format,55.23,output\webcam\FKA013C5758_20260607_023115.jpg
+2026-06-07T02:30:44.812030,FK A0 13 C5758,white,Private,FK,Unknown,Old format,55.23,output\webcam\FKA013C5758_20260607_023118.jpg
+2026-06-07T02:30:44.812030,FK A0 13 C5758,white,Private,FK,Unknown,Old format,55.23,output\webcam\FKA013C5758_20260607_023121.jpg
+2026-06-07T02:30:44.812030,FK A0 13 C5758,white,Private,FK,Unknown,Old format,55.23,output\webcam\FKA013C5758_20260607_023124.jpg
+2026-06-07T02:30:44.812030,FK A0 13 C5758,white,Private,FK,Unknown,Old format,55.23,output\webcam\FKA013C5758_20260607_023127.jpg
+2026-06-07T02:30:44.812030,FK A0 13 C5758,white,Private,FK,Unknown,Old format,55.23,output\webcam\FKA013C5758_20260607_023130.jpg
+2026-06-07T02:30:44.812030,FK A0 13 C5758,white,Private,FK,Unknown,Old format,55.23,output\webcam\FKA013C5758_20260607_023133.jpg
+2026-06-07T02:30:44.812030,FK A0 13 C5758,white,Private,FK,Unknown,Old format,55.23,output\webcam\FKA013C5758_20260607_023136.jpg
+2026-06-07T02:30:44.812030,FK A0 13 C5758,white,Private,FK,Unknown,Old format,55.23,output\webcam\FKA013C5758_20260607_023139.jpg
+2026-06-07T03:20:05.361099,HR 98 AA 7777,black,Taxi / Rental,HR,Haryana,Old format,84.32,output\webcam\HR98AA7777_20260607_032005.jpg
+2026-06-07T03:20:05.361099,HR 98 AA 7777,black,Taxi / Rental,HR,Haryana,Old format,84.32,output\webcam\HR98AA7777_20260607_032008.jpg
+2026-06-07T03:20:08.717066,HR 98 AA 7777,black,Taxi / Rental,HR,Haryana,Old format,97.05,output\webcam\HR98AA7777_20260607_032011.jpg
+2026-06-07T03:20:08.717066,HR 98 AA 7777,black,Taxi / Rental,HR,Haryana,Old format,97.05,output\webcam\HR98AA7777_20260607_032014.jpg
+2026-06-07T03:20:08.717066,HR 98 AA 7777,black,Taxi / Rental,HR,Haryana,Old format,97.05,output\webcam\HR98AA7777_20260607_032017.jpg
+2026-06-07T03:20:08.717066,HR 98 AA 7777,black,Taxi / Rental,HR,Haryana,Old format,97.05,output\webcam\HR98AA7777_20260607_032020.jpg
+2026-06-07T03:20:08.717066,HR 98 AA 7777,black,Taxi / Rental,HR,Haryana,Old format,97.05,output\webcam\HR98AA7777_20260607_032023.jpg
+2026-06-07T03:20:24.507658,KA49,white,Private,KA,Karnataka,Old format,67.66,output\webcam\KA49_20260607_032025.jpg
+2026-06-07T03:20:24.507658,KA49,white,Private,KA,Karnataka,Old format,67.66,output\webcam\KA49_20260607_032028.jpg
+2026-06-07T03:20:24.507658,KA49,white,Private,KA,Karnataka,Old format,67.66,output\webcam\KA49_20260607_032031.jpg
+2026-06-07T03:20:24.507658,KA49,white,Private,KA,Karnataka,Old format,67.66,output\webcam\KA49_20260607_032034.jpg
+2026-06-07T03:20:24.507658,KA49,white,Private,KA,Karnataka,Old format,67.66,output\webcam\KA49_20260607_032037.jpg
+2026-06-07T03:20:24.507658,KA49,white,Private,KA,Karnataka,Old format,67.66,output\webcam\KA49_20260607_032040.jpg
+2026-06-07T03:20:24.507658,KA49,white,Private,KA,Karnataka,Old format,67.66,output\webcam\KA49_20260607_032043.jpg
+2026-06-07T03:20:24.507658,KA49,white,Private,KA,Karnataka,Old format,67.66,output\webcam\KA49_20260607_032046.jpg
+2026-06-07T03:20:46.171186,I9P840,black,Taxi / Rental,,Unknown,Unknown,64.85,output\webcam\I9P840_20260607_032048.jpg
+2026-06-07T03:20:46.171186,I9P840,black,Taxi / Rental,,Unknown,Unknown,64.85,output\webcam\I9P840_20260607_032051.jpg
+2026-06-07T03:20:54.362787,KA 19 P8 400,black,Taxi / Rental,KA,Karnataka,Old format,65.27,output\webcam\KA19P8400_20260607_032054.jpg
+2026-06-07T03:20:56.352168,8488,black,Taxi / Rental,,Unknown,Unknown,95.97,output\webcam\8488_20260607_032056.jpg
+2026-06-07T03:20:56.352168,8488,black,Taxi / Rental,,Unknown,Unknown,95.97,output\webcam\8488_20260607_032059.jpg
+2026-06-07T03:20:56.352168,8488,black,Taxi / Rental,,Unknown,Unknown,95.97,output\webcam\8488_20260607_032102.jpg
+2026-06-07T03:20:56.352168,8488,black,Taxi / Rental,,Unknown,Unknown,95.97,output\webcam\8488_20260607_032105.jpg
+2026-06-07T03:20:56.352168,8488,black,Taxi / Rental,,Unknown,Unknown,95.97,output\webcam\8488_20260607_032108.jpg
+2026-06-07T03:21:11.459693,MZ 03 MF 4477,black,Taxi / Rental,MZ,Mizoram,Old format,98.76,output\webcam\MZ03MF4477_20260607_032111.jpg
+2026-06-07T03:21:11.459693,MZ 03 MF 4477,black,Taxi / Rental,MZ,Mizoram,Old format,98.76,output\webcam\MZ03MF4477_20260607_032114.jpg
+2026-06-07T03:21:15.596891,MZ 03 MF 4477,white,Private,MZ,Mizoram,Old format,99.95,output\webcam\MZ03MF4477_20260607_032117.jpg
+2026-06-07T03:21:15.596891,MZ 03 MF 4477,white,Private,MZ,Mizoram,Old format,99.95,output\webcam\MZ03MF4477_20260607_032120.jpg
+2026-06-07T03:21:15.596891,MZ 03 MF 4477,white,Private,MZ,Mizoram,Old format,99.95,output\webcam\MZ03MF4477_20260607_032123.jpg
+2026-06-07T03:21:15.596891,MZ 03 MF 4477,white,Private,MZ,Mizoram,Old format,99.95,output\webcam\MZ03MF4477_20260607_032126.jpg
+2026-06-07T03:21:28.384515,KA18EQ,black,Taxi / Rental,KA,Karnataka,Old format,99.49,output\webcam\KA18EQ_20260607_032128.jpg
+2026-06-07T03:21:28.384515,KA18EQ,black,Taxi / Rental,KA,Karnataka,Old format,99.49,output\webcam\KA18EQ_20260607_032131.jpg
+2026-06-07T03:21:28.384515,KA18EQ,black,Taxi / Rental,KA,Karnataka,Old format,99.49,output\webcam\KA18EQ_20260607_032134.jpg
+2026-06-07T03:21:28.384515,KA18EQ,black,Taxi / Rental,KA,Karnataka,Old format,99.49,output\webcam\KA18EQ_20260607_032137.jpg
+2026-06-07T03:21:35.220420,0001,white,Private,,Unknown,Unknown,98.67,output\webcam\0001_20260607_032137.jpg
+2026-06-07T03:21:35.220420,0001,white,Private,,Unknown,Unknown,98.67,output\webcam\0001_20260607_032140.jpg
+2026-06-07T03:21:40.022477,0001,white,Private,,Unknown,Unknown,99.36,output\webcam\0001_20260607_032143.jpg
+2026-06-07T03:21:40.022477,0001,white,Private,,Unknown,Unknown,99.36,output\webcam\0001_20260607_032146.jpg
+2026-06-07T03:21:40.022477,0001,white,Private,,Unknown,Unknown,99.36,output\webcam\0001_20260607_032150.jpg
+2026-06-07T03:21:40.022477,0001,white,Private,,Unknown,Unknown,99.36,output\webcam\0001_20260607_032153.jpg
+2026-06-07T03:21:55.820728,O744197,black,Taxi / Rental,,Unknown,Unknown,93.38,output\webcam\O744197_20260607_032155.jpg
+2026-06-07T03:21:57.871902,O744197,white,Private,,Unknown,Unknown,59.1,output\webcam\O744197_20260607_032158.jpg
+2026-06-07T03:21:57.871902,O744197,white,Private,,Unknown,Unknown,59.1,output\webcam\O744197_20260607_032202.jpg
+2026-06-07T03:21:57.871902,O744197,white,Private,,Unknown,Unknown,59.1,output\webcam\O744197_20260607_032205.jpg
+2026-06-07T03:21:57.871902,O744197,white,Private,,Unknown,Unknown,59.1,output\webcam\O744197_20260607_032208.jpg
+2026-06-07T03:21:57.871902,O744197,white,Private,,Unknown,Unknown,59.1,output\webcam\O744197_20260607_032211.jpg
+2026-06-07T03:21:57.871902,O744197,white,Private,,Unknown,Unknown,59.1,output\webcam\O744197_20260607_032214.jpg
+2026-06-07T03:22:12.748190,PL231,white,Private,PL,Unknown,Old format,81.63,output\webcam\PL231_20260607_032215.jpg
+2026-06-07T03:22:12.748190,PL231,white,Private,PL,Unknown,Old format,81.63,output\webcam\PL231_20260607_032218.jpg
+2026-06-07T03:22:18.439761,PL731,white,Private,PL,Unknown,Old format,88.33,output\webcam\PL731_20260607_032221.jpg
+2026-06-07T03:22:18.439761,PL731,white,Private,PL,Unknown,Old format,88.33,output\webcam\PL731_20260607_032224.jpg
+2026-06-07T03:22:18.439761,PL731,white,Private,PL,Unknown,Old format,88.33,output\webcam\PL731_20260607_032227.jpg
+2026-06-07T03:22:18.439761,PL731,white,Private,PL,Unknown,Old format,88.33,output\webcam\PL731_20260607_032230.jpg
+2026-06-07T03:22:18.439761,PL731,white,Private,PL,Unknown,Old format,88.33,output\webcam\PL731_20260607_032233.jpg
+2026-06-07T03:22:18.439761,PL731,white,Private,PL,Unknown,Old format,88.33,output\webcam\PL731_20260607_032236.jpg
+2026-06-07T03:22:18.439761,PL731,white,Private,PL,Unknown,Old format,88.33,output\webcam\PL731_20260607_032239.jpg
+2026-06-07T03:22:18.439761,PL731,white,Private,PL,Unknown,Old format,88.33,output\webcam\PL731_20260607_032242.jpg
+2026-06-07T03:22:18.439761,PL731,white,Private,PL,Unknown,Old format,88.33,output\webcam\PL731_20260607_032245.jpg
+2026-06-07T03:22:18.439761,PL731,white,Private,PL,Unknown,Old format,88.33,output\webcam\PL731_20260607_032248.jpg
+2026-06-07T03:22:49.054731,1364,black,Taxi / Rental,,Unknown,Unknown,99.09,output\webcam\1364_20260607_032249.jpg
+2026-06-07T03:22:51.042322,1364,black,Taxi / Rental,,Unknown,Unknown,99.7,output\webcam\1364_20260607_032252.jpg
+2026-06-07T03:22:51.042322,1364,black,Taxi / Rental,,Unknown,Unknown,99.7,output\webcam\1364_20260607_032255.jpg
+2026-06-07T03:22:57.473988,TN 33 J1 364,black,Taxi / Rental,TN,Tamil Nadu,Old format,75.55,output\webcam\TN33J1364_20260607_032257.jpg
+2026-06-07T03:22:59.401436,1364,black,Taxi / Rental,,Unknown,Unknown,80.22,output\webcam\1364_20260607_032259.jpg
+2026-06-07T03:22:59.401436,1364,black,Taxi / Rental,,Unknown,Unknown,80.22,output\webcam\1364_20260607_032302.jpg
+2026-06-07T03:22:59.951796,1364,white,Private,,Unknown,Unknown,93.55,output\webcam\1364_20260607_032305.jpg
+2026-06-07T03:23:06.807309,TN 33 J1 364,black,Taxi / Rental,TN,Tamil Nadu,Old format,72.83,output\webcam\TN33J1364_20260607_032306.jpg
+2026-06-07T03:23:06.807309,TN 33 J1 364,black,Taxi / Rental,TN,Tamil Nadu,Old format,72.83,output\webcam\TN33J1364_20260607_032309.jpg
+2026-06-07T03:23:06.807309,TN 33 J1 364,black,Taxi / Rental,TN,Tamil Nadu,Old format,72.83,output\webcam\TN33J1364_20260607_032312.jpg
+2026-06-07T03:23:06.807309,TN 33 J1 364,black,Taxi / Rental,TN,Tamil Nadu,Old format,72.83,output\webcam\TN33J1364_20260607_032315.jpg

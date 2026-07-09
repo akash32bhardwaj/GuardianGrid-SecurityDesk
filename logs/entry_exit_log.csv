@@ -1,0 +1,15 @@
+event_type,plate_number,state_name,plate_label,confidence,timestamp,duration_minutes,snapshot_path
+ENTRY,HR 98 AA 7777,Haryana,Private,99.7,2026-06-07 11:49:12,0.0,output\webcam\HR98AA7777_20260607_114912.jpg
+ENTRY,22 8H 65 17A,Unknown,Private,91.7,2026-06-07 11:49:26,0.0,output\webcam\228H6517A_20260607_114926.jpg
+ENTRY,22 8H 65 17,Unknown,Taxi / Rental,49.7,2026-06-07 11:49:29,0.0,output\webcam\228H6517_20260607_114929.jpg
+ENTRY,MH 0T AE 8017,Maharashtra,Private,62.2,2026-06-07 11:49:40,0.0,output\webcam\MH0TAE8017_20260607_114939.jpg
+ENTRY,MH UT AE 0U1,Unknown,Private,51.6,2026-06-07 11:49:45,0.0,output\webcam\MHUTAE0U1_20260607_114945.jpg
+ENTRY,MH 01 AE 8012,Maharashtra,Private,42.4,2026-06-07 11:49:50,0.0,output\webcam\MH01AE8012_20260607_114950.jpg
+ENTRY,MH 01 AE 8017,Maharashtra,Private,58.1,2026-06-07 11:49:52,0.0,output\webcam\MH01AE8017_20260607_114952.jpg
+ENTRY,TATA,Unknown,Private,98.7,2026-06-07 11:50:00,0.0,output\webcam\TATA_20260607_115000.jpg
+ENTRY,DL 1Y 43 550,Delhi,Commercial,82.0,2026-06-07 11:50:07,0.0,output\webcam\DL1Y43550_20260607_115007.jpg
+ENTRY,IY43550,Unknown,Commercial,79.3,2026-06-07 11:50:09,0.0,output\webcam\IY43550_20260607_115009.jpg
+ENTRY,16517,Unknown,Taxi / Rental,93.0,2026-06-07 11:50:29,0.0,output\webcam\16517_20260607_115029.jpg
+ENTRY,RJ 16 CV 0002,Rajasthan,Taxi / Rental,43.8,2026-06-07 11:51:15,0.0,output\webcam\RJ16CV0002_20260607_115115.jpg
+ENTRY,RJ 1L CV 0002,Rajasthan,Taxi / Rental,58.2,2026-06-07 11:51:18,0.0,output\webcam\RJ1LCV0002_20260607_115118.jpg
+ENTRY,RJ 12 CV 0002,Rajasthan,Private,82.1,2026-06-07 11:51:23,0.0,output\webcam\RJ12CV0002_20260607_115123.jpg

@@ -1,0 +1,8 @@
+timestamp,threat_type,severity,description,confidence,person_count,snapshot_path
+2026-06-07T18:09:21.372933,INTRUSION,HIGH,Person crossed intrusion boundary,0.89,1,output\threats\snapshots\INTRUSION_20260607_180921.jpg
+2026-06-07T18:09:31.398976,LOITER,MEDIUM,Person loitering for 10s,0.93,1,output\threats\snapshots\LOITER_20260607_180931.jpg
+2026-06-07T18:09:51.456344,INTRUSION,HIGH,Person crossed intrusion boundary,0.93,1,output\threats\snapshots\INTRUSION_20260607_180951.jpg
+2026-06-07T18:12:40.031026,INTRUSION,HIGH,Person crossed intrusion boundary,0.82,1,output\threats\snapshots\INTRUSION_20260607_181240.jpg
+2026-06-07T18:12:50.125933,LOITER,MEDIUM,Person loitering for 10s,0.8,1,output\threats\snapshots\LOITER_20260607_181250.jpg
+2026-06-07T18:17:57.325771,INTRUSION,HIGH,Person crossed intrusion boundary,0.56,1,output\threats\snapshots\INTRUSION_20260607_181757.jpg
+2026-06-07T18:18:09.519080,LOITER,MEDIUM,Person loitering for 10s,0.8,1,output\threats\snapshots\LOITER_20260607_181809.jpg
