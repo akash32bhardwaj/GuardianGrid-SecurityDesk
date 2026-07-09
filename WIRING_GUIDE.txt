@@ -1,0 +1,124 @@
+# Defender Octa — Deployment Package: Wiring Guide
+
+Four files go into the backend folder (next to api_server.py):
+
+  site_config.json          ← the ONLY file you edit per society
+  site_config.py            ← loads it (never edit)
+  backup.py                 ← daily DB backup (never edit)
+  start_defender_octa.bat   ← one-click launcher
+
+Then make the small api_server.py edits below so the code READS from
+site_config instead of hardcoded values.
+
+--------------------------------------------------------------------
+EDIT 1 — import the config at the top of api_server.py
+--------------------------------------------------------------------
+Add near your other imports (after "from pathlib import Path"):
+
+    from site_config import CONFIG
+    from backup import run_daily_backup
+
+Then REPLACE the hardcoded constants (around lines 54-57):
+
+    OUTPUT_DIR   = Path("output/webcam")
+    MIN_CONF     = 30
+    DEBOUNCE_SEC = 30
+    EXIT_MINUTES = 5
+
+with values from config:
+
+    OUTPUT_DIR   = Path("output/webcam")
+    MIN_CONF     = CONFIG.min_confidence
+    DEBOUNCE_SEC = CONFIG.debounce_seconds
+    EXIT_MINUTES = CONFIG.exit_minutes
+
+And the voting config:
+
+    VOTE_WINDOW_SECONDS = CONFIG.vote_window_seconds
+    VOTE_MIN_SAMPLES    = CONFIG.vote_min_samples
+
+And the guard-decision flag (wherever REQUIRE_GUARD_DECISION is set):
+
+    REQUIRE_GUARD_DECISION = CONFIG.require_guard_decision
+
+--------------------------------------------------------------------
+EDIT 2 — admin credentials from config
+--------------------------------------------------------------------
+You currently import from config.py:
+
+    from config import ADMIN_USERNAME, ADMIN_PASSWORD
+
+Change the auth to use CONFIG.admin_username / CONFIG.admin_password
+instead. If your auth_models reads a users file, set the initial
+admin there from CONFIG. Simplest: wherever ADMIN_USERNAME /
+ADMIN_PASSWORD were used, substitute CONFIG.admin_username and
+CONFIG.admin_password.
+
+--------------------------------------------------------------------
+EDIT 3 — the __main__ block: use config, not argparse defaults
+--------------------------------------------------------------------
+Replace the bottom "if __name__ == '__main__':" block with:
+
+    if __name__ == "__main__":
+        CONFIG.warn_if_insecure()          # loud warning if defaults left
+
+        init_db()
+        init_visitors()
+
+        if CONFIG.backup_enabled:
+            run_daily_backup(CONFIG.backup_keep_days)
+
+        # restore today's counters from stored events
+        _stats, _inside = rebuild_today_state()
+        vehicle_stats.update(_stats)
+        entry_times.update(_inside)
+        for p in _inside:
+            gate_state[p] = {"status": "INSIDE", "since": _inside[p].isoformat()}
+        print(f"[DB] Restored: {_stats['entries']} in / {_stats['exits']} out / {len(_inside)} inside")
+
+        if CONFIG.camera_enabled:
+            threading.Thread(target=camera_thread,
+                             args=(CONFIG.camera_index,), daemon=True).start()
+            print(f"[INFO] Camera {CONFIG.camera_index} starting...")
+            time.sleep(2)
+
+        init_rtsp_cams(app)
+
+        print(f"\n{'='*50}")
+        print(f"  DEFENDER OCTA — {CONFIG.society_name}")
+        print(f"  Site: {CONFIG.site_id}  |  {CONFIG.location}")
+        print(f"{'='*50}")
+        print(f"  Dashboard : http://localhost:{CONFIG.port}")
+        print(f"  Camera    : {'ON' if CONFIG.camera_enabled else 'OFF'}")
+        print(f"{'='*50}\n")
+
+        app.run(host=CONFIG.host, port=CONFIG.port, debug=False, threaded=True)
+
+Note: this removes the --camera/--port command-line args in favour of
+site_config.json. If you still want them as overrides, keep argparse
+and let args override CONFIG values — but for deployment, the JSON
+file is cleaner (guards/installers don't type command-line flags).
+
+--------------------------------------------------------------------
+EDIT 4 — RTSP cameras from config (if init_rtsp_cams takes a list)
+--------------------------------------------------------------------
+If your rtmp_proxy.init_rtsp_cams reads camera URLs from somewhere
+hardcoded, pass CONFIG.rtsp_cameras instead. Check how init_rtsp_cams
+currently gets its URLs; feed it CONFIG.rtsp_cameras
+(each item is {"name": ..., "url": ...}).
+
+--------------------------------------------------------------------
+DEPLOYING TO A NEW SOCIETY — the whole process
+--------------------------------------------------------------------
+1. Copy the entire backend folder to the society's mini-PC.
+2. Open site_config.json and edit:
+     - society name, site_id, location
+     - camera index (usually 0) or set enabled:false if RTSP-only
+     - rtsp_cameras: the society's IP camera URLs
+     - admin password  (CHANGE FROM DEFAULT!)
+3. Double-click start_defender_octa.bat
+4. Open http://localhost:5000, log in, import the resident Excel.
+5. Done. No code was touched.
+
+The startup prints SECURITY WARNINGS if the admin password or site_id
+is still a default — so you can't accidentally ship an insecure box.

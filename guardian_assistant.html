@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guardian Voice Assistant</title>
+<style>
+  :root {
+    --gg-bg: #0d1420;
+    --gg-panel: #141d2e;
+    --gg-line: #24324a;
+    --gg-text: #e8eef7;
+    --gg-muted: #8698b5;
+    --gg-accent: #35e0c8;      /* teal — "listening" */
+    --gg-speak: #4a9eff;       /* blue — "speaking" */
+    --gg-alert: #ff5c6c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+    background: #060a12;
+    color: var(--gg-text);
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+
+  /* Floating button (bottom-right, like a dashboard would have) */
+  .gg-fab {
+    position: fixed; bottom: 28px; right: 28px;
+    width: 60px; height: 60px; border-radius: 50%;
+    background: var(--gg-panel); border: 1px solid var(--gg-line);
+    color: var(--gg-accent); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px; transition: transform .15s, border-color .15s;
+    z-index: 50;
+  }
+  .gg-fab:hover { transform: scale(1.05); border-color: var(--gg-accent); }
+  .gg-fab.armed { border-color: var(--gg-accent); box-shadow: 0 0 0 4px rgba(53,224,200,.12); }
+
+  /* The dialogue box */
+  .gg-box {
+    width: 100%; max-width: 420px;
+    background: var(--gg-panel);
+    border: 1px solid var(--gg-line);
+    border-radius: 18px;
+    padding: 28px 24px 22px;
+    display: flex; flex-direction: column; align-items: center;
+    gap: 18px;
+  }
+  .gg-title { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--gg-muted); }
+
+  /* The animated orb — the "AI is here" feel */
+  .gg-orb-wrap { position: relative; width: 120px; height: 120px; display: grid; place-items: center; }
+  .gg-orb {
+    width: 74px; height: 74px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #2a3d5c, #141d2e 70%);
+    border: 2px solid var(--gg-line);
+    position: relative; z-index: 2;
+    transition: border-color .3s, box-shadow .3s;
+  }
+  .gg-ring {
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 2px solid transparent; opacity: 0;
+  }
+
+  /* States */
+  .state-idle .gg-orb { border-color: var(--gg-line); }
+  .state-listening .gg-orb { border-color: var(--gg-accent); box-shadow: 0 0 24px rgba(53,224,200,.4); }
+  .state-listening .gg-ring { border-color: var(--gg-accent); animation: pulse 1.6s ease-out infinite; opacity: 1; }
+  .state-thinking .gg-orb { border-color: var(--gg-muted); }
+  .state-thinking .gg-ring { border-color: var(--gg-muted); animation: spin 1s linear infinite; opacity: .8; border-top-color: transparent; border-right-color: transparent; }
+  .state-speaking .gg-orb { border-color: var(--gg-speak); box-shadow: 0 0 24px rgba(74,158,255,.45); }
+  .state-speaking .gg-ring { border-color: var(--gg-speak); animation: pulse 1.1s ease-out infinite; opacity: 1; }
+
+  @keyframes pulse { 0% { transform: scale(1); opacity: .7; } 100% { transform: scale(1.5); opacity: 0; } }
+  @keyframes spin  { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .gg-ring { animation: none !important; }
+  }
+
+  .gg-status { font-size: 15px; color: var(--gg-text); min-height: 22px; text-align: center; }
+  .gg-transcript { font-size: 14px; color: var(--gg-muted); text-align: center; min-height: 20px; font-style: italic; }
+  .gg-answer {
+    font-size: 15px; line-height: 1.5; color: var(--gg-text);
+    background: #0d1626; border: 1px solid var(--gg-line); border-radius: 12px;
+    padding: 14px 16px; width: 100%; min-height: 20px;
+    text-align: left; display: none;
+  }
+  .gg-answer.show { display: block; }
+
+  .gg-row { display: flex; gap: 10px; width: 100%; }
+  .gg-btn {
+    flex: 1; padding: 11px; border-radius: 10px; cursor: pointer;
+    font-size: 14px; font-weight: 500; border: 1px solid var(--gg-line);
+    background: #0d1626; color: var(--gg-text); transition: border-color .15s;
+  }
+  .gg-btn:hover { border-color: var(--gg-accent); }
+  .gg-btn.primary { background: var(--gg-accent); color: #062018; border-color: var(--gg-accent); }
+  .gg-hint { font-size: 12px; color: var(--gg-muted); text-align: center; }
+  .gg-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .gg-chip { font-size: 12px; padding: 6px 11px; border-radius: 20px; border: 1px solid var(--gg-line); color: var(--gg-muted); cursor: pointer; background: transparent; }
+  .gg-chip:hover { border-color: var(--gg-accent); color: var(--gg-text); }
+</style>
+</head>
+<body>
+
+<div class="gg-box state-idle" id="ggBox">
+  <div class="gg-title">Guardian Assistant</div>
+
+  <div class="gg-orb-wrap">
+    <div class="gg-ring"></div>
+    <div class="gg-orb"></div>
+  </div>
+
+  <div class="gg-status" id="ggStatus">Tap the mic, or say "Hey Guardian"</div>
+  <div class="gg-transcript" id="ggTranscript"></div>
+  <div class="gg-answer" id="ggAnswer"></div>
+
+  <div class="gg-chips" id="ggChips">
+    <button class="gg-chip">Any alerts?</button>
+    <button class="gg-chip">Alerts today</button>
+    <button class="gg-chip">Give me a summary</button>
+    <button class="gg-chip">What's the status?</button>
+  </div>
+
+  <div class="gg-row">
+    <button class="gg-btn primary" id="ggMic">🎤 Ask Guardian</button>
+    <button class="gg-btn" id="ggWake">Enable "Hey Guardian"</button>
+  </div>
+  <div class="gg-hint" id="ggHint">Browser voice — works in Chrome & Edge</div>
+</div>
+
+<script>
+// ── Config ──────────────────────────────────────────────────────
+// Where the backend lives. When served from your dashboard, same origin works.
+const ASK_URL = (location.origin.startsWith("http") ? location.origin : "http://localhost:5000") + "/api/guardian/ask";
+
+const box = document.getElementById("ggBox");
+const statusEl = document.getElementById("ggStatus");
+const transcriptEl = document.getElementById("ggTranscript");
+const answerEl = document.getElementById("ggAnswer");
+const micBtn = document.getElementById("ggMic");
+const wakeBtn = document.getElementById("ggWake");
+const hint = document.getElementById("ggHint");
+
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const synth = window.speechSynthesis;
+
+function setState(s, msg) {
+  box.className = "gg-box state-" + s;
+  if (msg !== undefined) statusEl.textContent = msg;
+}
+
+if (!SR) {
+  hint.textContent = "Voice not supported here — use Chrome or Edge.";
+  micBtn.disabled = true; wakeBtn.disabled = true;
+}
+
+// ── Speak an answer aloud (browser TTS) ────────────────────────
+let _voicesReady = false;
+function _loadVoices() {
+  const vs = synth ? synth.getVoices() : [];
+  if (vs.length) _voicesReady = true;
+  return vs;
+}
+if (synth) {
+  _loadVoices();
+  synth.addEventListener("voiceschanged", _loadVoices);
+}
+
+function speak(text) {
+  if (!synth) { setState("idle", "(no speech support) " + text); return; }
+  synth.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 1.0; u.pitch = 1.0; u.volume = 1.0;
+  const voices = _loadVoices();
+  const v = voices.find(v => /female|zira|samantha|google us english/i.test(v.name))
+            || voices.find(v => /^en/i.test(v.lang));
+  if (v) u.voice = v;
+  setState("speaking", "Guardian is responding…");
+  u.onend = () => setState("idle", 'Ask again, or say "Hey Guardian"');
+  u.onerror = (e) => { setState("idle", "Voice error: " + e.error + " (answer shown above)"); };
+  // Some browsers need a tick after cancel() before speak() takes.
+  setTimeout(() => synth.speak(u), 60);
+}
+
+// Prime speech synthesis on first user gesture (Chrome autoplay policy):
+// a silent utterance unlocks audio so later answers actually play.
+let _primed = false;
+function primeVoice() {
+  if (_primed || !synth) return;
+  const u = new SpeechSynthesisUtterance(" ");
+  u.volume = 0; synth.speak(u); _primed = true;
+}
+
+// ── Ask the backend ────────────────────────────────────────────
+async function ask(question) {
+  transcriptEl.textContent = '“' + question + '”';
+  setState("thinking", "Thinking…");
+  answerEl.classList.remove("show");
+  try {
+    const res = await fetch(ASK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question })
+    });
+    const data = await res.json();
+    const answer = data.answer || "I didn't get an answer, boss.";
+    answerEl.textContent = answer;
+    answerEl.classList.add("show");
+    speak(answer);
+  } catch (e) {
+    setState("idle", "Couldn't reach Guardian. Is the server running?");
+    answerEl.textContent = "Connection error — check that the server is running.";
+    answerEl.classList.add("show");
+  }
+}
+
+// ── One-shot question capture ──────────────────────────────────
+function listenOnce() {
+  if (!SR) return;
+  const rec = new SR();
+  rec.lang = "en-IN";
+  rec.interimResults = false;
+  rec.maxAlternatives = 1;
+  setState("listening", "Listening…");
+  transcriptEl.textContent = "";
+  rec.onresult = (e) => {
+    const said = e.results[0][0].transcript;
+    ask(said);
+  };
+  rec.onerror = (e) => setState("idle", e.error === "no-speech" ? "Didn't catch that — try again." : "Mic error: " + e.error);
+  rec.onend = () => { if (box.classList.contains("state-listening")) setState("idle", 'Tap the mic, or say "Hey Guardian"'); };
+  rec.start();
+}
+
+// ── Wake-word listening ("Hey Guardian") ───────────────────────
+let wakeRec = null, wakeOn = false;
+function toggleWake() {
+  if (!SR) return;
+  if (wakeOn) {
+    wakeOn = false; if (wakeRec) wakeRec.stop();
+    wakeBtn.textContent = 'Enable "Hey Guardian"';
+    document.querySelector(".gg-fab")?.classList.remove("armed");
+    setState("idle", 'Tap the mic, or say "Hey Guardian"');
+    return;
+  }
+  wakeOn = true;
+  wakeBtn.textContent = 'Stop listening';
+  wakeRec = new SR();
+  wakeRec.lang = "en-IN";
+  wakeRec.continuous = true;
+  wakeRec.interimResults = true;
+  wakeRec.onresult = (e) => {
+    const txt = Array.from(e.results).map(r => r[0].transcript).join(" ").toLowerCase();
+    if (txt.includes("guardian")) {
+      wakeRec.stop();  // hand off to one-shot capture
+    }
+  };
+  wakeRec.onend = () => {
+    if (!wakeOn) return;
+    // if we stopped because of the wake word, capture a question, then resume
+    if (box.classList.contains("state-idle") && statusEl.textContent.includes("Hey")) {
+      setState("listening", "Yes, boss? Ask your question…");
+      listenOnceThenResume();
+    } else {
+      try { wakeRec.start(); } catch(_) {}  // keep listening
+    }
+  };
+  try { wakeRec.start(); } catch(_) {}
+  setState("idle", 'Listening for "Hey Guardian"…');
+}
+
+function listenOnceThenResume() {
+  const rec = new SR();
+  rec.lang = "en-IN"; rec.interimResults = false;
+  rec.onresult = (e) => ask(e.results[0][0].transcript);
+  rec.onend = () => { if (wakeOn) setTimeout(() => { try { wakeRec.start(); } catch(_){} }, 1500); };
+  rec.onerror = () => { if (wakeOn) { try { wakeRec.start(); } catch(_){} } };
+  rec.start();
+}
+
+// ── Wire up buttons ────────────────────────────────────────────
+micBtn.addEventListener("click", () => { primeVoice(); listenOnce(); });
+wakeBtn.addEventListener("click", () => { primeVoice(); toggleWake(); });
+document.querySelectorAll(".gg-chip").forEach(c =>
+  c.addEventListener("click", () => { primeVoice(); ask(c.textContent); }));
+
+// double-click the orb to test the voice in isolation
+document.querySelector(".gg-orb").addEventListener("click", () => {
+  primeVoice();
+  speak("Voice test. If you can hear this, Guardian's audio is working, boss.");
+});
+
+// load voices (some browsers populate async)
+if (synth) synth.onvoiceschanged = () => {};
+</script>
+</body>
+</html>

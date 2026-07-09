@@ -14,7 +14,11 @@ def create_new_incident(data):
         severity=data.get("severity", "LOW"),
         camera_name=data.get("camera_name", "Unknown Camera"),
         operator=data.get("operator"),
-        evidence_image=data.get("evidence_image")
+        evidence_image=data.get("evidence_image"),
+        plate_number=data.get("plate_number"),
+        resident_name=data.get("resident_name"),
+        flat_number=data.get("flat_number"),
+        confidence=data.get("confidence"),
     )
 
 

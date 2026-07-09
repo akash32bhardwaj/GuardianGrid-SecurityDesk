@@ -16,29 +16,20 @@ import cv2
 import time
 import threading
 from flask import Response
+from site_config import CONFIG
 
+# Camera list comes from site_config.json. Each entry there is
+# {"name": ..., "url": ..., "ai_mode": ...(optional)}.
+# IDs are assigned by position.
 RTSP_CAMERAS = [
-    {"id":  1, "name": "Main Gate",      "url": "rtsp://admin:J%40i32guru@192.168.31.123:554/h264/ch1/main/av_stream", "ai_mode": ""},
-    {"id":  2, "name": "Exit Gate",      "url": "rtsp://admin:J%40i32guru@192.168.31.122:554/h264/ch1/main/av_stream", "ai_mode": "person+vehicle"},
-    {"id":  3, "name": "Parking A",      "url": "rtsp://admin:J%40i32guru@192.168.31.121:554/h264/ch1/main/av_stream",                                                         "ai_mode": "person+vehicle"},
-    {"id":  4, "name": "Parking B",      "url": "rtsp://admin:J%40i32guru@192.168.31.120:554/h264/ch1/main/av_stream",                                                 "ai_mode": "person+vehicle"},
-    {"id":  5, "name": "Block A Lobby",  "url": "",                                                 "ai_mode": "person"},
-    {"id":  6, "name": "Block B Lobby",  "url": "",                                                 "ai_mode": "person"},
-    {"id":  7, "name": "Block C Lobby",  "url": "",                                                 "ai_mode": "person"},
-    {"id":  8, "name": "Block D Lobby",  "url": "",                                                 "ai_mode": "person"},
-    {"id":  9, "name": "Playground",     "url": "",                                                 "ai_mode": "person"},
-    {"id": 10, "name": "Club House",     "url": "",                                                 "ai_mode": "person"},
-    {"id": 11, "name": "Swimming Pool",  "url": "",                                                 "ai_mode": "person"},
-    {"id": 12, "name": "Garden",         "url": "",                                                 "ai_mode": "person"},
-    {"id": 13, "name": "Terrace",        "url": "",                                                 "ai_mode": "person"},
-    {"id": 14, "name": "Basement Entry", "url": "",                                                 "ai_mode": "person+vehicle"},
-    {"id": 15, "name": "Server Room",    "url": "",                                                 "ai_mode": "person"},
-    {"id": 16, "name": "Guard Post",     "url": "",                                                 "ai_mode": "person"},
+    {"id": i + 1, "name": c.get("name", f"Camera {i+1}"),
+     "url": c.get("url", ""), "ai_mode": c.get("ai_mode", "")}
+    for i, c in enumerate(CONFIG.rtsp_cameras)
 ]
 
 RECONNECT_DELAY   = 5
 JPEG_QUALITY      = 65
-AI_EVERY_N_FRAMES = 3
+AI_EVERY_N_FRAMES = 8
 
 _frames: dict = {}
 _locks:  dict = {}
@@ -54,11 +45,13 @@ def _camera_worker(cam: dict):
     name    = cam["name"]
     ai_mode = cam.get("ai_mode", "")
 
-    # RTSP live view only for now.
-    # AI modules will be added later.
-
-    ai_detect = None
-    motion_detector = None
+    # Person/vehicle detection — only for cameras with an ai_mode set.
+    if ai_mode:
+        from person_detector import detect as ai_detect, MotionGate
+        motion_detector = MotionGate()
+    else:
+        ai_detect = None
+        motion_detector = None
 
     frame_count    = 0
     last_annotated = None

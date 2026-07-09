@@ -15,11 +15,19 @@ import re
 import threading
 import argparse
 from pathlib import Path
+from site_config import CONFIG
+from backup import run_daily_backup
 from datetime import datetime
 from collections import deque
+from backend.auth.auth_service import decode_token
 from backend.incidents.incident_routes import register_incident_routes
 from flask import Flask, Response, jsonify, send_file, abort, send_from_directory, request
 from flask_cors import CORS
+from db import init_db, record_event, hourly_stats as db_hourly, \
+               daily_summary, events_for_date, vehicle_summary, \
+               init_visitors, add_visitor, visitors_today, visitor_exit, \
+               rebuild_today_state
+
 
 from core.anpr_engine import ANPREngine, PlateResult, PlateVoter
 from resident_db import db as resident_db	
@@ -39,6 +47,7 @@ from reportlab.platypus import (
 from reportlab.lib.styles import getSampleStyleSheet
 from flask import send_file
 
+
 try:
     from whatsapp_alerts import send_vehicle_alert
     WHATSAPP_AVAILABLE = True
@@ -48,14 +57,14 @@ except ImportError:
 
 # ── Config ──────────────────────────────────────────────────────
 OUTPUT_DIR   = Path("output/webcam")
-MIN_CONF     = 30
-DEBOUNCE_SEC = 30
-EXIT_MINUTES = 5
+MIN_CONF     = CONFIG.min_confidence
+DEBOUNCE_SEC = CONFIG.debounce_seconds
+EXIT_MINUTES = CONFIG.exit_minutes
 
 # Voting config — accumulate readings before confirming a plate.
 # Window is wide because each detection can take 1-3s on CPU.
-VOTE_WINDOW_SECONDS = 8.0
-VOTE_MIN_SAMPLES    = 3
+VOTE_WINDOW_SECONDS = CONFIG.vote_window_seconds
+VOTE_MIN_SAMPLES    = CONFIG.vote_min_samples
 
 # ── Where the built React app lives ─────────────────────────────
 # After running "npm run build" in your React project,
@@ -73,7 +82,12 @@ CORS(app)
 
 register_auth_routes(app)
 register_incident_routes(app)
-
+from guardian_ask import register_guardian_ask
+register_guardian_ask(app)
+from correction_routes import correction_bp
+app.register_blueprint(correction_bp)
+from resident_routes import resident_bp
+app.register_blueprint(resident_bp)
 print("\nREGISTERED ROUTES:")
 for rule in app.url_map.iter_rules():
     print(rule)
@@ -149,164 +163,178 @@ def classify_vehicle_type(plate_label: str) -> str:
     if "motorcycle" in label:                  return "Motorcycle"
     return "Car"
 
+# ── Guard-decision flow ──────────────────────────────────────────
+# Unknown/blacklisted plates are NOT logged automatically; they wait
+# for the guard's Entry/Hold/Exit in the Gate Console (post-correction).
+# Residents & approved visitors still auto-log.
+REQUIRE_GUARD_DECISION = True
+
+pending_detections = {}   # normalized plate -> detection details
+
+def _norm(p):
+    return re.sub(r"[^A-Z0-9]", "", (p or "").upper())
+
+def commit_vehicle_event(plate, event_type, *, vtype="Manual", state="",
+                         confidence=100.0, snapshot_path="", operator="system"):
+    """THE single place an event becomes real: stats, log, SQLite,
+    activity feed, plus unknown-vehicle incident on ENTRY."""
+    plate = re.sub(r"[^A-Z0-9]", "", (plate or "").upper())
+    now = datetime.now()
+    resident_info = resident_db.lookup(plate)
+    access = resident_info.status if resident_info else "UNKNOWN"
+
+    with lock:
+        if event_type == "ENTRY":
+            vehicle_stats["entries"] += 1
+            vehicle_stats["total"]   += 1
+            entry_times[plate] = now
+            if vtype == "Car":          vehicle_stats["cars"]        += 1
+            elif vtype == "Motorcycle": vehicle_stats["motorcycles"] += 1
+            elif vtype == "Bus":        vehicle_stats["buses"]       += 1
+            elif vtype == "Truck":      vehicle_stats["trucks"]      += 1
+        elif event_type == "EXIT":
+            vehicle_stats["exits"] += 1
+            entry_times.pop(plate, None)
+
+        record = {
+            "vehicle_id": f"VH{len(vehicle_db)+1:04d}",
+            "plate": plate, "type": vtype, "state": state,
+            "event": event_type, "confidence": round(confidence, 1),
+            "time": now.strftime("%H:%M:%S"),
+            "timestamp": now.isoformat(),
+            "image": Path(snapshot_path).name if snapshot_path else "",
+            "access": access,
+        }
+        vehicle_log.appendleft(record)
+        vehicle_db[plate] = record
+        activity_feed.appendleft({
+            "time": now.isoformat(),
+            "event": f"{event_type} ({operator}): {plate}",
+            "type": "vehicle",
+        })
+    record_event(record)
+
+    # Unknown vehicle actually ENTERING → now it's incident-worthy
+    if event_type == "ENTRY" and not resident_info:
+        notification_feed.appendleft({
+            "time": now.isoformat(),
+            "title": "UNKNOWN VEHICLE ENTERED",
+            "message": plate, "severity": "MEDIUM",
+        })
+        create_new_incident({
+            "title": "Unknown Vehicle Entered",
+            "description": f"Vehicle {plate} was allowed entry by {operator} but is not registered.",
+            "severity": "MEDIUM", "camera_name": "Entry Gate",
+            "evidence_image": Path(snapshot_path).name if snapshot_path else None,
+            "plate_number": plate, "resident_name": "Unknown",
+            "flat_number": "--", "confidence": round(confidence, 1),
+        })
+    return record
 
 def process_entry_exit(result: PlateResult, snapshot_path: str = ""):
     plate = result.plate_number
     if not plate:
         return
     now = datetime.now()
-    event_type    = None
-    resident_dict = None
     with lock:
         last = last_seen.get(plate)
         if last and (now - last).total_seconds() < DEBOUNCE_SEC:
             return
         last_seen[plate] = now
+    vtype = classify_vehicle_type(result.plate_label)
 
-        entry_time = entry_times.get(plate)
-        if entry_time is None:
-            event_type = "ENTRY"
-            entry_times[plate] = now
-            vehicle_stats["entries"] += 1
-            vehicle_stats["total"]   += 1
-            vtype = classify_vehicle_type(result.plate_label)
-            if vtype == "Car":         vehicle_stats["cars"]        += 1
-            elif vtype == "Motorcycle":vehicle_stats["motorcycles"] += 1
-            elif vtype == "Bus":       vehicle_stats["buses"]       += 1
-            elif vtype == "Truck":     vehicle_stats["trucks"]      += 1
-        else:
-            minutes = (now - entry_time).total_seconds() / 60
-            if minutes >= EXIT_MINUTES:
-                event_type = "EXIT"
-                vehicle_stats["exits"] += 1
-                del entry_times[plate]
-            else:
-                return
-
-        vehicle_id = f"VH{len(vehicle_db)+1:04d}"
-        vtype      = classify_vehicle_type(result.plate_label)
-        record = {
-            "vehicle_id": vehicle_id,
-            "plate":      plate,
-            "type":       vtype,
-            "state":      result.state_name,
-            "event":      event_type,
-            "confidence": round(result.confidence, 1),
-            "time":       now.strftime("%H:%M:%S"),
-            "timestamp":  now.isoformat(),
-            "image":      Path(snapshot_path).name if snapshot_path else "",
-        }
-        vehicle_log.appendleft(record)
-        activity_feed.appendleft({
-            "time": now.isoformat(),
-            "event": f"{event_type}: {plate}",
-            "type": "vehicle"
-        })
-        vehicle_db[plate] = record
+    # Always update the live display panels
+    resident_info = resident_db.lookup(plate)
+    with lock:
         latest_detection.update({
-            "plate":      plate,
-            "state":      result.state_name,
-            "type":       vtype,
+            "plate": plate, "state": result.state_name, "type": vtype,
             "confidence": round(result.confidence, 1),
-            "alert":      f"{event_type}: {plate} ({result.state_name})",
-            "timestamp":  now.isoformat(),
-            "event":      event_type,
+            "alert": f"DETECTED: {plate} ({result.state_name})",
+            "timestamp": now.isoformat(), "event": "DETECTED",
         })
-        resident_info = resident_db.lookup(plate)
-
         if resident_info:
             latest_resident.update({
-                "plate": plate,
-                "name": resident_info.resident_name,
+                "plate": plate, "name": resident_info.resident_name,
                 "flat": resident_info.flat_number,
-                "phone": resident_info.phone,
-                "status": resident_info.status
+                "phone": resident_info.phone, "status": resident_info.status,
             })
-            resident_dict = {
-                "found":         True,
-                "status":        resident_info.status,
-                "resident_name": resident_info.resident_name,
-                "flat_number":   resident_info.flat_number,
-                "block":         resident_info.block,
-                "phone":         resident_info.phone,
-                "notes":         resident_info.notes,
-            }
         else:
-             latest_resident.update({
-                 "plate": plate,
-                 "name": "Unknown Vehicle",
-                 "flat": "-",
-                 "phone": "-",
-                 "status": "UNKNOWN"
-            })
-             resident_dict = {"found": False, "status": "UNKNOWN"}
-
-        if not resident_info:
-
-            print("SNAPSHOT PATH =", snapshot_path)
-
-            activity_feed.appendleft({
-                "time": now.isoformat(),
-                "event": f"UNKNOWN VEHICLE: {plate}",
-                "type": "warning"
+            latest_resident.update({
+                "plate": plate, "name": "Unknown Vehicle",
+                "flat": "-", "phone": "-", "status": "UNKNOWN",
             })
 
-            notification_feed.appendleft({
-                "time": now.isoformat(),
-                "title": "UNKNOWN VEHICLE DETECTED",
-                "message": plate,
-                "severity": "MEDIUM"
-            })
+    # Blacklisted → alert + incident IMMEDIATELY (never wait), but the
+    # gate event itself still waits for the guard's decision.
+    if resident_info and resident_info.status == "BLACKLISTED":
+        notification_feed.appendleft({
+            "time": now.isoformat(), "title": "BLACKLISTED VEHICLE",
+            "message": plate, "severity": "HIGH",
+        })
+        activity_feed.appendleft({
+            "time": now.isoformat(),
+            "event": f"BLACKLISTED ALERT: {plate}", "type": "critical",
+        })
+        _bl_incident = create_new_incident({
+            "title": "BLACKLISTED VEHICLE DETECTED",
+            "description": f"Vehicle {plate} belongs to {resident_info.resident_name}. Reason: {resident_info.notes}",
+            "severity": "HIGH", "camera_name": "Entry Gate",
+            "evidence_image": Path(snapshot_path).name if snapshot_path else None,
+            "plate_number": plate, "resident_name": resident_info.resident_name,
+            "flat_number": resident_info.flat_number,
+            "confidence": round(result.confidence, 1),
+        })
+        try:
+            from guardian_wiring import on_blacklisted_vehicle
+            on_blacklisted_vehicle(
+                plate=plate,
+                resident_name=resident_info.resident_name,
+                reason=resident_info.notes or "",
+                incident=_bl_incident,
+            )
+        except Exception as e:
+            print(f"[WARN] Guardian blacklist hook failed: {e}")
 
-            create_new_incident({
-                "title": "Unknown Vehicle Detected",
-                "description": f"Vehicle {plate} entered the premises but is not registered.",
-                "severity": "MEDIUM",
-                "camera_name": "Entry Gate"
-            })
+    trusted = resident_info and resident_info.status in ("KNOWN", "VISITOR")
 
-        elif resident_info.status == "BLACKLISTED":
+    if REQUIRE_GUARD_DECISION and not trusted:
+        # Park it as pending — guard will correct (if needed) and decide.
+        pending_detections[_norm(plate)] = {
+            "vtype": vtype, "state": result.state_name,
+            "confidence": round(result.confidence, 1),
+            "snapshot": snapshot_path,
+        }
+        activity_feed.appendleft({
+            "time": now.isoformat(),
+            "event": f"AWAITING GUARD DECISION: {plate}", "type": "warning",
+        })
+        return
 
-            print("SNAPSHOT PATH =", snapshot_path)
-
-            activity_feed.appendleft({
-                "time": now.isoformat(),
-                "event": f"BLACKLISTED ALERT: {plate}",
-                "type": "critical"
-            })
-
-            notification_feed.appendleft({
-                "time": now.isoformat(),
-                "title": "BLACKLISTED VEHICLE",
-                "message": plate,
-                "severity": "HIGH"
-            })
-
-            create_new_incident({
-                "title": "BLACKLISTED VEHICLE DETECTED",
-                "description":
-                    f"Vehicle {plate} belongs to "
-                    f"{resident_info.resident_name}. "
-                    f"Reason: {resident_info.notes}",
-                "severity": "HIGH",
-                "camera_name": "Entry Gate",
-                "evidence_image":
-                    Path(snapshot_path).name if snapshot_path else None
-            })
-
-    # ── Fire WhatsApp alert (outside lock, background thread) ──────
-    if WHATSAPP_AVAILABLE and event_type:
-        threading.Thread(
-            target=send_vehicle_alert,
-            kwargs={
-                "plate":         plate,
-                "event":         event_type,
-                "resident_info": resident_dict,
-                "snapshot_path": snapshot_path,
-            },
-            daemon=True
-        ).start()
-        print(f"[WHATSAPP] Firing — {event_type} | {plate} | {resident_dict.get('status','UNKNOWN')}")
+    # Trusted (resident/approved visitor) → auto entry/exit as before
+    with lock:
+        entry_time = entry_times.get(plate)
+    if entry_time is None:
+        event_type = "ENTRY"
+    elif (now - entry_time).total_seconds() / 60 >= EXIT_MINUTES:
+        event_type = "EXIT"
+    else:
+        return
+    record = commit_vehicle_event(
+        plate, event_type, vtype=vtype, state=result.state_name,
+        confidence=result.confidence, snapshot_path=snapshot_path,
+        operator="ANPR auto",
+    )
+    if WHATSAPP_AVAILABLE:
+        threading.Thread(target=send_vehicle_alert, kwargs={
+            "plate": plate, "event": event_type,
+            "resident_info": {"found": True, "status": resident_info.status,
+                              "resident_name": resident_info.resident_name,
+                              "flat_number": resident_info.flat_number,
+                              "block": resident_info.block,
+                              "phone": resident_info.phone,
+                              "notes": resident_info.notes},
+            "snapshot_path": snapshot_path,
+        }, daemon=True).start()
 
 
 # ── Camera thread ─────────────────────────────────────────────────
@@ -485,70 +513,300 @@ def camera_stream(cam_id):
 
 @app.route("/generate_report")
 def generate_report():
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.units import cm
+    from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
+                                    Table, TableStyle)
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from db import hourly_stats as db_hourly, access_mix, events_for_date
+    from backend.incidents.incident_models import get_all_incidents
+    import io
 
-    filename = "GuardianGrid_Report.pdf"
-
-    doc = SimpleDocTemplate(filename)
-
+    day = request.args.get("date", datetime.now().strftime("%Y-%m-%d"))
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+                            topMargin=1.5*cm, bottomMargin=1.5*cm)
     styles = getSampleStyleSheet()
+    h1 = ParagraphStyle("h1", parent=styles["Title"], fontSize=18)
+    h2 = ParagraphStyle("h2", parent=styles["Heading2"], textColor=colors.HexColor("#0e7490"))
+    body = styles["BodyText"]
+    story = []
 
+    story.append(Paragraph("DEFENDER OCTA — Daily Security Report", h1))
+    story.append(Paragraph(f"S&N GuardianGrid Technologies · {day} · Generated {datetime.now().strftime('%d %b %Y, %H:%M')}", body))
+    story.append(Spacer(1, 14))
+
+    # 1. Traffic summary
+    hourly = db_hourly(day)
+    tot_in = sum(h["entered"] for h in hourly)
+    tot_out = sum(h["exited"] for h in hourly)
+    peak = max(hourly, key=lambda h: h["entered"] + h["exited"])["h"] if hourly else "—"
+    story.append(Paragraph("1. Traffic Summary", h2))
+    story.append(Paragraph(
+        f"Total entries: <b>{tot_in}</b> &nbsp;·&nbsp; Total exits: <b>{tot_out}</b> "
+        f"&nbsp;·&nbsp; Peak hour: <b>{peak}</b>", body))
+    story.append(Spacer(1, 8))
+
+    # 2. Access mix
+    story.append(Paragraph("2. Access Mix (who came through)", h2))
+    mix = access_mix(day)
+    mix_total = sum(m["count"] for m in mix) or 1
+    tdata = [["Status", "Vehicles", "Share"]] + [
+        [m["status"], str(m["count"]), f"{round(m['count']/mix_total*100)}%"] for m in mix]
+    t = Table(tdata, colWidths=[6*cm, 3*cm, 3*cm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0e7490")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+    ]))
+    story.append(t)
+    verified = sum(m["count"] for m in mix if m["status"] in ("KNOWN", "VISITOR", "RESIDENT"))
+    story.append(Paragraph(f"Verified traffic: <b>{round(verified/mix_total*100)}%</b>", body))
+    story.append(Spacer(1, 8))
+
+    # 3. Incidents
+    story.append(Paragraph("3. Incidents & Case Files", h2))
+    incidents = [i for i in get_all_incidents() if (i.get("created_at") or "").startswith(day)]
+    if not incidents:
+        story.append(Paragraph("No incidents recorded on this date.", body))
+    else:
+        idata = [["Case", "Title", "Plate", "Severity", "Status", "Operator"]] + [
+            [i["incident_id"], (i.get("title") or "")[:34], i.get("plate_number") or "—",
+             i.get("severity") or "—", (i.get("status") or "").replace("_", " "),
+             i.get("operator") or "Unassigned"] for i in incidents]
+        it = Table(idata, colWidths=[2*cm, 5.6*cm, 3*cm, 2*cm, 2.6*cm, 2.6*cm])
+        it.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0e7490")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ]))
+        story.append(it)
+    story.append(Spacer(1, 8))
+
+    # 4. Event log (last 30)
+    story.append(Paragraph("4. Vehicle Event Log (latest 30)", h2))
+    events = events_for_date(day, limit=30)
+    if not events:
+        story.append(Paragraph("No events recorded.", body))
+    else:
+        edata = [["Time", "Plate", "Type", "Event", "Conf."]] + [
+            [e["timestamp"][11:19], e["plate"], e.get("type") or "—",
+             e["event"], f"{e.get('confidence') or 0}%"] for e in events]
+        et = Table(edata, colWidths=[2.6*cm, 4*cm, 3*cm, 2.6*cm, 2*cm])
+        et.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0e7490")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ]))
+        story.append(et)
+
+    doc.build(story)
+    buf.seek(0)
+    return send_file(buf, as_attachment=True,
+                     download_name=f"defender-octa-report-{day}.pdf",
+                     mimetype="application/pdf")
+
+@app.route("/hourly_stats")
+def hourly_stats_route():
+    """?date=YYYY-MM-DD (default today) — hourly chart data."""
+    return jsonify(db_hourly(request.args.get("date")))
+
+@app.route("/calendar_summary")
+def calendar_summary_route():
+    """?year=2026&month=7 — per-day totals for the calendar."""
+    now = datetime.now()
+    year  = request.args.get("year",  now.year,  type=int)
+    month = request.args.get("month", now.month, type=int)
+    return jsonify(daily_summary(year, month))
+
+@app.route("/events_by_date")
+def events_by_date_route():
+    """?date=YYYY-MM-DD — full event list for the drill-down."""
+    date_str = request.args.get("date", datetime.now().strftime("%Y-%m-%d"))
+    return jsonify(events_for_date(date_str))
+
+@app.route("/vehicle_summary")
+def vehicle_summary_route():
+    """Per-vehicle registry with real visit counts."""
+    return jsonify(vehicle_summary())
+
+@app.route("/inside_now")
+def inside_now():
+    """Every vehicle currently inside or on hold, with details."""
+    out = []
     with lock:
+        plates = dict(entry_times)          # inside (ANPR + manual)
+        holds  = {p: s for p, s in gate_state.items() if s["status"] == "HOLD"}
+        records = dict(vehicle_db)
+    for plate, t in plates.items():
+        rec = records.get(plate, {})
+        r = resident_db.lookup(plate)
+        out.append({
+            "plate": plate,
+            "since": t.isoformat(),
+            "type": rec.get("type", "—"),
+            "resident": r.resident_name if r else "Unknown",
+            "flat": r.flat_number if r else "—",
+            "access": r.status if r else "UNKNOWN",
+            "state": "INSIDE",
+        })
+    for plate, s in holds.items():
+        if plate in plates:
+            continue
+        r = resident_db.lookup(plate)
+        out.append({
+            "plate": plate, "since": s["since"], "type": "—",
+            "resident": r.resident_name if r else "Unknown",
+            "flat": r.flat_number if r else "—",
+            "access": r.status if r else "UNKNOWN",
+            "state": "HOLD",
+        })
+    out.sort(key=lambda x: x["since"], reverse=True)
+    return jsonify(out)
 
-        entries = vehicle_stats["entries"]
-        exits = vehicle_stats["exits"]
+@app.route("/camera_heat")
+def camera_heat_route():
+    from db import camera_heat
+    return jsonify(camera_heat(request.args.get("date")))
 
-        total_events = len(vehicle_log)
+@app.route("/cameras")
+def cameras_route():
+    from rtmp_proxy import RTSP_CAMERAS
+    with lock:
+        anpr_online = camera_running
+    cams = [{
+        "name": "CAM 01 — Main Gate (ANPR)",
+        "status": "online" if anpr_online else "offline",
+        "uptime": "—", "fps": 25 if anpr_online else 0,
+        "stream": "/video_feed",
+    }]
+    for cam in RTSP_CAMERAS:
+        if not cam.get("url"):        # skip cameras with no URL yet
+            continue
+        cams.append({
+            "name": f"CAM {cam['id']:02d} — {cam['name']}",
+            "status": "online", "uptime": "—", "fps": 25,
+            "stream": f"/cam/{cam['id']}",
+        })
+    return jsonify(cams)
 
-        blacklist_count = len([
-            x for x in activity_feed
-            if x.get("type") == "critical"
+# ── Visitors ─────────────────────────────────────────────────────
+@app.route("/visitors_today")
+def visitors_today_route():
+    return jsonify(visitors_today())
+
+@app.route("/visitors", methods=["POST"])
+def add_visitor_route():
+    data = request.get_json() or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"success": False, "error": "name required"}), 400
+    vid = add_visitor(name, (data.get("flat") or "").strip(),
+                      (data.get("phone") or "").strip(),
+                      (data.get("purpose") or "").strip())
+    activity_feed.appendleft({
+        "time": datetime.now().isoformat(),
+        "event": f"VISITOR IN: {name} → {data.get('flat', '')}",
+        "type": "visitor",
+    })
+    return jsonify({"success": True, "id": vid})
+
+@app.route("/visitors/<int:vid>/exit", methods=["POST"])
+def visitor_exit_route(vid):
+    ok = visitor_exit(vid)
+    return jsonify({"success": ok})
+
+# ── API authentication guard ────────────────────────────────────
+# Every route requires a valid JWT except the exempt list below.
+AUTH_EXEMPT_PREFIXES = (
+    "/api/auth/login",   # must stay open or nobody can log in
+    "/api/auth/test",
+    "/video_feed",       # MJPEG streams — <img> tags can't send headers
+    "/cam/",
+    "/frontend",         # built frontend assets
+    "/static",
+    "/guardian",         # Guardian voice assistant page
+    "/api/guardian/",    # Guardian Q&A endpoint (local booth — trusted network)
+)
+
+@app.before_request
+def require_auth():
+    if request.method == "OPTIONS":          # CORS preflight
+        return
+    p = request.path
+    if p == "/" or any(p.startswith(e) for e in AUTH_EXEMPT_PREFIXES):
+        return
+    auth = request.headers.get("Authorization", "")
+    token = auth[7:] if auth.startswith("Bearer ") else request.args.get("token", "")
+    if not token:
+        return jsonify({"success": False, "message": "Authentication required"}), 401
+    try:
+        request.auth_user = decode_token(token)   # available to routes if needed
+    except Exception:
+        return jsonify({"success": False, "message": "Invalid or expired token"}), 401
+
+# ── Manual gate control ──────────────────────────────────────────
+gate_state = {}   # plate → {"status": "INSIDE"/"HOLD", "since": iso}
+
+@app.route("/gate/action", methods=["POST"])
+def gate_action():
+    data = request.get_json()
+    plate    = (data.get("plate") or "").strip().upper()
+    action   = (data.get("action") or "").upper()
+    operator = data.get("operator", "guard")
+    if not plate or action not in ("ENTRY", "HOLD", "EXIT"):
+        return jsonify({"success": False, "error": "plate and valid action required"}), 400
+
+    # Pull pending ANPR details — check the plate itself AND the last
+    # raw detection (so a corrected plate inherits the misread's snapshot)
+    pend = pending_detections.pop(_norm(plate), None)
+    if pend is None and pending_detections:
+        # correction case: adopt the most recent pending detection
+        pend = pending_detections.pop(next(reversed(pending_detections)), None)
+    meta = pend or {"vtype": "Manual", "state": "", "confidence": 100.0, "snapshot": ""}
+
+    now = datetime.now()
+    if action == "HOLD":
+        with lock:
+            gate_state[plate] = {"status": "HOLD", "since": now.isoformat()}
+            activity_feed.appendleft({
+                "time": now.isoformat(),
+                "event": f"HOLD (manual by {operator}): {plate}", "type": "vehicle",
+            })
+        if pend:  # keep details for the eventual Entry/Exit
+            pending_detections[_norm(plate)] = pend
+        return jsonify({"success": True, "plate": plate, "action": action})
+
+    if action == "ENTRY":
+        with lock:
+            gate_state[plate] = {"status": "INSIDE", "since": now.isoformat()}
+    else:  # EXIT
+        with lock:
+            gate_state.pop(plate, None)
+
+    commit_vehicle_event(
+        plate, action, vtype=meta["vtype"], state=meta["state"],
+        confidence=meta["confidence"], snapshot_path=meta["snapshot"],
+        operator=f"manual by {operator}",
+    )
+    return jsonify({"success": True, "plate": plate, "action": action})
+
+@app.route("/gate/inside")
+def gate_inside():
+    """Vehicles currently inside or on hold — powers the Exit buttons."""
+    with lock:
+        return jsonify([
+            {"plate": p, **s} for p, s in gate_state.items()
         ])
 
-    content = [
-
-        Paragraph(
-            "S&N GuardianGrid Technologies",
-            styles["Title"]
-        ),
-
-        Spacer(1, 12),
-
-        Paragraph(
-            f"Generated: {datetime.now().strftime('%d-%m-%Y %H:%M')}",
-            styles["Normal"]
-        ),
-
-        Spacer(1, 12),
-
-        Paragraph(
-            f"Vehicles Entered: {entries}",
-            styles["Normal"]
-        ),
-
-        Paragraph(
-            f"Vehicles Exited: {exits}",
-            styles["Normal"]
-        ),
-
-        Paragraph(
-            f"Vehicle Events: {total_events}",
-            styles["Normal"]
-        ),
-
-        Paragraph(
-            f"Blacklisted Alerts: {blacklist_count}",
-            styles["Normal"]
-        )
-
-    ]
-
-    doc.build(content)
-
-    return send_file(
-        filename,
-        as_attachment=True
-    )
-
+@app.route("/access_mix")
+def access_mix_route():
+    from db import access_mix
+    return jsonify(access_mix(request.args.get("date")))
 
 # ── Serve React frontend ──────────────────────────────────────────
 @app.route("/", defaults={"path": ""})
@@ -577,29 +835,46 @@ def serve_frontend(path):
 
 # ── Main ──────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="GuardianGrid Server")
-    parser.add_argument("--camera",    type=int, default=0)
-    parser.add_argument("--port",      type=int, default=5000)
-    parser.add_argument("--no-camera", action="store_true")
-    args = parser.parse_args()
+    CONFIG.warn_if_insecure()
 
-    if not args.no_camera:
+    init_db()
+    init_visitors()
+
+    # ── Guardian voice/alert integration ─────────────────────────
+    try:
+        from guardian_wiring import wire_guardian
+        from booth_voice import speak
+        wire_guardian(voice_fn=speak)
+    except Exception as e:
+        print(f"[WARN] Guardian wiring failed to start: {e}")
+
+    if CONFIG.backup_enabled:
+        run_daily_backup(CONFIG.backup_keep_days)
+
+    _stats, _inside = rebuild_today_state()
+    vehicle_stats.update(_stats)
+    entry_times.update(_inside)
+    for p in _inside:
+        gate_state[p] = {"status": "INSIDE", "since": _inside[p].isoformat()}
+    print(f"[DB] Restored: {_stats['entries']} in / {_stats['exits']} out / {len(_inside)} inside")
+
+    if CONFIG.camera_enabled:
         threading.Thread(target=camera_thread,
-                         args=(args.camera,), daemon=True).start()
-        print(f"[INFO] Camera {args.camera} starting...")
+                         args=(CONFIG.camera_index,), daemon=True).start()
+        print(f"[INFO] Camera {CONFIG.camera_index} starting...")
         time.sleep(2)
-    # Start RTSP camera engine
+
     init_rtsp_cams(app)
 
     print(f"\n{'='*50}")
-    print(f"  GuardianGrid is RUNNING")
+    print(f"  DEFENDER OCTA — {CONFIG.society_name}")
+    print(f"  Site: {CONFIG.site_id}  |  {CONFIG.location}")
     print(f"{'='*50}")
-    print(f"  Dashboard : http://localhost:{args.port}")
-    print(f"  API       : http://localhost:{args.port}/alerts")
-    print(f"  Camera    : {'ON' if not args.no_camera else 'OFF'}")
+    print(f"  Dashboard : http://localhost:{CONFIG.port}")
+    print(f"  Camera    : {'ON' if CONFIG.camera_enabled else 'OFF'}")
     print(f"{'='*50}\n")
 
-    app.run(host="0.0.0.0", port=args.port, debug=False, threaded=True)
+    app.run(host=CONFIG.host, port=CONFIG.port, debug=False, threaded=True)
 
 
 # ── Threat Detection Integration ─────────────────────────────────
