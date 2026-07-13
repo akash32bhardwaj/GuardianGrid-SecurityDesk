@@ -6,11 +6,9 @@ output/
 .env
 *.key
 site_config.json
-frontend/
 frontend_legacy/
 frontend_octa/
 indian_anpr/frontend/
-dist/
 __pycache__/
 *.pyc
 venv/
