@@ -90,8 +90,8 @@ class _Config:
         self.require_guard_decision = bool(d["require_guard_decision"])
 
         # Admin
-        self.admin_username = cfg["admin"]["username"]
-        self.admin_password = cfg["admin"]["password"]
+        self.admin_username = os.environ.get("ADMIN_USERNAME", cfg["admin"]["username"])
+        self.admin_password = os.environ.get("ADMIN_PASSWORD", cfg["admin"]["password"])
 
         # Backup
         self.backup_enabled  = bool(cfg["backup"]["enabled"])
