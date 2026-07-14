@@ -9,6 +9,7 @@ Usage:
   python api_server.py --camera 1 --port 5000
 """
 
+import os
 import cv2
 import time
 import re
@@ -343,7 +344,7 @@ def camera_thread(camera_index: int):
     engine = ANPREngine(use_gpu=False)
     voter  = PlateVoter(window_seconds=VOTE_WINDOW_SECONDS,
                         min_samples=VOTE_MIN_SAMPLES)
-    cap    = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)
+    cap    = cv2.VideoCapture(camera_index)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH,  1280)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
     if not cap.isOpened():
@@ -835,6 +836,23 @@ def serve_frontend(path):
 
 # ── Main ──────────────────────────────────────────────────────────
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--port", type=int, default=None)
+    parser.add_argument("--no-camera", action="store_true")
+    parser.add_argument("--camera", type=int, default=None)
+    args, unknown = parser.parse_known_args()
+
+    if args.port is not None:
+        CONFIG.port = args.port
+    elif os.environ.get("PORT"):
+        CONFIG.port = int(os.environ.get("PORT"))
+        
+    if args.no_camera:
+        CONFIG.camera_enabled = False
+    elif args.camera is not None:
+        CONFIG.camera_index = args.camera
+        CONFIG.camera_enabled = True
+
     CONFIG.warn_if_insecure()
 
     init_db()

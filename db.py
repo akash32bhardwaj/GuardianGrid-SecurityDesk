@@ -45,7 +45,7 @@ def _conn():
 def init_db():
     with _conn() as c:
         c.executescript(_SCHEMA)
-    print(f"[DB] Event store ready → {DB_PATH.resolve()}")
+    print(f"[DB] Event store ready -> {DB_PATH.resolve()}")
 
 
 def record_event(record: dict):
