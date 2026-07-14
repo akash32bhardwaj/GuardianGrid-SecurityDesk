@@ -20,6 +20,7 @@ psycopg2-binary>=2.9.9
 
 PyJWT>=2.8.0
 Werkzeug>=3.0.0
+python-dotenv>=1.0.0
 
 # PDF Reports
 reportlab>=4.0.0
