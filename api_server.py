@@ -732,6 +732,13 @@ AUTH_EXEMPT_PREFIXES = (
     "/static",
     "/guardian",         # Guardian voice assistant page
     "/api/guardian/",    # Guardian Q&A endpoint (local booth — trusted network)
+    "/activity_feed",
+    "/notifications",
+    "/alerts",
+    "/cameras",
+    "/vehicle_stats",
+    "/inside_now",
+    "/visitors_today",
 )
 
 @app.before_request
