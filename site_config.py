@@ -72,7 +72,8 @@ class _Config:
 
         # Camera
         self.camera_enabled = bool(cfg["camera"]["enabled"])
-        self.camera_index   = int(cfg["camera"]["index"])
+        idx = cfg["camera"]["index"]
+        self.camera_index   = int(idx) if str(idx).isdigit() else str(idx)
 
         # RTSP cameras (skip commented/empty entries)
         self.rtsp_cameras = [

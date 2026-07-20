@@ -10,6 +10,7 @@ Usage:
 """
 
 import os
+import numpy as np
 import cv2
 import time
 import re
@@ -339,104 +340,85 @@ def process_entry_exit(result: PlateResult, snapshot_path: str = ""):
 
 
 # ── Camera thread ─────────────────────────────────────────────────
-def camera_thread(camera_index: int):
-    global latest_frame, camera_running
+# ── Global AI State ──────────────────────────────────────────────
+engine = None
+voter = None
+confirmed_result = None
+last_confirmed_plate = None
+
+def init_ai():
+    global engine, voter, camera_running
     engine = ANPREngine(use_gpu=False)
-    voter  = PlateVoter(window_seconds=VOTE_WINDOW_SECONDS,
-                        min_samples=VOTE_MIN_SAMPLES)
-    cap    = cv2.VideoCapture(camera_index)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH,  1280)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-    if not cap.isOpened():
-        print(f"[ERROR] Cannot open camera {camera_index}")
-        camera_running = False
-        return
-
+    voter  = PlateVoter(window_seconds=VOTE_WINDOW_SECONDS, min_samples=VOTE_MIN_SAMPLES)
     camera_running = True
-    frame_count     = 0
-    processing      = False
-    confirmed_result = None
-    last_confirmed_plate = None
 
-    def async_detect(frame_copy):
-        nonlocal confirmed_result, processing, last_confirmed_plate
-        try:
-            r = engine.process_image(frame_copy)
-            if r.detected and r.confidence >= MIN_CONF:
-                voter.add(r)
-                consensus = voter.get_consensus()
-                if consensus and consensus.plate_number_raw != last_confirmed_plate:
+@app.route("/api/upload_frame", methods=["POST"])
+def upload_frame():
+    global latest_frame, confirmed_result, last_confirmed_plate
+    
+    if not camera_running:
+        init_ai()
+        
+    if 'image' not in request.files:
+        return jsonify({"success": False, "error": "No image provided"}), 400
+        
+    file = request.files['image']
+    img_bytes = file.read()
+    nparr = np.frombuffer(img_bytes, np.uint8)
+    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    
+    if frame is None:
+         return jsonify({"success": False, "error": "Invalid image"}), 400
 
-                    # ── Fuzzy-snap to a known resident plate ──────────
-                    # If this reading is 1 character off from a
-                    # registered resident's plate, trust the
-                    # registered plate instead (residents pass by
-                    # repeatedly, so their plate is the "ground truth")
-                    close_match = resident_db.fuzzy_lookup(
-                        consensus.plate_number_raw, max_distance=1
-                    )
-                    if close_match and close_match.plate_number != consensus.plate_number_raw:
-                        corrected_raw = close_match.plate_number
-                        consensus.plate_number_raw = corrected_raw
-                        consensus.plate_number = ANPREngine._format_plate(
-                            corrected_raw, consensus.series
-                        )
-                        consensus.notes += " | snapped to known resident plate"
+    r = engine.process_image(frame)
+    if r.detected and r.confidence >= MIN_CONF:
+        voter.add(r)
+        consensus = voter.get_consensus()
+        if consensus and consensus.plate_number_raw != last_confirmed_plate:
+            close_match = resident_db.fuzzy_lookup(consensus.plate_number_raw, max_distance=1)
+            if close_match and close_match.plate_number != consensus.plate_number_raw:
+                corrected_raw = close_match.plate_number
+                consensus.plate_number_raw = corrected_raw
+                consensus.plate_number = ANPREngine._format_plate(corrected_raw, consensus.series)
+                consensus.notes += " | snapped to known resident plate"
+            
+            confirmed_result = consensus
+            last_confirmed_plate = consensus.plate_number_raw
+            
+            ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
+            snap = str(OUTPUT_DIR / f"{consensus.plate_number_raw}_{ts}.jpg")
+            cv2.imwrite(snap, frame)
+            process_entry_exit(consensus, snap)
+            print(f"[CONFIRMED] {consensus.plate_number} ({consensus.state_name}) {consensus.confidence:.0f}%")
+            
+    if confirmed_result and not voter.get_consensus():
+        confirmed_result = None
+        last_confirmed_plate = None
 
-                    confirmed_result = consensus
-                    last_confirmed_plate = consensus.plate_number_raw
+    if confirmed_result and confirmed_result.detected and confirmed_result.bbox:
+        frame = engine.draw_result(frame, confirmed_result)
 
-                    ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    snap = str(OUTPUT_DIR / f"{consensus.plate_number_raw}_{ts}.jpg")
-                    cv2.imwrite(snap, frame_copy)
-                    process_entry_exit(consensus, snap)
-                    print(f"[CONFIRMED] {consensus.plate_number} "
-                          f"({consensus.state_name}) {consensus.confidence:.0f}%")
-        finally:
-            processing = False
+    if confirmed_result and confirmed_result.detected:
+        h, w = frame.shape[:2]
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (0, h-60), (w, h), (0,0,0), -1)
+        cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
+        color_map = {"yellow":(0,215,255),"green":(0,220,0),
+                     "black":(180,180,180),"white":(0,220,130)}
+        color = color_map.get(confirmed_result.plate_type, (0,220,130))
+        cv2.putText(frame, confirmed_result.plate_number,
+                    (16, h-30), cv2.FONT_HERSHEY_DUPLEX, 1.2, color, 2)
+        cv2.putText(frame,
+                    f"{confirmed_result.state_name}  |  "
+                    f"{confirmed_result.confidence:.0f}%  |  CONFIRMED",
+                    (16, h-8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200,200,200), 1)
 
-    print("[INFO] Camera started.")
-    while camera_running:
-        ret, frame = cap.read()
-        if not ret:
-            time.sleep(0.1)
-            continue
-        frame_count += 1
-        if frame_count % 2 == 0 and not processing:
-            processing = True
-            threading.Thread(target=async_detect,
-                             args=(frame.copy(),), daemon=True).start()
+    _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+    with lock:
+        latest_frame = buf.tobytes()
 
-        # Clear confirmed result once the voter window expires
-        # (plate has left the frame / no recent matching reads)
-        if confirmed_result and not voter.get_consensus():
-            confirmed_result = None
-            last_confirmed_plate = None
+    return jsonify({"success": True})
 
-        if confirmed_result and confirmed_result.detected and confirmed_result.bbox:
-            frame = engine.draw_result(frame, confirmed_result)
-
-        if confirmed_result and confirmed_result.detected:
-            h, w = frame.shape[:2]
-            overlay = frame.copy()
-            cv2.rectangle(overlay, (0, h-60), (w, h), (0,0,0), -1)
-            cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
-            color_map = {"yellow":(0,215,255),"green":(0,220,0),
-                         "black":(180,180,180),"white":(0,220,130)}
-            color = color_map.get(confirmed_result.plate_type, (0,220,130))
-            cv2.putText(frame, confirmed_result.plate_number,
-                        (16, h-30), cv2.FONT_HERSHEY_DUPLEX, 1.2, color, 2)
-            cv2.putText(frame,
-                        f"{confirmed_result.state_name}  |  "
-                        f"{confirmed_result.confidence:.0f}%  |  CONFIRMED",
-                        (16, h-8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200,200,200), 1)
-
-        _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
-        with lock:
-            latest_frame = buf.tobytes()
-        time.sleep(0.03)
-
-    cap.release()
 
 
 # ── API Routes ────────────────────────────────────────────────────
@@ -726,6 +708,7 @@ def visitor_exit_route(vid):
 AUTH_EXEMPT_PREFIXES = (
     "/api/auth/login",   # must stay open or nobody can log in
     "/api/auth/test",
+    "/api/upload_frame",
     "/video_feed",       # MJPEG streams — <img> tags can't send headers
     "/cam/",
     "/frontend",         # built frontend assets
@@ -846,7 +829,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=None)
     parser.add_argument("--no-camera", action="store_true")
-    parser.add_argument("--camera", type=int, default=None)
+    parser.add_argument("--camera", default=None)
     args, unknown = parser.parse_known_args()
 
     if args.port is not None:
@@ -883,11 +866,7 @@ if __name__ == "__main__":
         gate_state[p] = {"status": "INSIDE", "since": _inside[p].isoformat()}
     print(f"[DB] Restored: {_stats['entries']} in / {_stats['exits']} out / {len(_inside)} inside")
 
-    if CONFIG.camera_enabled:
-        threading.Thread(target=camera_thread,
-                         args=(CONFIG.camera_index,), daemon=True).start()
-        print(f"[INFO] Camera {CONFIG.camera_index} starting...")
-        time.sleep(2)
+    # camera thread removed
 
     init_rtsp_cams(app)
 
