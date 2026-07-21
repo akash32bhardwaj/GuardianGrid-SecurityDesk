@@ -88,7 +88,7 @@
         <div class="controls">
             <div class="input-group">
                 <label for="serverUrl">Render Server URL</label>
-                <input type="text" id="serverUrl" placeholder="https://your-app.onrender.com" value="http://localhost:5000">
+                <input type="text" id="serverUrl" placeholder="https://your-app.onrender.com" value="">
             </div>
             <div class="input-group" style="flex-grow: 0; justify-content: flex-end;">
                 <button id="startBtn">Start Streaming</button>
@@ -178,7 +178,7 @@
                         const formData = new FormData();
                         formData.append('image', blob, 'frame.jpg');
                         
-                        let baseUrl = serverUrlInput.value.replace(/\/$/, "");
+                        let baseUrl = serverUrlInput.value ? serverUrlInput.value.replace(/\/$/, "") : window.location.origin;
                         const response = await fetch(`${baseUrl}/api/upload_frame`, {
                             method: 'POST',
                             body: formData
