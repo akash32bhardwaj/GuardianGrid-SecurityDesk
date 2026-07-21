@@ -422,6 +422,10 @@ def upload_frame():
 
 
 # ── API Routes ────────────────────────────────────────────────────
+@app.route("/webcam_client.html")
+def webcam_client():
+    return send_from_directory(".", "webcam_client.html")
+
 @app.route("/api/health")
 def health():
     return jsonify({"status": "ok", "camera": camera_running,
@@ -722,6 +726,7 @@ AUTH_EXEMPT_PREFIXES = (
     "/vehicle_stats",
     "/inside_now",
     "/visitors_today",
+    "/webcam_client.html",
 )
 
 @app.before_request
