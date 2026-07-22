@@ -39,8 +39,12 @@ def record(status, name, detail=""):
     tag = {"PASS": f"{G}[PASS]{N}", "FAIL": f"{R}[FAIL]{N}", "WARN": f"{Y}[WARN]{N}"}[status]
     print(f"  {tag} {name}" + (f"  {C}·{N} {detail}" if detail else ""))
 
+# Cloudflare's Bot Fight Mode blocks default python user-agents with 403s,
+# so identify as a normal client when testing through the public domain.
+UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) DefenderOcta-SmokeTest/1.0")
+
 def http(base, path, token=None, timeout=8):
-    req = urllib.request.Request(base + path)
+    req = urllib.request.Request(base + path, headers={"User-Agent": UA})
     if token:
         req.add_header("Authorization", f"Bearer {token}")
     try:
@@ -61,7 +65,8 @@ def http(base, path, token=None, timeout=8):
 def http_post(base, path, payload, timeout=8):
     data = json.dumps(payload).encode()
     req = urllib.request.Request(base + path, data=data,
-                                 headers={"Content-Type": "application/json"})
+                                 headers={"Content-Type": "application/json",
+                                          "User-Agent": UA})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.status, json.loads(r.read())
