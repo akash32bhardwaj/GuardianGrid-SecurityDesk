@@ -24,7 +24,7 @@ _PERSON_CLASSES  = {0}                     # person
 _VEHICLE_CLASSES = {2, 3, 5, 7}            # car, motorcycle, bus, truck
 
 _BOX_COLOR   = {"person": (0, 200, 255), "vehicle": (0, 220, 130)}
-_CONF_THRESH = 0.40
+_CONF_THRESH = 0.35
 
 
 def _load_model():
@@ -51,7 +51,7 @@ def detect(frame, mode="person"):
 
     model = _load_model()
     # verbose=False keeps the console quiet; imgsz small = faster on CPU
-    results = model.predict(frame, conf=_CONF_THRESH, imgsz=480, verbose=False)
+    results = model.predict(frame, conf=_CONF_THRESH, imgsz=736, verbose=False)
 
     counts = {"persons": 0, "vehicles": 0}
     annotated = frame.copy()
@@ -71,10 +71,10 @@ def detect(frame, mode="person"):
                 label_type = "vehicle"; counts["vehicles"] += 1
 
             color = _BOX_COLOR[label_type]
-            cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
+            cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 3)
             cv2.putText(annotated, f"{label_type} {conf:.0%}",
-                        (x1, max(y1 - 6, 12)), cv2.FONT_HERSHEY_SIMPLEX,
-                        0.5, color, 1, cv2.LINE_AA)
+                        (x1, max(y1 - 8, 16)), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.7, color, 2, cv2.LINE_AA)
 
     return annotated, counts
 

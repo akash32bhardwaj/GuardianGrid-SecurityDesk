@@ -34,6 +34,8 @@ _DEFAULTS = {
     },
     "admin":  {"username": "admin", "password": "change-me-now"},
     "backup": {"enabled": True, "keep_days": 14},
+    "face":   {"enabled": False, "camera": "", "alert_mode": "watchlist",
+               "cooldown_seconds": 60},
 }
 
 
@@ -96,6 +98,13 @@ class _Config:
         # Backup
         self.backup_enabled  = bool(cfg["backup"]["enabled"])
         self.backup_keep_days = int(cfg["backup"]["keep_days"])
+
+        # Face recognition
+        f = cfg["face"]
+        self.face_enabled    = bool(f["enabled"])
+        self.face_camera     = f["camera"]
+        self.face_alert_mode = f["alert_mode"]
+        self.face_cooldown   = int(f["cooldown_seconds"])
 
     def warn_if_insecure(self):
         """Print loud warnings for unsafe defaults left in production."""

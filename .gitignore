@@ -1,3 +1,7 @@
+# Runtime generated data
+recordings/
+reports/
+
 *.db
 *.db-journal
 data/
@@ -22,3 +26,4 @@ venv/
 .vscode/
 .DS_Store
 Thumbs.db
+face_db.json

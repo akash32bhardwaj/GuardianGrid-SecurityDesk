@@ -1,0 +1,48 @@
+# ══════════════════════════════════════════════════════════════════
+# Defender Octa — .gitignore
+# Rule: CODE goes to git. SECRETS, DATA and MEDIA never do.
+# ══════════════════════════════════════════════════════════════════
+
+# ── Secrets & per-site configuration ──────────────────────────────
+site_config.json
+.env
+*.env
+*_secret*
+twilio*.txt
+
+# ── Databases (residents' personal data — DPDP-sensitive) ─────────
+*.db
+*.sqlite
+*.sqlite3
+backups/
+
+# ── Video, images & generated reports ─────────────────────────────
+recordings/
+reports/
+snapshots/
+captures/
+vehicle_images/
+faces/
+*.mp4
+*.avi
+*.pdf
+
+# ── Python noise ──────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+nohup.out
+*.log
+
+# ── Frontend build noise (React project) ──────────────────────────
+node_modules/
+dist/
+.vite/
+
+# ── OS / editor noise ─────────────────────────────────────────────
+Thumbs.db
+Desktop.ini
+.DS_Store
+.vscode/

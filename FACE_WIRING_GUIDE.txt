@@ -1,0 +1,219 @@
+DEFENDER OCTA - FACE RECOGNITION WIRING GUIDE
+==============================================
+Files to place in the backend folder (next to api_server.py):
+    face_engine.py      (recognition + watchlist + alert policy)
+    enroll_face.py      (enrol residents / watchlist people)
+
+Then do the 4 edits below and restart Flask.
+
+Behaviour after wiring:
+    KNOWN face      -> green box "Name - Flat", no alert
+    WATCHLIST face  -> red box + incident + WhatsApp with photo
+    UNKNOWN face    -> muted red box only (SILENT)  <-- keeps demos clean
+                       ...unless alert_mode = "all" (see step 1)
+
+
+---------------------------------------------------------------
+STEP 1 - site_config.json  (choose the camera + alert mode)
+---------------------------------------------------------------
+Add a "face" block at the top level:
+
+  "face": {
+    "enabled": true,
+    "camera": "Main Gate",
+    "alert_mode": "watchlist",
+    "cooldown_seconds": 60,
+    "_comment": "alert_mode: 'watchlist' = only flagged faces alert; 'all' = every unknown alerts. camera = which feed runs face recognition (ONE only on a laptop)."
+  }
+
+Notes:
+  - "camera" must EXACTLY match a camera name in your cameras list.
+    Pick the head-height gate/entrance camera, NOT the overhead one.
+  - Run face recognition on ONE camera only on a laptop CPU.
+
+
+---------------------------------------------------------------
+STEP 2 - site_config.py
+---------------------------------------------------------------
+(a) In _DEFAULTS add:
+
+    "face": {"enabled": False, "camera": "", "alert_mode": "watchlist",
+             "cooldown_seconds": 60},
+
+(b) In _Config.__init__ add:
+
+        # Face recognition
+        f = cfg.get("face", {})
+        self.face_enabled = bool(f.get("enabled", False))
+        self.face_camera = f.get("camera", "")
+        self.face_alert_mode = f.get("alert_mode", "watchlist")
+        self.face_cooldown = int(f.get("cooldown_seconds", 60))
+
+
+---------------------------------------------------------------
+STEP 3 - rtmp_proxy.py  (run recognition on the chosen camera)
+---------------------------------------------------------------
+At the top, alongside the person_detector import, add a lazy holder:
+
+    _face = None
+    def _get_face():
+        global _face
+        if _face is None:
+            import face_engine
+            _face = face_engine
+        return _face
+
+In _camera_worker, decide once (near where ai_mode is read) whether THIS
+camera does faces:
+
+    try:
+        from site_config import CONFIG
+        do_faces = (CONFIG.face_enabled and name == CONFIG.face_camera)
+        face_interval = 2.0            # seconds between face passes
+    except Exception:
+        do_faces = False
+        face_interval = 2.0
+    last_face_ts = 0.0
+
+Then, INSIDE the frame loop, AFTER the person/vehicle AI block and BEFORE
+the frame is stored for streaming, add:
+
+    if do_faces:
+        now_ts = time.time()
+        if (now_ts - last_face_ts) >= face_interval:
+            try:
+                fe = _get_face()
+                display_frame, face_results = fe.recognise(display_frame)
+                last_face_ts = now_ts
+                for fr in face_results:
+                    if fe.should_alert(fr["status"]):
+                        _fire_face_alert(cam_id, name, fr, display_frame)
+            except Exception as e:
+                print(f"[CAM {cam_id}] face error: {e}")
+
+(display_frame is whatever variable you draw/stream; if your code uses a
+different name, match it. Faces are drawn on top of vehicle boxes.)
+
+
+---------------------------------------------------------------
+STEP 4 - the alert function (put in rtmp_proxy.py OR api_server.py)
+---------------------------------------------------------------
+This reuses your existing incident + WhatsApp machinery. It must call the
+same create_new_incident() and whatsapp send that unknown vehicles use.
+Because rtmp_proxy runs in its own thread, the cleanest approach is to
+POST to a small internal endpoint on api_server. Add this route to
+api_server.py:
+
+    _face_alert_cooldown = {}   # key -> last alert time
+
+    @app.route("/internal/face_alert", methods=["POST"])
+    def internal_face_alert():
+        from site_config import CONFIG
+        import time as _t
+        data = request.get_json() or {}
+        name   = data.get("name", "UNKNOWN")
+        status = data.get("status", "UNKNOWN")
+        reason = data.get("reason", "")
+        camera = data.get("camera", "Gate")
+        snap   = data.get("snapshot", "")     # filename saved by rtmp_proxy
+
+        # de-dupe: one alert per person per cooldown window
+        key = f"{status}:{name}"
+        now = _t.time()
+        if now - _face_alert_cooldown.get(key, 0) < CONFIG.face_cooldown:
+            return jsonify({"ok": True, "skipped": "cooldown"})
+        _face_alert_cooldown[key] = now
+
+        title = ("WATCHLIST FACE DETECTED" if status == "WATCHLIST"
+                 else "UNKNOWN FACE DETECTED")
+        sev = "HIGH" if status == "WATCHLIST" else "MEDIUM"
+        desc = (f"{title} at {camera}. "
+                + (f"Name: {name}. " if status == "WATCHLIST" else "")
+                + (f"Reason: {reason}. " if reason else ""))
+
+        create_new_incident({
+            "title": title, "description": desc, "severity": sev,
+            "camera_name": camera, "evidence_image": snap,
+            "plate_number": "-", "resident_name": name,
+            "flat_number": "-", "confidence": 0,
+        })
+        notification_feed.appendleft({
+            "time": datetime.now().isoformat(),
+            "title": title, "message": name, "severity": sev,
+        })
+        activity_feed.appendleft({
+            "time": datetime.now().isoformat(),
+            "event": f"{title}: {name}", "type": "critical",
+        })
+
+        # WhatsApp with the snapshot (reuse your existing sender)
+        if WHATSAPP_AVAILABLE and snap:
+            try:
+                threading.Thread(target=send_vehicle_alert, kwargs={
+                    "plate": name, "event": title,
+                    "resident_info": {"found": status == "WATCHLIST",
+                                      "status": status,
+                                      "resident_name": name,
+                                      "flat_number": "-", "block": "",
+                                      "phone": CONFIG.__dict__.get("security_whatsapp", "")},
+                    "snapshot_path": snap,
+                }, daemon=True).start()
+            except Exception as e:
+                print(f"[FACE] whatsapp error: {e}")
+
+        return jsonify({"ok": True})
+
+Then in rtmp_proxy.py, _fire_face_alert saves a snapshot and calls it:
+
+    import os, requests
+    from datetime import datetime
+
+    def _fire_face_alert(cam_id, camera_name, fr, frame):
+        try:
+            os.makedirs("output/faces", exist_ok=True)
+            fname = f"face_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{fr['status']}.jpg"
+            path = os.path.join("output", "faces", fname)
+            cv2.imwrite(path, frame)
+            requests.post("http://127.0.0.1:5000/internal/face_alert",
+                          json={"name": fr["name"], "status": fr["status"],
+                                "reason": fr.get("reason", ""),
+                                "camera": camera_name, "snapshot": fname},
+                          timeout=3)
+        except Exception as e:
+            print(f"[CAM {cam_id}] face alert post failed: {e}")
+
+IMPORTANT: /internal/face_alert must be exempt from the auth guard, since
+rtmp_proxy calls it without a token. Add "/internal/" to your
+AUTH_EXEMPT_PREFIXES in api_server.py.
+
+
+---------------------------------------------------------------
+DEMO SCRIPT (the money moment)
+---------------------------------------------------------------
+1. Enrol yourself as a resident:
+     python enroll_face.py --name "Akash" --flat "B-402" --image me.jpg
+2. Enrol a "banned" person as watchlist (a colleague / a printed photo):
+     python enroll_face.py --name "Flagged Person" --watchlist \
+        --reason "Banned visitor" --image flagged.jpg
+3. On camera:
+     - You walk up      -> GREEN "Akash - B-402", silent
+     - A stranger       -> muted red "UNKNOWN", silent (no spam)
+     - The flagged face -> RED "WATCHLIST", incident appears in Incident
+                           Management + WhatsApp fires with the photo
+   That sequence tells the whole story: recognises residents, ignores
+   ordinary visitors, screams about flagged threats.
+
+
+---------------------------------------------------------------
+PERFORMANCE / SAFETY NOTES
+---------------------------------------------------------------
+- One camera only on a laptop. Face + vehicle YOLO + ANPR together is
+  heavy; if the feed stutters, raise face_interval to 3-4 seconds.
+- alert_mode "watchlist" is the safe default. Only switch to "all" if a
+  client explicitly wants every unknown face alerted (expect volume).
+- cooldown_seconds stops the same person alerting repeatedly.
+- Face data is sensitive personal data under the DPDP Act. Get written
+  consent before enrolling real residents, and keep face_db.json out of
+  git (add it to .gitignore).
+PYEOF
+echo "written"

@@ -1,0 +1,181 @@
+DEFENDER OCTA — DEMO MODE WIRING GUIDE
+=======================================
+Three files to edit. Do them in order, then restart Flask.
+
+
+---------------------------------------------------------------
+STEP 1 — site_config.json
+---------------------------------------------------------------
+Add a "demo" block anywhere at the top level (e.g. after "backup"):
+
+  "demo": {
+    "demo_mode": false,
+    "_comment": "true = seeded DEMO rows are counted in charts and KPIs. Set false before any real deployment."
+  }
+
+Remember the comma after the preceding block.
+
+
+---------------------------------------------------------------
+STEP 2 — site_config.py
+---------------------------------------------------------------
+(a) In _DEFAULTS, add one line after the "backup" entry:
+
+    "demo":   {"demo_mode": False},
+
+(b) In _Config.__init__, after the Backup section, add:
+
+        # Demo mode
+        self.demo_mode = bool(cfg["demo"]["demo_mode"])
+
+(c) In warn_if_insecure(), add this before the `if warnings:` line:
+
+        if self.demo_mode:
+            warnings.append(
+                "DEMO MODE IS ON — seeded fake events are being counted. "
+                "Set demo.demo_mode to false in site_config.json before a real deployment."
+            )
+
+
+---------------------------------------------------------------
+STEP 3 — db.py
+---------------------------------------------------------------
+(a) Near the top, after the DB_PATH line, add:
+
+    # Demo rows use plates prefixed "DEMO". When demo mode is off they
+    # are excluded from every aggregate query.
+    def _demo_filter() -> str:
+        """Returns a SQL fragment to append to a WHERE clause."""
+        try:
+            from site_config import CONFIG
+            if CONFIG.demo_mode:
+                return ""            # count everything
+        except Exception:
+            pass
+        return " AND plate NOT LIKE 'DEMO%'"
+
+
+(b) Now add the filter to each aggregate query. In every function below,
+    find the WHERE clause and append {_demo_filter()} inside the f-string.
+    The queries must become f-strings (note the f prefix).
+
+    hourly_stats():
+        rows = c.execute(
+            f"""SELECT CAST(strftime('%H', timestamp) AS INTEGER) AS hour,
+                      SUM(event = 'ENTRY') AS entered,
+                      SUM(event = 'EXIT')  AS exited
+               FROM vehicle_events
+               WHERE date(timestamp) = ?{_demo_filter()}
+               GROUP BY hour ORDER BY hour""",
+            (day,),
+        ).fetchall()
+
+    daily_summary():
+        rows = c.execute(
+            f"""SELECT date(timestamp) AS d,
+                      SUM(event = 'ENTRY') AS entered,
+                      SUM(event = 'EXIT')  AS exited
+               FROM vehicle_events
+               WHERE strftime('%Y-%m', timestamp) = ?{_demo_filter()}
+               GROUP BY d ORDER BY d""",
+            (ym,),
+        ).fetchall()
+
+    events_for_date():
+        rows = c.execute(
+            f"""SELECT plate, vtype AS type, state, event, confidence,
+                      image, timestamp
+               FROM vehicle_events
+               WHERE date(timestamp) = ?{_demo_filter()}
+               ORDER BY timestamp DESC LIMIT ?""",
+            (date_str, limit),
+        ).fetchall()
+
+    vehicle_summary():
+        (this one has no WHERE clause — add one)
+        rows = c.execute(
+            f"""SELECT plate,
+                      MAX(vtype)  AS type,
+                      MAX(state)  AS state,
+                      COUNT(*)    AS visits,
+                      MAX(timestamp) AS last_seen
+               FROM vehicle_events
+               WHERE 1=1{_demo_filter()}
+               GROUP BY plate
+               ORDER BY last_seen DESC LIMIT ?""",
+            (limit,),
+        ).fetchall()
+
+    access_mix():
+        rows = c.execute(
+            f"""SELECT COALESCE(access, 'UNKNOWN') AS status, COUNT(*) AS n
+               FROM vehicle_events
+               WHERE date(timestamp) = ?{_demo_filter()}
+               GROUP BY status""",
+            (day,),
+        ).fetchall()
+
+    camera_heat():
+        rows = c.execute(
+            f"""SELECT COALESCE(camera, 'Main Gate') AS camera,
+                      CAST(strftime('%H', timestamp) AS INTEGER) AS hour,
+                      COUNT(*) AS n
+               FROM vehicle_events
+               WHERE date(timestamp) = ?{_demo_filter()}
+               GROUP BY camera, hour""",
+            (day,),
+        ).fetchall()
+
+    rebuild_today_state():
+        rows = c.execute(
+            f"""SELECT plate, vtype, event, timestamp FROM vehicle_events
+               WHERE date(timestamp) = ?{_demo_filter()}
+               ORDER BY timestamp""",
+            (day,),
+        ).fetchall()
+
+
+---------------------------------------------------------------
+STEP 4 — api_server.py (startup banner)
+---------------------------------------------------------------
+In the __main__ block, after CONFIG.warn_if_insecure() (or after init_db()),
+add:
+
+    from site_config import CONFIG
+    if CONFIG.demo_mode:
+        print("\n" + "*" * 58)
+        print("  *** DEMO MODE ACTIVE — SEEDED DATA IS BEING COUNTED ***")
+        print("  Dashboard numbers include fabricated events.")
+        print("  Set demo.demo_mode = false in site_config.json before")
+        print("  deploying to a real society.")
+        print("*" * 58 + "\n")
+
+
+---------------------------------------------------------------
+DAILY USE
+---------------------------------------------------------------
+Seed demo traffic (once; it persists):
+    python seed_demo.py            # today only
+    python seed_demo.py --days 7   # a week of history for the calendar
+
+Turn demo data ON for a recording:
+    site_config.json  ->  "demo_mode": true    ->  restart Flask
+
+Turn it OFF for real use:
+    site_config.json  ->  "demo_mode": false   ->  restart Flask
+    (rows stay in the database but are excluded from every query)
+
+Remove demo rows entirely:
+    python seed_demo.py --clear
+
+
+---------------------------------------------------------------
+WHAT THIS DOES NOT COVER
+---------------------------------------------------------------
+- Incidents are stored in a separate table and are not seeded or
+  filtered. Demo incidents (if any) must be managed manually.
+- The live KPI counters (vehicle_stats) are rebuilt at startup from
+  rebuild_today_state(), so they honour demo_mode. But events
+  recorded WHILE the server runs always count, demo mode or not.
+- The committee PDF reads the same filtered functions, so it will
+  correctly exclude demo rows when demo_mode is false.

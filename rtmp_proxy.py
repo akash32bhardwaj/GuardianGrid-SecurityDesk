@@ -17,7 +17,38 @@ import time
 import threading
 from flask import Response
 from site_config import CONFIG
+from site_config import CONFIG
 
+# ── Face recognition (lazy) ──────────────────────────────────────
+import os
+from datetime import datetime
+try:
+    import requests as _requests
+except Exception:
+    _requests = None
+
+_face = None
+def _get_face():
+    global _face
+    if _face is None:
+        import face_engine
+        _face = face_engine
+    return _face
+
+def _fire_face_alert(cam_id, camera_name, fr, frame):
+    if _requests is None:
+        return
+    try:
+        os.makedirs("output/faces", exist_ok=True)
+        fname = f"face_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{fr['status']}.jpg"
+        cv2.imwrite(os.path.join("output", "faces", fname), frame)
+        _requests.post("http://127.0.0.1:5000/internal/face_alert",
+                       json={"name": fr["name"], "status": fr["status"],
+                             "reason": fr.get("reason", ""),
+                             "camera": camera_name, "snapshot": fname},
+                       timeout=3)
+    except Exception as e:
+        print(f"[CAM {cam_id}] face alert post failed: {e}")
 # Camera list comes from site_config.json. Each entry there is
 # {"name": ..., "url": ..., "ai_mode": ...(optional)}.
 # IDs are assigned by position.
@@ -30,6 +61,9 @@ RTSP_CAMERAS = [
 RECONNECT_DELAY   = 5
 JPEG_QUALITY      = 65
 AI_EVERY_N_FRAMES = 8
+
+AI_IDLE_INTERVAL = 2.0   # seconds — re-run YOLO at least this often so
+                         # parked/stationary objects stay boxed
 
 _frames: dict = {}
 _locks:  dict = {}
@@ -56,6 +90,16 @@ def _camera_worker(cam: dict):
     frame_count    = 0
     last_annotated = None
     has_motion     = False
+    last_ai_ts     = 0.0
+
+    # Face recognition — only on the one camera named in site_config.json
+    try:
+        do_faces = CONFIG.face_enabled and name == CONFIG.face_camera
+    except Exception:
+        do_faces = False
+    last_face_ts = 0.0
+    if do_faces:
+        print(f"[CAM {cam_id}] {name} — face recognition ENABLED")
 
     while True:
         print(f"[CAM {cam_id}] {name} — connecting...")
@@ -82,19 +126,23 @@ def _camera_worker(cam: dict):
             if ai_detect and ai_mode:
                 has_motion = motion_detector.has_motion(frame)
 
-                if has_motion and frame_count % AI_EVERY_N_FRAMES == 0:
+                # Run YOLO if: motion is present (every Nth frame), OR
+                # enough time has passed since the last run (keeps parked
+                # vehicles boxed even when the scene is completely still).
+                now_ts = time.time()
+                due_by_motion = has_motion and frame_count % AI_EVERY_N_FRAMES == 0
+                due_by_timer  = (now_ts - last_ai_ts) >= AI_IDLE_INTERVAL
+
+                if due_by_motion or due_by_timer:
                     try:
                         annotated, counts = ai_detect(frame, mode=ai_mode)
                         last_annotated = annotated
+                        last_ai_ts = now_ts
                         with _locks[cam_id]:
                             _stats[cam_id] = counts
                     except Exception as e:
                         print(f"[CAM {cam_id}] AI error: {e}")
                         last_annotated = frame
-                elif not has_motion:
-                    last_annotated = None
-                    with _locks[cam_id]:
-                        _stats[cam_id] = {"persons": 0, "vehicles": 0}
 
                 display_frame = last_annotated if last_annotated is not None else frame
 
@@ -107,9 +155,22 @@ def _camera_worker(cam: dict):
                 display_frame = frame
                 has_motion    = True  # Main Gate records continuously
 
+            # ── Face recognition pass (throttled) ───────────────
+            if do_faces and (time.time() - last_face_ts) >= 2.0:
+                try:
+                    fe = _get_face()
+                    display_frame, face_results = fe.recognise(display_frame)
+                    last_face_ts = time.time()
+                    for fr in face_results:
+                        if fe.should_alert(fr["status"]):
+                            _fire_face_alert(cam_id, name, fr, display_frame)
+                except Exception as e:
+                    print(f"[CAM {cam_id}] face error: {e}")
+
             # ── Write to recording ──────────────────────────────
             if _recorder:
-                _recorder.write_frame(cam_id, frame, has_motion=has_motion)
+                always_record = (name == "Main Gate")
+                _recorder.write_frame(cam_id, frame, has_motion=has_motion or always_record)
 
             ok, buf = cv2.imencode(
                 ".jpg", display_frame,

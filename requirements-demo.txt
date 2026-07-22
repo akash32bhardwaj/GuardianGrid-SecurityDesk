@@ -1,0 +1,36 @@
+# =============================================================================
+# Defender Octa - COMPLETE dependency set for the demo laptop
+# =============================================================================
+# This is a superset of requirements.txt. The original was missing several
+# packages the code actually imports (dotenv, reportlab, insightface,
+# onnxruntime, ultralytics, openpyxl, twilio) which would crash at runtime.
+#
+# The SETUP script installs this in two groups so a failure in the heavy,
+# optional vision packages doesn't block the core app (login + ANPR + dashboard).
+# =============================================================================
+
+# ---- CORE (must succeed: login page, API, ANPR, dashboard, reports) ----
+flask>=3.0.0
+flask-cors>=4.0.0
+Werkzeug>=3.0.0
+waitress>=3.0.0              # production WSGI server (serve.py); dev server is not for real deploys
+PyJWT>=2.8.0
+python-dotenv>=1.0.0
+opencv-python>=4.8.0
+numpy>=1.24.0,<2.0            # pinned <2 to avoid easyocr/opencv ABI issues
+easyocr>=1.7.1               # pulls torch automatically (large download)
+reportlab>=4.0.0             # committee PDF report
+openpyxl>=3.1.0             # resident xlsx import/export
+requests>=2.31.0
+twilio>=8.0.0               # WhatsApp alerts (optional feature, safe to keep)
+tqdm>=4.66.0
+Pillow>=10.0.0
+pyttsx3>=2.90              # offline text-to-speech for booth voice announcements
+psycopg2-binary>=2.9.9      # imported by the code even though demo uses SQLite
+
+# ---- HEAVY / OPTIONAL (face recognition + person/threat detection) ----
+# If these fail to build on the laptop, the app still runs; only live
+# face-recognition and person/threat detection are disabled.
+insightface>=0.7.3         # face recognition (buffalo_l). May need MSVC build tools.
+onnxruntime>=1.16.0        # runtime for insightface models
+ultralytics>=8.0.0         # YOLO person/threat detection (yolov8n.pt)

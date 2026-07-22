@@ -1,0 +1,54 @@
+{
+  "_comment": "Defender Octa — TEMPLATE. Copy this file to site_config.json on each machine/site and fill in real values. The real site_config.json is git-ignored and must never be committed.",
+
+  "society": {
+    "name": "EXAMPLE Society Name",
+    "site_id": "site-001",
+    "location": "City"
+  },
+
+  "server": {
+    "port": 5000,
+    "host": "0.0.0.0"
+  },
+
+  "camera": {
+    "enabled": true,
+    "index": 0,
+    "_comment_index": "0 = default USB/webcam. Use the camera number or leave 0."
+  },
+
+  "rtsp_cameras": [
+    { "name": "Main Gate", "url": "rtsp://USERNAME:PASSWORD@CAMERA_IP:554/h264/ch1/sub/av_stream", "ai_mode": "person+vehicle" },
+    { "name": "Parking A", "url": "rtsp://USERNAME:PASSWORD@CAMERA_IP:554/h264/ch1/sub/av_stream", "ai_mode": "person+vehicle" }
+  ],
+
+  "recording": {
+    "auto_start": false,
+    "only": "Main Gate,Parking A"
+  },
+
+  "detection": {
+    "min_confidence": 30,
+    "debounce_seconds": 30,
+    "exit_minutes": 5,
+    "vote_window_seconds": 8.0,
+    "vote_min_samples": 3,
+    "require_guard_decision": true
+  },
+
+  "admin": {
+    "_comment": "Initial admin login. ALWAYS set a strong unique password per site.",
+    "username": "admin",
+    "password": "CHANGE_ME_BEFORE_FIRST_RUN"
+  },
+
+  "backup": { "enabled": true, "keep_days": 14 },
+
+  "face": {
+    "enabled": true,
+    "camera": "Main Gate",
+    "alert_mode": "watchlist",
+    "cooldown_seconds": 60
+  }
+}

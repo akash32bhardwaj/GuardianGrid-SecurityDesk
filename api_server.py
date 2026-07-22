@@ -10,6 +10,11 @@ Usage:
 """
 
 import cv2
+import os
+import sys
+import json
+import sqlite3
+import subprocess
 import time
 import re
 import threading
@@ -17,7 +22,7 @@ import argparse
 from pathlib import Path
 from site_config import CONFIG
 from backup import run_daily_backup
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import deque
 from backend.auth.auth_service import decode_token
 from backend.incidents.incident_routes import register_incident_routes
@@ -45,7 +50,6 @@ from reportlab.platypus import (
 )
 
 from reportlab.lib.styles import getSampleStyleSheet
-from flask import send_file
 
 
 try:
@@ -70,6 +74,10 @@ VOTE_MIN_SAMPLES    = CONFIG.vote_min_samples
 # After running "npm run build" in your React project,
 # copy the "dist" folder into indian_anpr and rename it "frontend"
 FRONTEND_DIR = Path("frontend")
+
+# Absolute folder this file lives in — used by DB-reading routes so they
+# work regardless of the current working directory.
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -694,6 +702,116 @@ def cameras_route():
         })
     return jsonify(cams)
 
+@app.route("/api/reports")
+def list_reports():
+    out = []
+    rdir = "reports"
+    if os.path.isdir(rdir):
+        for f in sorted(os.listdir(rdir), reverse=True):
+            if not f.endswith(".json"):
+                continue
+            try:
+                with open(os.path.join(rdir, f), encoding="utf-8") as fh:
+                    out.append(json.load(fh))
+            except (json.JSONDecodeError, OSError):
+                continue  # skip corrupt/partial files instead of crashing
+    return jsonify(out[:30])
+
+@app.route("/api/reports/<date>/pdf")
+def report_pdf(date):
+    safe = re.sub(r"[^0-9-]", "", date)
+    path = os.path.join("reports", f"brief_{safe}.pdf")
+    if not os.path.exists(path):
+        return jsonify({"error": "report not found"}), 404
+    return send_from_directory("reports", f"brief_{safe}.pdf")
+
+@app.route("/api/day/<date>")
+def day_detail(date):
+    safe = re.sub(r"[^0-9-]", "", date)
+    start, end = f"{safe} 00:00:00", f"{safe} 23:59:59"
+    con = sqlite3.connect("guardiangrid.db")
+    con.row_factory = sqlite3.Row
+    cur = con.cursor()
+    incidents = [dict(r) for r in cur.execute(
+        "SELECT COALESCE(incident_id,'GG-'||id) AS id, title, severity, status, "
+        "created_at, camera_name FROM incidents "
+        "WHERE REPLACE(created_at,'T',' ') BETWEEN ? AND ? ORDER BY created_at",
+        (start, end))]
+    events = [dict(r) for r in cur.execute(
+        "SELECT plate, event, access, state, camera, timestamp FROM vehicle_events "
+        "WHERE REPLACE(timestamp,'T',' ') BETWEEN ? AND ? "
+        "ORDER BY timestamp DESC LIMIT 200",
+        (start, end))]
+    con.close()
+    return jsonify({"date": safe, "incidents": incidents, "events": events})
+
+# ── Face recognition alert sink ──────────────────────────────────
+_face_alert_cooldown = {}   # "status:name" -> last alert epoch
+
+@app.route("/internal/face_alert", methods=["POST"])
+def internal_face_alert():
+    import time as _t
+    from site_config import CONFIG
+    data = request.get_json() or {}
+    name   = data.get("name", "UNKNOWN")
+    status = data.get("status", "UNKNOWN")
+    reason = data.get("reason", "")
+    camera = data.get("camera", "Gate")
+    snap   = data.get("snapshot", "")
+
+    # de-dupe: one alert per person per cooldown window
+    key = f"{status}:{name}"
+    now = _t.time()
+    cooldown = getattr(CONFIG, "face_cooldown", 60)
+    if now - _face_alert_cooldown.get(key, 0) < cooldown:
+        return jsonify({"ok": True, "skipped": "cooldown"})
+    _face_alert_cooldown[key] = now
+
+    title = ("WATCHLIST FACE DETECTED" if status == "WATCHLIST"
+             else "UNKNOWN FACE DETECTED")
+    sev = "HIGH" if status == "WATCHLIST" else "MEDIUM"
+    desc = f"{title} at {camera}."
+    if status == "WATCHLIST":
+        desc += f" Identified as {name}."
+        if reason:
+            desc += f" Reason: {reason}."
+
+    create_new_incident({
+        "title": title,
+        "description": desc,
+        "severity": sev,
+        "camera_name": camera,
+        "evidence_image": snap or None,
+        "plate_number": "--",
+        "resident_name": name,
+        "flat_number": "--",
+        "confidence": 0,
+    })
+    notification_feed.appendleft({
+        "time": datetime.now().isoformat(),
+        "title": title, "message": name, "severity": sev,
+    })
+    activity_feed.appendleft({
+        "time": datetime.now().isoformat(),
+        "event": f"{title}: {name}", "type": "critical",
+    })
+
+    if WHATSAPP_AVAILABLE and snap:
+        try:
+            threading.Thread(target=send_vehicle_alert, kwargs={
+                "plate": name, "event": title,
+                "resident_info": {"found": status == "WATCHLIST",
+                                  "status": status,
+                                  "resident_name": name,
+                                  "flat_number": "--", "block": "",
+                                  "phone": "", "notes": reason},
+                "snapshot_path": snap,
+            }, daemon=True).start()
+        except Exception as e:
+            print(f"[FACE] whatsapp error: {e}")
+
+    return jsonify({"ok": True})
+
 # ── Visitors ─────────────────────────────────────────────────────
 @app.route("/visitors_today")
 def visitors_today_route():
@@ -723,14 +841,22 @@ def visitor_exit_route(vid):
 # ── API authentication guard ────────────────────────────────────
 # Every route requires a valid JWT except the exempt list below.
 AUTH_EXEMPT_PREFIXES = (
-    "/api/auth/login",   # must stay open or nobody can log in
+    "/api/auth/login",
     "/api/auth/test",
-    "/video_feed",       # MJPEG streams — <img> tags can't send headers
+    "/video_feed",
     "/cam/",
-    "/frontend",         # built frontend assets
+    "/frontend",
     "/static",
-    "/guardian",         # Guardian voice assistant page
-    "/api/guardian/",    # Guardian Q&A endpoint (local booth — trusted network)
+    "/assets",           # React JS/CSS bundle (must load before login)
+    "/favicon",          # favicon.svg
+    "/icons",            # icons.svg
+    "/logo",             # logo.png
+    "/sounds",           # UI sound assets
+    "/manifest",         # PWA manifest, if present
+    "/robots",           # robots.txt, if present
+    "/guardian",
+    "/api/guardian/",
+    "/internal/",        # rtmp_proxy posts face alerts here (local, tokenless)
 )
 
 @app.before_request
@@ -820,6 +946,12 @@ def serve_frontend(path):
             "<p>Run: <code>npm run build</code> in your React project first.</p>"
         ), 200
 
+    # Vite is built with base '/frontend/', so asset URLs arrive as
+    # "frontend/assets/...". FRONTEND_DIR is already the frontend folder,
+    # so strip the leading "frontend/" to avoid frontend/frontend/ nesting.
+    if path == "frontend" or path.startswith("frontend/"):
+        path = path[len("frontend"):].lstrip("/")
+
     # Serve static file if it exists
     file_path = FRONTEND_DIR / path
     if path and file_path.exists():
@@ -831,50 +963,6 @@ def serve_frontend(path):
         return send_file(str(index))
 
     abort(404)
-
-
-# ── Main ──────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    CONFIG.warn_if_insecure()
-
-    init_db()
-    init_visitors()
-
-    # ── Guardian voice/alert integration ─────────────────────────
-    try:
-        from guardian_wiring import wire_guardian
-        from booth_voice import speak
-        wire_guardian(voice_fn=speak)
-    except Exception as e:
-        print(f"[WARN] Guardian wiring failed to start: {e}")
-
-    if CONFIG.backup_enabled:
-        run_daily_backup(CONFIG.backup_keep_days)
-
-    _stats, _inside = rebuild_today_state()
-    vehicle_stats.update(_stats)
-    entry_times.update(_inside)
-    for p in _inside:
-        gate_state[p] = {"status": "INSIDE", "since": _inside[p].isoformat()}
-    print(f"[DB] Restored: {_stats['entries']} in / {_stats['exits']} out / {len(_inside)} inside")
-
-    if CONFIG.camera_enabled:
-        threading.Thread(target=camera_thread,
-                         args=(CONFIG.camera_index,), daemon=True).start()
-        print(f"[INFO] Camera {CONFIG.camera_index} starting...")
-        time.sleep(2)
-
-    init_rtsp_cams(app)
-
-    print(f"\n{'='*50}")
-    print(f"  DEFENDER OCTA — {CONFIG.society_name}")
-    print(f"  Site: {CONFIG.site_id}  |  {CONFIG.location}")
-    print(f"{'='*50}")
-    print(f"  Dashboard : http://localhost:{CONFIG.port}")
-    print(f"  Camera    : {'ON' if CONFIG.camera_enabled else 'OFF'}")
-    print(f"{'='*50}\n")
-
-    app.run(host=CONFIG.host, port=CONFIG.port, debug=False, threaded=True)
 
 
 # ── Threat Detection Integration ─────────────────────────────────
@@ -910,3 +998,400 @@ def threat_snapshot(filename):
     if img_path.exists():
         return send_file(str(img_path), mimetype="image/jpeg")
     abort(404)
+
+
+# ── AI Intelligence: 7-day threat forecast ───────────────────────
+@app.route("/api/forecast")
+def threat_forecast():
+    """Next-7-days risk forecast from historical weekday x hour patterns."""
+    lookback_days = 60
+    since = (datetime.now() - timedelta(days=lookback_days)).strftime("%Y-%m-%d %H:%M:%S")
+    con = sqlite3.connect(os.path.join(BASE_DIR, "guardiangrid.db"))
+    con.row_factory = sqlite3.Row
+    cur = con.cursor()
+    buckets = {}   # (weekday, hour) -> weight
+    days_seen = set()
+
+    def add(ts, w):
+        t = str(ts or "").replace("T", " ")
+        try:
+            dt = datetime.strptime(t[:19], "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            return
+        days_seen.add(t[:10])
+        key = (dt.weekday(), dt.hour)
+        buckets[key] = buckets.get(key, 0) + w
+
+    try:
+        for r in cur.execute(
+            "SELECT timestamp, access, state FROM vehicle_events "
+            "WHERE REPLACE(timestamp,'T',' ') >= ?", (since,)):
+            a = f"{r['access'] or ''} {r['state'] or ''}".upper()
+            if "BLACK" in a:
+                add(r["timestamp"], 5)
+            elif "UNKNOWN" in a or "UNREGISTER" in a:
+                add(r["timestamp"], 2)
+        for r in cur.execute(
+            "SELECT created_at, severity FROM incidents "
+            "WHERE REPLACE(created_at,'T',' ') >= ?", (since,)):
+            sev = (r["severity"] or "").upper()
+            add(r["created_at"], 6 if sev in ("CRITICAL", "HIGH") else 3)
+    except sqlite3.Error:
+        pass
+    con.close()
+
+    n_days = len(days_seen)
+    max_w = max(buckets.values()) if buckets else 1
+    out_days = []
+    today = datetime.now()
+    for i in range(1, 8):
+        d = today + timedelta(days=i)
+        wd = d.weekday()
+        day_buckets = {h: w for (w_, h), w in buckets.items() if w_ == wd}
+        total = sum(day_buckets.values())
+        risk = min(100, round((total / max_w) * 60)) if max_w else 0
+        peak_hour = max(day_buckets, key=day_buckets.get) if day_buckets else None
+        def fmt(h):
+            return f"{h % 12 or 12}{'AM' if h < 12 else 'PM'}"
+        out_days.append({
+            "date": d.strftime("%Y-%m-%d"),
+            "day": d.strftime("%a"),
+            "risk": risk,
+            "level": "High" if risk >= 60 else "Medium" if risk >= 30 else "Low",
+            "peak_window": f"{fmt(peak_hour)}\u2013{fmt((peak_hour + 2) % 24)}" if peak_hour is not None else None,
+        })
+    confidence = ("high" if n_days >= 30 else "medium" if n_days >= 14 else "low")
+    return jsonify({
+        "days": out_days,
+        "days_of_data": n_days,
+        "confidence": confidence,
+        "note": f"Prediction based on {n_days} day(s) of site history. "
+                f"Accuracy improves as monitoring data accumulates.",
+    })
+
+
+# ── AI Intelligence: live security score ─────────────────────────
+# Computes the score on demand from the DB using the SAME formula as the
+# daily brief (morning_report.collect + compute_score), so the live KPI
+# and the written brief can never disagree. Cached for 60s so frontend
+# polling doesn't hammer SQLite.
+_live_score_cache = {"at": 0.0, "payload": None}
+
+@app.route("/api/score/live")
+def live_score():
+    now = time.time()
+    if _live_score_cache["payload"] and now - _live_score_cache["at"] < 60:
+        return jsonify(_live_score_cache["payload"])
+    hours = min(max(int(request.args.get("hours", 12) or 12), 1), 48)
+    try:
+        from morning_report import collect, compute_score
+        d = collect(hours)
+        score, label, color = compute_score(d)
+        payload = {
+            "score": score,
+            "label": label,
+            "color": color,
+            "hours": hours,
+            "vehicles_total": d.get("vehicles_total", 0),
+            "vehicles_unknown": d.get("vehicles_unknown", 0),
+            "vehicles_blacklisted": d.get("vehicles_blacklisted", 0),
+            "incidents_total": d.get("incidents_total", 0),
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "live": True,
+        }
+    except Exception as e:
+        payload = {"score": None, "label": "Unavailable", "error": str(e), "live": False}
+    _live_score_cache["at"] = now
+    _live_score_cache["payload"] = payload
+    return jsonify(payload)
+
+
+# ── AI Intelligence: Smart Replay ────────────────────────────────
+# Maps event timestamps to recorded segments. Folder convention comes from
+# segment_recorder.py:  recordings\<Camera>\<YYYY-MM-DD>\seg_HH-MM-SS.mp4
+# Each segment covers [start, start + REPLAY_SEGMENT_SECONDS).
+RECORDINGS_DIR = os.path.join(BASE_DIR, "recordings")
+REPLAY_SEGMENT_SECONDS = 600
+
+# Events sometimes log under a different name than the recorded camera folder
+# (e.g. incidents say "Entry Gate", ANPR webcam defaults to "Main Gate").
+# Map logged-name -> recordings folder name here.
+REPLAY_CAMERA_ALIASES = {
+    "Entry Gate": "Main Gate",
+}
+
+def _replay_folder(camera):
+    return REPLAY_CAMERA_ALIASES.get(camera, camera)
+
+def _replay_safe(name):
+    return re.sub(r"[^A-Za-z0-9 _\-\.]", "", str(name or "")).strip()
+
+def _replay_segments(camera, date):
+    """List segments for camera+date as [{file, start_iso, end_iso}], sorted."""
+    day_dir = os.path.join(RECORDINGS_DIR, _replay_safe(_replay_folder(camera)), _replay_safe(date))
+    out = []
+    if not os.path.isdir(day_dir):
+        return out
+    for f in sorted(os.listdir(day_dir)):
+        m = re.fullmatch(r"seg_(\d{2})-(\d{2})-(\d{2})\.mp4", f)
+        if not m:
+            continue
+        try:
+            start = datetime.strptime(f"{date} {m[1]}:{m[2]}:{m[3]}", "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            continue
+        out.append({
+            "file": f,
+            "start": start.isoformat(timespec="seconds"),
+            "end": (start + timedelta(seconds=REPLAY_SEGMENT_SECONDS)).isoformat(timespec="seconds"),
+        })
+    return out
+
+@app.route("/api/replay/segments")
+def replay_segments():
+    """?camera=Parking A&date=YYYY-MM-DD → all segments for that day."""
+    camera = request.args.get("camera", "")
+    date = _replay_safe(request.args.get("date", datetime.now().strftime("%Y-%m-%d")))
+    return jsonify({"camera": camera, "date": date,
+                    "segments": _replay_segments(camera, date)})
+
+@app.route("/api/replay/for_event")
+def replay_for_event():
+    """?camera=Parking A&timestamp=2026-07-17T19:02:06 → the segment containing
+    that moment, plus offset_seconds to seek to inside the clip."""
+    camera = request.args.get("camera", "")
+    ts_raw = str(request.args.get("timestamp", "")).replace("T", " ")[:19]
+    try:
+        ts = datetime.strptime(ts_raw, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return jsonify({"error": "timestamp must be YYYY-MM-DDTHH:MM:SS"}), 400
+    date = ts.strftime("%Y-%m-%d")
+    best = None
+    for seg in _replay_segments(camera, date):
+        start = datetime.fromisoformat(seg["start"])
+        if start <= ts < start + timedelta(seconds=REPLAY_SEGMENT_SECONDS):
+            best = {**seg,
+                    "offset_seconds": int((ts - start).total_seconds()),
+                    "url": f"/api/replay/clip/{_replay_safe(_replay_folder(camera))}/{date}/{seg['file']}"}
+            break
+    if not best:
+        return jsonify({"found": False, "camera": camera, "timestamp": ts_raw,
+                        "note": "No recorded segment covers this moment "
+                                "(recorder not running, or camera not recorded)."}), 404
+    return jsonify({"found": True, "camera": camera, "timestamp": ts_raw, **best})
+
+@app.route("/api/replay/clip/<camera>/<date>/<filename>")
+def replay_clip(camera, date, filename):
+    """Serve one segment MP4 (streams in <video> tags / browser)."""
+    camera, date, filename = _replay_safe(camera), _replay_safe(date), _replay_safe(filename)
+    if not re.fullmatch(r"seg_\d{2}-\d{2}-\d{2}\.mp4", filename):
+        abort(404)
+    day_dir = os.path.join(RECORDINGS_DIR, camera, date)
+    path = os.path.join(day_dir, filename)
+    if not os.path.isfile(path):
+        abort(404)
+    return send_from_directory(day_dir, filename, mimetype="video/mp4",
+                               conditional=True)  # conditional → seek support
+
+
+# ── AI Intelligence: security score watchdog ─────────────────────
+# Background monitor: recomputes the live score every WATCHDOG_INTERVAL s.
+# Triggers an alarm when the score crosses below WATCHDOG_MIN_SCORE, or
+# drops by WATCHDOG_DROP_POINTS within WATCHDOG_DROP_WINDOW minutes.
+# Alarm = console + booth voice (if wired) + WhatsApp (if Twilio env set)
+# + /api/score/alerts for a dashboard banner. Cooldown prevents spam.
+WATCHDOG_INTERVAL      = 60          # seconds between checks
+WATCHDOG_MIN_SCORE     = 60          # absolute floor → alarm
+WATCHDOG_DROP_POINTS   = 15          # relative drop → alarm
+WATCHDOG_DROP_WINDOW   = 10          # minutes for the drop comparison
+WATCHDOG_COOLDOWN      = 600         # seconds between repeated alarms
+WATCHDOG_HOURS         = 2           # scoring window (match your test window)
+
+_watchdog_state = {"history": deque(maxlen=120), "alerts": deque(maxlen=20),
+                   "last_alarm": 0.0}
+
+def _watchdog_alarm(kind, message, score):
+    now = time.time()
+    if now - _watchdog_state["last_alarm"] < WATCHDOG_COOLDOWN:
+        return
+    _watchdog_state["last_alarm"] = now
+    alert = {"kind": kind, "message": message, "score": score,
+             "at": datetime.now().isoformat(timespec="seconds")}
+    _watchdog_state["alerts"].appendleft(alert)
+    print(f"[WATCHDOG ALARM] {message}")
+    try:
+        from booth_voice import speak
+        speak(f"Attention. {message}")
+    except Exception:
+        pass
+    try:
+        from morning_report import send_whatsapp
+        send_whatsapp(f"🚨 GuardianGrid watchdog: {message}")
+    except Exception:
+        pass
+
+def _watchdog_loop():
+    from morning_report import collect, compute_score
+    while True:
+        try:
+            d = collect(WATCHDOG_HOURS)
+            score, label, _ = compute_score(d)
+            now = time.time()
+            hist = _watchdog_state["history"]
+            hist.append((now, score))
+            # relative drop check
+            baseline = None
+            for t, s in hist:
+                if now - t >= WATCHDOG_DROP_WINDOW * 60:
+                    baseline = s
+                else:
+                    break
+            if score < WATCHDOG_MIN_SCORE:
+                _watchdog_alarm(
+                    "threshold",
+                    f"Security score fell to {score} ({label}) — below alert floor "
+                    f"{WATCHDOG_MIN_SCORE}. Review incidents now.", score)
+            elif baseline is not None and baseline - score >= WATCHDOG_DROP_POINTS:
+                _watchdog_alarm(
+                    "drop",
+                    f"Security score dropped {baseline - score} points in "
+                    f"{WATCHDOG_DROP_WINDOW} minutes (now {score}). "
+                    f"Threat activity rising.", score)
+        except Exception as e:
+            print(f"[WATCHDOG] check failed: {e}")
+        time.sleep(WATCHDOG_INTERVAL)
+
+@app.route("/api/score/alerts")
+def score_alerts():
+    """Recent watchdog alarms + current trend, for a dashboard banner."""
+    hist = list(_watchdog_state["history"])[-30:]
+    return jsonify({
+        "alerts": list(_watchdog_state["alerts"]),
+        "trend": [{"at": datetime.fromtimestamp(t).isoformat(timespec="seconds"),
+                   "score": s} for t, s in hist],
+        "thresholds": {"min_score": WATCHDOG_MIN_SCORE,
+                       "drop_points": WATCHDOG_DROP_POINTS,
+                       "drop_window_min": WATCHDOG_DROP_WINDOW},
+    })
+
+
+# ── AI Intelligence: daily highlight reels (smart_replay.py output) ──
+# smart_replay.py writes:  reports\replays\replay_YYYY-MM-DD.mp4
+#                          reports\replays\replay_YYYY-MM-DD.json  (metadata)
+REEL_DIR = os.path.join(BASE_DIR, "reports", "replays")
+
+@app.route("/api/replays")
+def list_replays():
+    """All generated reels, newest first: [{date, clips, duration_s}]."""
+    out = []
+    if os.path.isdir(REEL_DIR):
+        for f in os.listdir(REEL_DIR):
+            m = re.fullmatch(r"replay_(\d{4}-\d{2}-\d{2})\.mp4", f)
+            if not m:
+                continue
+            date = m[1]
+            meta = {"date": date, "clips": None, "duration_s": 0}
+            jpath = os.path.join(REEL_DIR, f"replay_{date}.json")
+            if os.path.isfile(jpath):
+                try:
+                    with open(jpath, encoding="utf-8") as jf:
+                        j = json.load(jf)
+                    meta["clips"] = j.get("clips")
+                    meta["duration_s"] = j.get("duration_s", 0)
+                except (json.JSONDecodeError, OSError):
+                    pass
+            out.append(meta)
+    out.sort(key=lambda r: r["date"], reverse=True)
+    return jsonify(out)
+
+@app.route("/api/replays/<date>/video")
+def replay_reel_video(date):
+    """Serve one reel MP4 (seekable in <video> tags)."""
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+        abort(404)
+    fname = f"replay_{date}.mp4"
+    if not os.path.isfile(os.path.join(REEL_DIR, fname)):
+        abort(404)
+    return send_from_directory(REEL_DIR, fname, mimetype="video/mp4",
+                               conditional=True)
+
+
+# ── Startup ───────────────────────────────────────────────────────
+def bootstrap():
+    """Run every startup step the app needs before serving requests.
+
+    Called by __main__ (Flask dev server) and by serve.py (waitress).
+    Keep all startup here — anything added below the __main__ guard
+    instead would silently not run under the production server.
+    """
+    CONFIG.warn_if_insecure()
+
+    init_db()
+    init_visitors()
+
+    # ── Guardian voice/alert integration ─────────────────────────
+    try:
+        from guardian_wiring import wire_guardian
+        from booth_voice import speak
+        wire_guardian(voice_fn=speak)
+    except Exception as e:
+        print(f"[WARN] Guardian wiring failed to start: {e}")
+
+    if CONFIG.backup_enabled:
+        run_daily_backup(CONFIG.backup_keep_days)
+
+    threading.Thread(target=_watchdog_loop, daemon=True).start()
+    print("[WATCHDOG] score monitor started "
+          f"(floor {WATCHDOG_MIN_SCORE}, drop {WATCHDOG_DROP_POINTS} pts/"
+          f"{WATCHDOG_DROP_WINDOW} min)")
+
+    # ── Optional: auto-start segment recorder as a child process ──
+    # site_config.json:  "recording": { "auto_start": true,
+    #                                   "only": "Parking A,Parking B" }
+    # Off by default. Production sites should keep using the Task Scheduler
+    # job instead, so recording survives Flask restarts.
+    try:
+        with open(os.path.join(BASE_DIR, "site_config.json"), encoding="utf-8") as _f:
+            _rec_cfg = json.load(_f).get("recording", {}) or {}
+        if _rec_cfg.get("auto_start"):
+            _rec_cmd = [sys.executable, os.path.join(BASE_DIR, "segment_recorder.py")]
+            if _rec_cfg.get("only"):
+                _rec_cmd += ["--only", str(_rec_cfg["only"])]
+            _rec_proc = subprocess.Popen(_rec_cmd)
+            import atexit
+            atexit.register(
+                lambda: _rec_proc.poll() is None and _rec_proc.terminate())
+            print(f"[RECORDER] auto-started (pid {_rec_proc.pid})"
+                  + (f" — only: {_rec_cfg['only']}" if _rec_cfg.get("only") else " — all cameras"))
+    except Exception as _e:
+        print(f"[WARN] recorder auto-start skipped: {_e}")
+
+    _stats, _inside = rebuild_today_state()
+    vehicle_stats.update(_stats)
+    entry_times.update(_inside)
+    for p in _inside:
+        gate_state[p] = {"status": "INSIDE", "since": _inside[p].isoformat()}
+    print(f"[DB] Restored: {_stats['entries']} in / {_stats['exits']} out / {len(_inside)} inside")
+
+    if CONFIG.camera_enabled:
+        threading.Thread(target=camera_thread,
+                         args=(CONFIG.camera_index,), daemon=True).start()
+        print(f"[INFO] Camera {CONFIG.camera_index} starting...")
+        time.sleep(2)
+
+    init_rtsp_cams(app)
+
+    print(f"\n{'='*50}")
+    print(f"  DEFENDER OCTA — {CONFIG.society_name}")
+    print(f"  Site: {CONFIG.site_id}  |  {CONFIG.location}")
+    print(f"{'='*50}")
+    print(f"  Dashboard : http://localhost:{CONFIG.port}")
+    print(f"  Camera    : {'ON' if CONFIG.camera_enabled else 'OFF'}")
+    print(f"{'='*50}\n")
+
+
+# ── Main (development server) ─────────────────────────────────────
+# Production deployments should use serve.py (waitress) instead.
+if __name__ == "__main__":
+    bootstrap()
+    app.run(host=CONFIG.host, port=CONFIG.port, debug=False, threaded=True)

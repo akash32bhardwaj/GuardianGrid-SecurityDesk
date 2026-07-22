@@ -2,11 +2,26 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/frontend/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>guardiangrid-command-center</title>
-    <script type="module" crossorigin src="/frontend/assets/index-CEj66BXr.js"></script>
-    <link rel="stylesheet" crossorigin href="/frontend/assets/index-CVT62GWc.css">
+    <title>Defender Octa — by GuardianGrid</title>
+
+    <meta name="theme-color" content="#0a0e1a" />
+    <link rel="manifest" href="/frontend/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/frontend/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Defender Octa" />
+    <script>
+      // register the service worker, scoped to the app base
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () =>
+          navigator.serviceWorker.register("/frontend/sw.js", { scope: "/frontend/" })
+            .catch(() => {/* http (non-localhost) — PWA needs https; app still works */})
+        );
+      }
+    </script>
+    <script type="module" crossorigin src="/frontend/assets/index-BkkI3awu.js"></script>
+    <link rel="stylesheet" crossorigin href="/frontend/assets/index-DdT0k3sI.css">
   </head>
   <body>
     <div id="root"></div>

@@ -199,8 +199,23 @@ def visitor_exit(visitor_id):
         )
         return cur.rowcount > 0
 
+def _configured_cameras():
+    """Camera names from site_config.json's rtsp_cameras — so widgets can show
+    every monitored camera permanently, even with zero activity."""
+    import json
+    from pathlib import Path as _P
+    try:
+        with open(_P(__file__).with_name("site_config.json"), encoding="utf-8") as f:
+            cams = json.load(f).get("rtsp_cameras", []) or []
+        return [c["name"] for c in cams if c.get("name")]
+    except Exception:
+        return []
+
+
 def camera_heat(date_str: str | None = None):
-    """Trigger counts per camera per hour — powers the heatmap."""
+    """Trigger counts per camera per hour — powers the heatmap.
+    Always includes every configured camera (zero-filled if quiet), so the
+    widget permanently shows the full monitored set, not just active ones."""
     day = date_str or datetime.now().strftime("%Y-%m-%d")
     with _conn() as c:
         rows = c.execute(
@@ -212,7 +227,12 @@ def camera_heat(date_str: str | None = None):
                GROUP BY camera, hour""",
             (day,),
         ).fetchall()
-    return [{"camera": r["camera"], "hour": r["hour"], "n": r["n"]} for r in rows]
+    out = [{"camera": r["camera"], "hour": r["hour"], "n": r["n"]} for r in rows]
+    seen = {o["camera"] for o in out}
+    for name in _configured_cameras():
+        if name not in seen:
+            out.append({"camera": name, "hour": 0, "n": 0})  # zero-filled row
+    return out
 def rebuild_today_state():
     """Recompute today's stats and who's inside from stored events.
     Returns (stats_dict, entry_times_dict)."""
