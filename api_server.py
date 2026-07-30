@@ -96,6 +96,12 @@ from correction_routes import correction_bp
 app.register_blueprint(correction_bp)
 from resident_routes import resident_bp
 app.register_blueprint(resident_bp)
+
+# False-escalation tracking. Must be registered AFTER app exists (above) and
+# BEFORE the route printout, so it appears in the startup route list.
+from escalation_metrics import escalation_bp
+app.register_blueprint(escalation_bp)
+
 print("\nREGISTERED ROUTES:")
 for rule in app.url_map.iter_rules():
     print(rule)
@@ -776,7 +782,7 @@ def internal_face_alert():
         if reason:
             desc += f" Reason: {reason}."
 
-    create_new_incident({
+    _face_incident = create_new_incident({
         "title": title,
         "description": desc,
         "severity": sev,
@@ -787,6 +793,24 @@ def internal_face_alert():
         "flat_number": "--",
         "confidence": 0,
     })
+
+    # Log the escalation HERE rather than inside send_vehicle_alert, because
+    # this is the only place that has both the alert and the incident id.
+    # send_vehicle_alert is called in a thread below with record_metric=False
+    # so it does not log a second, unlinked copy.
+    try:
+        from escalation_metrics import record_escalation as _rec_esc
+        _rec_esc(
+            incident_id=(_face_incident or {}).get("incident_id"),
+            tier=3 if status == "WATCHLIST" else 2,
+            trigger_type="face",
+            camera=camera,
+            zone="gate",
+            channel="voice+whatsapp" if status == "WATCHLIST" else "whatsapp",
+            subject=f"{name} ({status})",
+        )
+    except Exception as _e:
+        print(f"[WARN] escalation log failed: {_e}")
     notification_feed.appendleft({
         "time": datetime.now().isoformat(),
         "title": title, "message": name, "severity": sev,
@@ -806,6 +830,14 @@ def internal_face_alert():
                                   "flat_number": "--", "block": "",
                                   "phone": "", "notes": reason},
                 "snapshot_path": snap,
+                # Tag the escalation correctly. This path is face
+                # recognition reusing the vehicle alert plumbing; without
+                # these it would be logged as an ANPR escalation and the
+                # breakdown-by-trigger view would be wrong.
+                "trigger_type": "face",
+                "camera": camera,
+                "record_metric": False,   # already logged above, with the
+                                          # incident id attached
             }, daemon=True).start()
         except Exception as e:
             print(f"[FACE] whatsapp error: {e}")
@@ -874,6 +906,21 @@ def require_auth():
         request.auth_user = decode_token(token)   # available to routes if needed
     except Exception:
         return jsonify({"success": False, "message": "Invalid or expired token"}), 401
+
+    # ── VIEWER role: read-only enforcement ─────────────────────────
+    # Viewers (demo/QR visitors) may look but never touch:
+    #   * every non-GET request is refused
+    #   * the resident directory is refused even for reading — names,
+    #     flats and phone numbers are not demo material
+    # Structural rule in ONE place, so no route can forget to check.
+    if (request.auth_user or {}).get("role") == "VIEWER":
+        if request.method != "GET":
+            return jsonify({"success": False,
+                            "message": "Viewer access is read-only"}), 403
+        if p.startswith("/residents"):
+            return jsonify({"success": False,
+                            "message": "Resident directory is not available "
+                                       "to viewer accounts"}), 403
 
 # ── Manual gate control ──────────────────────────────────────────
 gate_state = {}   # plate → {"status": "INSIDE"/"HOLD", "since": iso}

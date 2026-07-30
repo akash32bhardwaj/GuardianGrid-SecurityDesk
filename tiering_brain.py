@@ -46,6 +46,16 @@ from typing import Optional
 
 logger = logging.getLogger("tiering")
 
+# ── False-escalation tracking ────────────────────────────────────────────────
+# Imported defensively: if escalation_metrics.py is missing, the alert path
+# must still work. Metrics are never allowed to break an alarm.
+try:
+    from escalation_metrics import record_escalation as _record_escalation
+except Exception:                                    # pragma: no cover
+    _record_escalation = None
+    logger.warning("escalation_metrics not available — false-escalation "
+                   "tracking is OFF")
+
 # ─────────────────────────────────────────────────────────────────────────────
 # CONFIG — tune these to your society. All in one place on purpose.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -224,7 +234,36 @@ def handle_threat(event):
                 "; ".join(decision.reasons))
 
     if decision.tier == 1:
-        return decision  # silent: dashboard + db already have it
+        # Silent. Dashboard + db already have it. NOT an escalation: no human
+        # was disturbed, so it must not enter the false-escalation denominator.
+        return decision
+
+    # ── Log the escalation ───────────────────────────────────────────────
+    # Tier 2+ means a human gets interrupted, which is the definition we
+    # measure against. Logged here rather than downstream because this is
+    # the one place that knows tier, zone and threat type together.
+    #
+    # channel reflects what the human actually receives:
+    #   tier 2 → voice at the desk
+    #   tier 3 → voice AND WhatsApp to ops
+    #
+    # NOTE: whatsapp_alerts.send_threat_alert() is deliberately NOT hooked.
+    # The escalate_fn downstream calls it, so hooking both would count every
+    # Tier 3 twice and halve your apparent false rate.
+    if _record_escalation is not None:
+        _row_id = _record_escalation(
+            tier=decision.tier,
+            trigger_type=(event.threat_type or "other").lower(),
+            camera=getattr(event, "camera", None),
+            zone=decision.zone if decision.zone != "unknown" else None,
+            channel="voice+whatsapp" if decision.tier >= 3 else "voice",
+            subject=getattr(event, "description", None),
+        )
+        # Stash the row id on the decision so guardian_wiring can link it to
+        # the incident it is about to create. The escalation is logged before
+        # the incident exists, so this is the only way the two ever get tied
+        # together — and without the tie, a guard cannot pass a verdict.
+        decision.escalation_row_id = _row_id
 
     # Tier 2+: speak
     if decision.should_speak and _voice_fn:

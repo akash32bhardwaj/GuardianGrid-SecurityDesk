@@ -35,6 +35,19 @@ import ack_watchdog
 
 logger = logging.getLogger("guardian-wiring")
 
+# ── False-escalation tracking ────────────────────────────────────────────────
+# Defensive: metrics must never be able to stop an alarm going out.
+try:
+    from escalation_metrics import (
+        record_escalation as _record_escalation,
+        link_incident as _link_incident,
+    )
+except Exception:                                    # pragma: no cover
+    _record_escalation = None
+    _link_incident = None
+    logger.warning("escalation_metrics unavailable — false-escalation "
+                   "tracking is OFF")
+
 # WhatsApp: import your existing sender, degrade gracefully if unavailable.
 try:
     from whatsapp_alerts import send_threat_alert
@@ -100,6 +113,15 @@ def _on_tier3(event_dict, decision):
     })
     logger.info("Tier-3 incident %s created", incident.get("incident_id"))
 
+    # Attach this incident to the escalation row that tiering_brain logged a
+    # moment ago. The escalation is recorded BEFORE the incident exists, so
+    # the link has to be made here, after the fact. Without it, a guard
+    # resolving this case has no escalation to pass a verdict on.
+    if _link_incident is not None:
+        row_id = getattr(decision, "escalation_row_id", None)
+        if row_id and incident.get("incident_id"):
+            _link_incident(row_id, incident["incident_id"])
+
     # 2. Start its acknowledgment timer (2 min deep-night / 4 min default).
     ack_watchdog.register_incident(
         incident, tier=3, deep_night=decision.is_deep_night
@@ -116,6 +138,15 @@ def _on_tier3(event_dict, decision):
 # the watchdog calls this → another WhatsApp with the reason.
 # ─────────────────────────────────────────────────────────────────────────────
 def _on_watchdog_escalation(incident, reason):
+    """
+    ⚠️ DO NOT call record_escalation() here.
+
+    This fires when an ALREADY-LOGGED escalation goes unacknowledged. It is a
+    reminder about an existing alert, not a new one. Logging it would inflate
+    the denominator every time a guard was slow to respond — which would make
+    the detector look noisier the worse your response times got, exactly
+    backwards from what the metric is for.
+    """
     logger.info("Watchdog escalation for %s: %s",
                 incident.get("incident_id"), reason)
     _send_whatsapp(
@@ -176,6 +207,25 @@ def on_blacklisted_vehicle(plate: str, resident_name: str = "",
     # WhatsApp — fire the threat-style alert so it joins the escalation flow.
     _send_whatsapp("BLACKLISTED VEHICLE", "HIGH",
                    f"Plate {plate}{who}. {reason}".strip())
+
+    # ── Log the escalation ───────────────────────────────────────────────
+    # This path is a SEPARATE entry point that bypasses tiering_brain
+    # entirely, so nothing upstream has recorded it. Without this call,
+    # blacklist hits — the highest-severity event the system produces —
+    # would be completely absent from the false-escalation data.
+    #
+    # A blacklisted plate is Tier 3 by definition; no scoring involved.
+    _esc_row = None
+    if _record_escalation is not None:
+        _esc_row = _record_escalation(
+            incident_id=(incident or {}).get("incident_id"),
+            tier=3,
+            trigger_type="blacklist",
+            camera="Entry Gate",
+            zone="gate",
+            channel="voice+whatsapp",
+            subject=f"{plate} (BLACKLISTED)",
+        )
 
     # If the caller passed the incident it already created, track it for ack.
     if incident and incident.get("incident_id"):

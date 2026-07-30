@@ -126,6 +126,41 @@ def main():
         record("FAIL", "login /api/auth/login", f"status {st} — check credentials in site_config.json")
         finish(); return
 
+    # ── 1b. viewer account (if configured): must be read-only ───
+    v = (cfg.get("viewer") or {})
+    if v.get("username") and v.get("password"):
+        st_v, d_v = http_post(base, "/api/auth/login",
+                              {"username": v["username"], "password": v["password"]})
+        vtok = d_v.get("token") if isinstance(d_v, dict) else None
+        if st_v == 200 and vtok:
+            record("PASS", "viewer login", f"user '{v['username']}'")
+            # a write MUST be refused with 403
+            import urllib.request as _u
+            req = _u.Request(base + "/gate/action",
+                             data=json.dumps({"plate": "TEST", "action": "ENTRY"}).encode(),
+                             headers={"Content-Type": "application/json",
+                                      "Authorization": f"Bearer {vtok}",
+                                      "User-Agent": UA})
+            try:
+                with _u.urlopen(req, timeout=8) as r:
+                    record("FAIL", "viewer is read-only", f"write ACCEPTED (status {r.status})!")
+            except Exception as e:
+                code = getattr(e, "code", None)
+                if code == 403:
+                    record("PASS", "viewer is read-only", "write correctly refused (403)")
+                else:
+                    record("WARN", "viewer is read-only", f"write refused with {code} (expected 403)")
+            # residents must be hidden even for GET
+            st_r2, _ = http(base, "/residents", vtok)
+            if st_r2 == 403:
+                record("PASS", "viewer cannot read residents", "403 as designed")
+            else:
+                record("FAIL", "viewer cannot read residents", f"got {st_r2}")
+        else:
+            record("FAIL", "viewer login", f"status {st_v} — viewer block set but login failed")
+    else:
+        record("WARN", "viewer account", "not configured — add a \"viewer\" block before sharing the QR card")
+
     # ── 2. core data endpoints (shape-validated) ─────────────────
     print(f"\n{C}— Core data —{N}")
     def check_json(name, path, validate, warn_empty=None):

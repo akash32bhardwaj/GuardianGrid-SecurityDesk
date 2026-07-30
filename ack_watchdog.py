@@ -43,7 +43,7 @@ import time
 import logging
 import threading
 from datetime import datetime
-
+from escalation_metrics import record_acknowledgement, mark_auto_closed
 from backend.incidents.incident_models import (
     get_all_incidents, update_incident, add_note,
 )

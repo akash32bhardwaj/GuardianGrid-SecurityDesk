@@ -36,6 +36,15 @@ except ImportError:
 # ── Load smart alert routing settings ───────────────────────────
 from alert_settings import settings
 
+# ── False-escalation tracking ───────────────────────────────────
+# Defensive import: a metrics failure must never stop an alert going out.
+try:
+    from escalation_metrics import record_escalation as _record_escalation
+except Exception:
+    _record_escalation = None
+    logger.warning("escalation_metrics not available — false-escalation "
+                   "tracking is OFF")
+
 # ── Try importing Twilio ────────────────────────────────────────
 try:
     from twilio.rest import Client
@@ -167,7 +176,10 @@ def _resident_number(resident_info: dict) -> str:
 # ── Main alert function — called from api_server.py ──────────────
 def send_vehicle_alert(plate: str, event: str,
                        resident_info: dict = None,
-                       snapshot_path: str = "") -> dict:
+                       snapshot_path: str = "",
+                       trigger_type: str = "anpr",
+                       camera: str = None,
+                       record_metric: bool = True) -> dict:
     """
     Send WhatsApp alert(s) based on vehicle status and Smart Alert
     Routing settings (alert_settings.py).
@@ -177,6 +189,15 @@ def send_vehicle_alert(plate: str, event: str,
       event: "ENTRY" or "EXIT"
       resident_info: dict from resident_db lookup (or None/unknown)
       snapshot_path: path to snapshot image (not sent in sandbox mode)
+      trigger_type: what produced this alert — "anpr" or "face". The face
+        recognition path in api_server.py reuses this function, so it must
+        say so, otherwise every face detection is filed as an ANPR event
+        and the breakdown-by-trigger report is wrong.
+      camera: originating camera name, for the breakdown report.
+      record_metric: set False when the CALLER logs the escalation itself.
+        The face path does this, because it creates an incident and needs the
+        escalation tied to that incident id — which it can only do from the
+        caller side. Leaving this True there would log the escalation twice.
 
     Returns: dict with results for each message sent/skipped
     """
@@ -231,13 +252,47 @@ def send_vehicle_alert(plate: str, event: str,
             results.append({"to": "security", "type": "UNKNOWN",
                            "success": False, "error": "routing disabled or quiet hours"})
 
+    # ── Log the escalation, if one actually happened ─────────────
+    # Three deliberate rules here, each one protects the metric:
+    #
+    #  1. Only messages to SECURITY count. A resident's own phone buzzing
+    #     because their car came home did not consume an operator. Counting
+    #     those would bury the real false rate under routine notifications.
+    #
+    #  2. Only SUCCESSFUL sends count. Every branch above appends a result
+    #     even when it was skipped for quiet hours, disabled routing, or a
+    #     Twilio failure. Those never reached a human, so they are not
+    #     escalations — logging the attempt would inflate the denominator
+    #     and flatter the false rate downward.
+    #
+    #  3. One row per alert event, even if several messages went out.
+    _reached_security = [r for r in results
+                         if r.get("to") == "security" and r.get("success")]
+    if _record_escalation is not None and _reached_security and record_metric:
+        _record_escalation(
+            tier=3 if status in ("BLACKLISTED", "WATCHLIST") else 2,
+            trigger_type=trigger_type,
+            camera=camera or "Main Gate",
+            zone="gate",
+            channel="whatsapp",
+            subject=f"{plate} ({status} {event})",
+        )
+
     return {"sent": True, "results": results}
 
 
 def send_threat_alert(threat_type: str, severity: str,
                       description: str) -> dict:
     """Send WhatsApp alert for AI threat detection — ALWAYS sent,
-    ignores quiet hours, cannot be disabled from settings."""
+    ignores quiet hours, cannot be disabled from settings.
+
+    ⚠️ DO NOT add record_escalation() here.
+    This function is called by the escalate_fn downstream of
+    tiering_brain.handle_threat(), which has ALREADY logged the escalation
+    with full tier and zone context. Hooking it here as well would count
+    every Tier 3 threat twice, which halves the apparent false-escalation
+    rate — the exact direction of error that makes the metric useless.
+    """
     if not CONFIG_LOADED:
         return {"sent": False, "reason": "config not loaded"}
 
