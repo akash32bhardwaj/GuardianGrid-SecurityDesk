@@ -43,7 +43,7 @@ def record(status, name, detail=""):
 # so identify as a normal client when testing through the public domain.
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) DefenderOcta-SmokeTest/1.0")
 
-def http(base, path, token=None, timeout=8):
+def http(base, path, token=None, timeout=8, _retry=True):
     req = urllib.request.Request(base + path, headers={"User-Agent": UA})
     if token:
         req.add_header("Authorization", f"Bearer {token}")
@@ -60,9 +60,12 @@ def http(base, path, token=None, timeout=8):
         except Exception:
             return e.code, None
     except Exception as e:
+        if _retry:                       # one dropped packet ≠ a failure:
+            import time as _t; _t.sleep(1.5)
+            return http(base, path, token, timeout, _retry=False)
         return None, str(e)
 
-def http_post(base, path, payload, timeout=8):
+def http_post(base, path, payload, timeout=8, _retry=True):
     data = json.dumps(payload).encode()
     req = urllib.request.Request(base + path, data=data,
                                  headers={"Content-Type": "application/json",
@@ -76,6 +79,9 @@ def http_post(base, path, payload, timeout=8):
         except Exception:
             return e.code, None
     except Exception as e:
+        if _retry:
+            import time as _t; _t.sleep(1.5)
+            return http_post(base, path, payload, timeout, _retry=False)
         return None, str(e)
 
 
