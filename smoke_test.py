@@ -82,8 +82,18 @@ def http_post(base, path, payload, timeout=8):
 def main():
     ap = argparse.ArgumentParser(description="Defender Octa smoke test")
     ap.add_argument("--base", default="http://localhost:5000")
+    ap.add_argument("--user", default=None,
+                    help="admin username for the TARGET server (default: local config)")
+    ap.add_argument("--password", default=None,
+                    help="admin password for the TARGET server (default: local config)")
+    ap.add_argument("--remote", action="store_true",
+                    help="testing a remote server: skip local filesystem checks "
+                         "and local-config comparisons that only apply to this machine")
     args = ap.parse_args()
     base = args.base.rstrip("/")
+    # convenience: a non-localhost base implies --remote
+    if "localhost" not in base and "127.0.0.1" not in base:
+        args.remote = True
 
     print(f"\n{C}Defender Octa smoke test · {base} · {TODAY}{N}\n")
 
@@ -102,8 +112,11 @@ def main():
     else:
         record("FAIL", "site_config.json readable", "file not found — run from the backend folder")
 
-    user = (cfg.get("admin") or {}).get("username", "admin")
-    pw = (cfg.get("admin") or {}).get("password", "")
+    user = args.user or (cfg.get("admin") or {}).get("username", "admin")
+    pw = args.password or (cfg.get("admin") or {}).get("password", "")
+    if args.remote and not args.password:
+        record("WARN", "credentials", "remote target but no --password given — "
+               "using LOCAL config credentials, which may differ on the server")
     if pw == "admin123":
         record("WARN", "admin password", "still the default admin123 — change before client deployment")
 
@@ -188,7 +201,7 @@ def main():
     heat = check_json("/camera_heat", "/camera_heat", lambda d: (
         f"{len({r['camera'] for r in d})} camera row(s)" if isinstance(d, list) else
         (_ for _ in ()).throw(AssertionError("expected a list"))))
-    if isinstance(heat, list) and cams:
+    if isinstance(heat, list) and cams and not args.remote:
         present = {r.get("camera") for r in heat}
         missing = [c for c in cams if c not in present]
         if missing:
@@ -249,6 +262,10 @@ def main():
         record("FAIL", "/api/replay/for_event (segment mapping)", f"status {st_m} — replay routes not deployed?")
 
     # ── 4. filesystem ────────────────────────────────────────────
+    if args.remote:
+        print(f"\n{C}— Filesystem —{N}")
+        record("PASS", "filesystem checks", "skipped (--remote: these test the local disk, not the server)")
+        finish(); return
     print(f"\n{C}— Filesystem —{N}")
     rec_root = os.path.join(BASE_DIR, "recordings")
     seg_count, rec_cams = 0, []

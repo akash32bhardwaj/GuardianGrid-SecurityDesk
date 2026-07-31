@@ -708,6 +708,13 @@ def cameras_route():
         })
     return jsonify(cams)
 
+@app.route("/cameras/ai_status")
+def cameras_ai_status():
+    """Per-camera AI attention state for the patrol widget:
+    tier (continuous/motion), awake, wakes (today), online, counts."""
+    from rtmp_proxy import get_all_cam_stats
+    return jsonify(get_all_cam_stats())
+
 @app.route("/api/reports")
 def list_reports():
     out = []
