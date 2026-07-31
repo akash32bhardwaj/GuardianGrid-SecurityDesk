@@ -162,6 +162,35 @@ vehicle_stats = {
 vehicle_log: deque = deque(maxlen=50)
 activity_feed: deque = deque(maxlen=100)
 notification_feed: deque = deque(maxlen=100)
+
+# ══════════════════════════════════════════════════════════════════
+# LIVE ALERT STREAM (SSE) — Architecture v2's realtime artery.
+# Every alert pushed through push_alert() lands in notification_feed
+# (so /notifications keeps working unchanged) AND is broadcast
+# instantly to every connected dashboard via /api/stream.
+# SSE over plain HTTP: works under the dev server, waitress, and
+# Cloudflare tunnels alike; browsers reconnect automatically.
+# ══════════════════════════════════════════════════════════════════
+import queue as _queue
+
+_sse_clients: set = set()
+_sse_lock = threading.Lock()
+
+def _sse_broadcast(payload: dict):
+    with _sse_lock:
+        dead = []
+        for q in _sse_clients:
+            try:
+                q.put_nowait(payload)
+            except Exception:
+                dead.append(q)
+        for q in dead:
+            _sse_clients.discard(q)
+
+def push_alert(payload: dict):
+    """Single choke point for alert emission: feed + live broadcast."""
+    notification_feed.appendleft(payload)
+    _sse_broadcast(payload)
 vehicle_db:  dict  = {}
 last_seen:   dict  = {}
 entry_times: dict  = {}
@@ -230,7 +259,7 @@ def commit_vehicle_event(plate, event_type, *, vtype="Manual", state="",
 
     # Unknown vehicle actually ENTERING → now it's incident-worthy
     if event_type == "ENTRY" and not resident_info:
-        notification_feed.appendleft({
+        push_alert({
             "time": now.isoformat(),
             "title": "UNKNOWN VEHICLE ENTERED",
             "message": plate, "severity": "MEDIUM",
@@ -281,7 +310,7 @@ def process_entry_exit(result: PlateResult, snapshot_path: str = ""):
     # Blacklisted → alert + incident IMMEDIATELY (never wait), but the
     # gate event itself still waits for the guard's decision.
     if resident_info and resident_info.status == "BLACKLISTED":
-        notification_feed.appendleft({
+        push_alert({
             "time": now.isoformat(), "title": "BLACKLISTED VEHICLE",
             "message": plate, "severity": "HIGH",
         })
@@ -475,6 +504,33 @@ def vehicle_stats_route():
 def activity_feed_route():
     with lock:
         return jsonify(list(activity_feed))
+
+@app.route("/api/stream")
+def alert_stream():
+    """Server-Sent Events: pushes each new alert the moment it fires.
+    Auth: standard guard (Bearer header or ?token=). Viewer role: GET,
+    so read-only accounts receive alerts too — by design."""
+    client_q: "_queue.Queue" = _queue.Queue(maxsize=50)
+    with _sse_lock:
+        _sse_clients.add(client_q)
+
+    def gen():
+        try:
+            yield ": connected\n\n"
+            while True:
+                try:
+                    item = client_q.get(timeout=20)
+                    yield f"data: {json.dumps(item)}\n\n"
+                except _queue.Empty:
+                    yield ": ping\n\n"   # keepalive for proxies/tunnels
+        finally:
+            with _sse_lock:
+                _sse_clients.discard(client_q)
+
+    return Response(gen(), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache",
+                             "X-Accel-Buffering": "no",
+                             "Connection": "keep-alive"})
 
 @app.route("/notifications")
 def notifications_route():
@@ -818,7 +874,7 @@ def internal_face_alert():
         )
     except Exception as _e:
         print(f"[WARN] escalation log failed: {_e}")
-    notification_feed.appendleft({
+    push_alert({
         "time": datetime.now().isoformat(),
         "title": title, "message": name, "severity": sev,
     })
@@ -1272,6 +1328,8 @@ def _watchdog_alarm(kind, message, score):
     alert = {"kind": kind, "message": message, "score": score,
              "at": datetime.now().isoformat(timespec="seconds")}
     _watchdog_state["alerts"].appendleft(alert)
+    push_alert({"time": alert["at"], "title": "AI WATCHDOG ALARM",
+                "message": message, "severity": "CRITICAL"})
     print(f"[WATCHDOG ALARM] {message}")
     try:
         from booth_voice import speak
