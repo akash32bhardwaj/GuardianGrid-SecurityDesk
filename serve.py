@@ -8,7 +8,7 @@ to use it in production.
 
 Run:
     python serve.py
-    python serve.py --threads 16 --port 8080
+    python serve.py --threads 32 --port 8080
 
 Host/port default to site_config.json ("server": {...}); flags override.
 

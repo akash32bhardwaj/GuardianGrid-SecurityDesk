@@ -1,0 +1,52 @@
+{
+  "_comment": "Defender Octa \u2014 TEMPLATE. Copy this file to site_config.json on each machine/site and fill in real values. The real site_config.json is git-ignored and must never be committed.",
+  "society": {
+    "name": "Defender Octa Demo",
+    "site_id": "site-001",
+    "location": "City"
+  },
+  "server": {
+    "port": 5000,
+    "host": "0.0.0.0"
+  },
+  "camera": {
+    "enabled": false,
+    "index": 0,
+    "_comment_index": "0 = default USB/webcam. Use the camera number or leave 0."
+  },
+  "rtsp_cameras": [],
+  "recording": {
+    "auto_start": false,
+    "only": "Main Gate,Parking A"
+  },
+  "detection": {
+    "min_confidence": 30,
+    "debounce_seconds": 30,
+    "exit_minutes": 5,
+    "vote_window_seconds": 8.0,
+    "vote_min_samples": 3,
+    "require_guard_decision": true
+  },
+  "admin": {
+    "_comment": "Initial admin login. ALWAYS set a strong unique password per site.",
+    "username": "admin",
+    "password": "YOUR-STRONG-PASSWORD"
+  },
+  "viewer": {
+    "username": "demo",
+    "password": "octa-view-2026"
+  },
+  "backup": {
+    "enabled": true,
+    "keep_days": 14
+  },
+  "face": {
+    "enabled": true,
+    "camera": "Main Gate",
+    "alert_mode": "watchlist",
+    "cooldown_seconds": 60
+  },
+  "demo": {
+    "demo_mode": true
+  }
+}
