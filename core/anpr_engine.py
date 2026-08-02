@@ -11,7 +11,6 @@ Improvements over previous version:
 
 import cv2
 import numpy as np
-import easyocr
 import re
 import logging
 from pathlib import Path
@@ -337,6 +336,7 @@ def generate_variants(roi: np.ndarray) -> list:
 class ANPREngine:
     def __init__(self, use_gpu: bool = False):
         logger.info("Loading EasyOCR model...")
+        import easyocr  # lazy: loads ~690MB only when ANPR actually starts
         self.reader = easyocr.Reader(["en"], gpu=use_gpu, verbose=False)
         self._cache: dict = {}
         self._cache_ttl = 2.0

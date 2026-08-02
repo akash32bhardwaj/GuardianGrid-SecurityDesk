@@ -28,3 +28,6 @@ venv/
 Thumbs.db
 face_db.json
 cloudflared.exe
+*.bak
+*.db-shm
+*.db-wal

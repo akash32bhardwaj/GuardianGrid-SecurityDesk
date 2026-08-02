@@ -29,12 +29,19 @@ from typing import Optional
 from collections import defaultdict
 
 # ── Try importing ultralytics (YOLOv8) ──────────────────────────
-try:
-    from ultralytics import YOLO
-    YOLO_AVAILABLE = True
-except ImportError:
-    YOLO_AVAILABLE = False
-    print("[WARN] ultralytics not installed. Run: pip install ultralytics")
+YOLO = None                    # lazy-loaded on first ThreatDetector() — saves ~500MB at startup
+YOLO_AVAILABLE = True          # verified for real on first use
+
+def _load_yolo():
+    global YOLO, YOLO_AVAILABLE
+    if YOLO is None and YOLO_AVAILABLE:
+        try:
+            from ultralytics import YOLO as _Y
+            YOLO = _Y
+        except ImportError:
+            YOLO_AVAILABLE = False
+            print("[WARN] ultralytics not installed. Run: pip install ultralytics")
+    return YOLO_AVAILABLE
 
 # ── Config ──────────────────────────────────────────────────────
 OUTPUT_DIR   = Path("output/threats")
@@ -185,7 +192,7 @@ def draw_intrusion_line(frame, y_pct=INTRUSION_LINE_Y):
 # ── Main ThreatDetector class ────────────────────────────────────
 class ThreatDetector:
     def __init__(self, camera_index: int = 0, show_window: bool = False):
-        if not YOLO_AVAILABLE:
+        if not _load_yolo():
             raise ImportError("ultralytics not installed. Run: pip install ultralytics")
 
         print("[INFO] Loading YOLOv8n model (downloads ~6MB on first run)...")
