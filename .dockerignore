@@ -1,0 +1,13 @@
+.venv
+.git
+__pycache__
+*.pyc
+*.bak
+backups
+*.db
+*.db-shm
+*.db-wal
+site_config.json
+recordings
+reports
+.EasyOCR
