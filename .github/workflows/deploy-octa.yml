@@ -1,0 +1,77 @@
+name: Deploy Defender Octa
+
+run-name: Deploy Defender Octa by ${{ github.actor }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type DEPLOY to confirm production deployment"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: defender-octa-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ github.ref == 'refs/heads/main' && github.event.inputs.confirm == 'DEPLOY' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Configure secure SSH access
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.OCTA_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.OCTA_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 "$HOME/.ssh"
+
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Deploy to Defender Octa server
+        env:
+          OCTA_HOST: ${{ secrets.OCTA_HOST }}
+          OCTA_USER: ${{ secrets.OCTA_USER }}
+        run: |
+          ssh \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=20 \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=10 \
+            "${OCTA_USER}@${OCTA_HOST}" \
+            "sudo /usr/local/sbin/octa-deploy"
+
+      - name: Verify all society services
+        env:
+          OCTA_HOST: ${{ secrets.OCTA_HOST }}
+          OCTA_USER: ${{ secrets.OCTA_USER }}
+        run: |
+          ssh \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            "${OCTA_USER}@${OCTA_HOST}" \
+            '
+            for port in 5001 5002 5003 5004 5005 5006; do
+              code=$(curl -s -o /dev/null -w "%{http_code}" \
+                --max-time 10 "http://127.0.0.1:${port}/")
+
+              echo "Port ${port}: HTTP ${code}"
+
+              if [ "${code}" != "200" ]; then
+                echo "Health check failed on port ${port}"
+                exit 1
+              fi
+            done
+            '
