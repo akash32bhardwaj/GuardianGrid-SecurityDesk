@@ -31,3 +31,4 @@ cloudflared.exe
 *.bak
 *.db-shm
 *.db-wal
+docker-compose.yml.backup-*

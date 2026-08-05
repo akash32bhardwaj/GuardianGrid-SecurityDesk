@@ -2,36 +2,53 @@ services:
   society1:
     image: defender-octa:latest
     container_name: octa-society1
-    ports: ["5001:5000"]
-    volumes: ["/opt/societies/society1:/data"]
+    ports:
+      - "127.0.0.1:5001:5000"
+    volumes:
+      - "/opt/societies/society1:/data"
     restart: unless-stopped
+
   society2:
     image: defender-octa:latest
     container_name: octa-society2
-    ports: ["5002:5000"]
-    volumes: ["/opt/societies/society2:/data"]
+    ports:
+      - "127.0.0.1:5002:5000"
+    volumes:
+      - "/opt/societies/society2:/data"
     restart: unless-stopped
+
   society3:
     image: defender-octa:latest
     container_name: octa-society3
-    ports: ["5003:5000"]
-    volumes: ["/opt/societies/society3:/data"]
+    ports:
+      - "127.0.0.1:5003:5000"
+    volumes:
+      - "/opt/societies/society3:/data"
     restart: unless-stopped
+
   society4:
     image: defender-octa:latest
     container_name: octa-society4
-    ports: ["5004:5000"]
-    volumes: ["/opt/societies/society4:/data"]
+    ports:
+      - "127.0.0.1:5004:5000"
+    volumes:
+      - "/opt/societies/society4:/data"
     restart: unless-stopped
+
   society5:
     image: defender-octa:latest
     container_name: octa-society5
-    ports: ["5005:5000"]
-    volumes: ["/opt/societies/society5:/data"]
+    ports:
+      - "127.0.0.1:5005:5000"
+    volumes:
+      - "/opt/societies/society5:/data"
     restart: unless-stopped
+
   society6:
     image: defender-octa:latest
     container_name: octa-society6
-    ports: ["5006:5000"]
-    volumes: ["/opt/societies/society6:/data"]
+    ports:
+      - "127.0.0.1:5006:5000"
+    volumes:
+      - "/opt/societies/society6:/data"
     restart: unless-stopped
