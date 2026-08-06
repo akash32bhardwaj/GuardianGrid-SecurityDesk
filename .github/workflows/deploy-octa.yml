@@ -19,11 +19,28 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ github.ref == 'refs/heads/main' && inputs.confirm == 'DEPLOY' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
+      - name: Validate deployment request
+        env:
+          DEPLOY_CONFIRMATION: ${{ inputs.confirm }}
+        run: |
+          echo "Selected branch: ${GITHUB_REF}"
+
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "ERROR: Deployment is allowed only from main."
+            exit 1
+          fi
+
+          if [ "${DEPLOY_CONFIRMATION}" != "DEPLOY" ]; then
+            echo "ERROR: Enter DEPLOY in the confirmation field."
+            exit 1
+          fi
+
+          echo "Deployment request validated."
+
       - name: Configure secure SSH access
         env:
           SSH_PRIVATE_KEY: ${{ secrets.OCTA_SSH_KEY }}
