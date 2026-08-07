@@ -59,6 +59,16 @@ except ImportError:
     WHATSAPP_AVAILABLE = False
     print("[WARN] whatsapp_alerts.py not found — WhatsApp alerts disabled")
 
+# ── Visitor Notify v1 (resident WhatsApp on visitor entry) ──────
+try:
+    from visitor_notify import notify_flat as _visitor_notify_flat
+    from flat_directory import init_flats as _init_flats
+    VISITOR_NOTIFY_AVAILABLE = True
+except ImportError:
+    VISITOR_NOTIFY_AVAILABLE = False
+    print("[WARN] visitor_notify.py / flat_directory.py not found — "
+          "resident visitor alerts disabled")
+
 # ── Config ──────────────────────────────────────────────────────
 OUTPUT_DIR   = Path("output/webcam")
 MIN_CONF     = CONFIG.min_confidence
@@ -73,7 +83,7 @@ VOTE_MIN_SAMPLES    = CONFIG.vote_min_samples
 # ── Where the built React app lives ─────────────────────────────
 # After running "npm run build" in your React project,
 # copy the "dist" folder into indian_anpr and rename it "frontend"
-FRONTEND_DIR = Path("frontend")
+FRONTEND_DIR = Path(r"C:\Users\akash\Desktop\GuardianGrid\guardiangrid-command-center\dist")
 
 # Absolute folder this file lives in — used by DB-reading routes so they
 # work regardless of the current working directory.
@@ -84,6 +94,7 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 app = Flask(
     __name__,
     static_folder=str(FRONTEND_DIR) if FRONTEND_DIR.exists() else None,
+    static_url_path="/frontend",
 )
 CORS(app)
 
@@ -92,6 +103,8 @@ register_auth_routes(app)
 register_incident_routes(app)
 from guardian_ask import register_guardian_ask
 register_guardian_ask(app)
+from nightwatch_routes import register_nightwatch
+register_nightwatch(app)
 from correction_routes import correction_bp
 app.register_blueprint(correction_bp)
 from resident_routes import resident_bp
@@ -191,6 +204,16 @@ def push_alert(payload: dict):
     """Single choke point for alert emission: feed + live broadcast."""
     notification_feed.appendleft(payload)
     _sse_broadcast(payload)
+
+def _alert(title, message, severity="MEDIUM"):
+    """Adapter: modules that emit (title, message, severity) -> payload dict."""
+    push_alert({"time": datetime.now().isoformat(), "title": title,
+                "message": message, "severity": severity})
+
+from recon_detector import start_recon_watch
+start_recon_watch(_alert)
+from panic_routes import register_panic
+register_panic(app, _alert)
 vehicle_db:  dict  = {}
 last_seen:   dict  = {}
 entry_times: dict  = {}
@@ -918,15 +941,36 @@ def add_visitor_route():
     name = (data.get("name") or "").strip()
     if not name:
         return jsonify({"success": False, "error": "name required"}), 400
-    vid = add_visitor(name, (data.get("flat") or "").strip(),
+    flat_no = (data.get("flat") or "").strip()
+    purpose = (data.get("purpose") or "").strip()
+    vid = add_visitor(name, flat_no,
                       (data.get("phone") or "").strip(),
-                      (data.get("purpose") or "").strip())
+                      purpose)
     activity_feed.appendleft({
         "time": datetime.now().isoformat(),
         "event": f"VISITOR IN: {name} → {data.get('flat', '')}",
         "type": "visitor",
     })
-    return jsonify({"success": True, "id": vid})
+
+    # ── Visitor Notify v1: WhatsApp the flat owner (never blocks the
+    #    guard's save — runs in a background thread, logs its outcome
+    #    to the visitor_notifications table either way).
+    notified = "disabled"
+    if VISITOR_NOTIFY_AVAILABLE and flat_no:
+        notified = "queued"
+
+        def _notify_bg(_flat=flat_no, _name=name, _purpose=purpose, _vid=vid):
+            try:
+                _visitor_notify_flat(_flat, _name, purpose=_purpose,
+                                     visitor_id=_vid)
+            except Exception as e:
+                print(f"[VISITOR-NOTIFY] unexpected error: {e}")
+
+        threading.Thread(target=_notify_bg, daemon=True).start()
+    elif VISITOR_NOTIFY_AVAILABLE:
+        notified = "skipped (no flat)"
+
+    return jsonify({"success": True, "id": vid, "notified": notified})
 
 @app.route("/visitors/<int:vid>/exit", methods=["POST"])
 def visitor_exit_route(vid):
@@ -1440,6 +1484,8 @@ def bootstrap():
 
     init_db()
     init_visitors()
+    if VISITOR_NOTIFY_AVAILABLE:
+        _init_flats()      # flats + visitor_notifications tables
 
     # ── Guardian voice/alert integration ─────────────────────────
     try:
