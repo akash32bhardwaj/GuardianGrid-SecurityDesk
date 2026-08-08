@@ -552,8 +552,7 @@ def alert_stream():
 
     return Response(gen(), mimetype="text/event-stream",
                     headers={"Cache-Control": "no-cache",
-                             "X-Accel-Buffering": "no",
-                             "Connection": "keep-alive"})
+                             "X-Accel-Buffering": "no"})
 
 @app.route("/notifications")
 def notifications_route():
