@@ -83,7 +83,7 @@ VOTE_MIN_SAMPLES    = CONFIG.vote_min_samples
 # ── Where the built React app lives ─────────────────────────────
 # After running "npm run build" in your React project,
 # copy the "dist" folder into indian_anpr and rename it "frontend"
-FRONTEND_DIR = Path(r"C:\Users\akash\Desktop\GuardianGrid\guardiangrid-command-center\dist")
+FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
 
 # Absolute folder this file lives in — used by DB-reading routes so they
 # work regardless of the current working directory.
