@@ -66,11 +66,16 @@ def register_panic(app, push_alert=None):
         except Exception as e:
             results["incident"] = f"failed: {e}"
 
-        # 3) Booth voice
+        # 3) Booth voice (multilingual if available, legacy fallback)
         try:
-            from booth_voice import speak
-            speak(f"Emergency. Guard assistance required at {camera}.")
-            results["voice"] = "spoken"
+            try:
+                from booth_voice_ml import announce
+                announce("panic", camera=camera)
+                results["voice"] = "spoken (hi+en)"
+            except ImportError:
+                from booth_voice import speak
+                speak(f"Emergency. Guard assistance required at {camera}.")
+                results["voice"] = "spoken (en)"
         except Exception as e:
             results["voice"] = f"unavailable: {e}"
 
