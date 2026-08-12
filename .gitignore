@@ -32,3 +32,4 @@ cloudflared.exe
 *.db-shm
 *.db-wal
 docker-compose.yml.backup-*
+whatsapp_config.py
