@@ -210,6 +210,77 @@ def _alert(title, message, severity="MEDIUM"):
     push_alert({"time": datetime.now().isoformat(), "title": title,
                 "message": message, "severity": severity})
 
+def _seed_demo_alerts():
+    """Populate demo notifications on startup when demo_mode is enabled."""
+    try:
+        import json
+
+        config_path = os.path.join(BASE_DIR, "site_config.json")
+
+        with open(config_path, encoding="utf-8") as f:
+            cfg = json.load(f)
+
+        if not cfg.get("demo", {}).get("demo_mode", False):
+            return
+
+        now = datetime.now()
+
+        demo_alerts = [
+            {
+                "time": (now - timedelta(minutes=8)).isoformat(),
+                "title": "BLACKLISTED VEHICLE DETECTED",
+                "message": "PB08CX4421 denied at Main Gate",
+                "severity": "HIGH",
+            },
+            {
+                "time": (now - timedelta(minutes=22)).isoformat(),
+                "title": "UNKNOWN VEHICLE AWAITING REVIEW",
+                "message": "PB10AZ7812 detected at Visitor Parking",
+                "severity": "MEDIUM",
+            },
+            {
+                "time": (now - timedelta(minutes=38)).isoformat(),
+                "title": "LOITERING DETECTED",
+                "message": "Person observed near Parking A for 11 minutes",
+                "severity": "MEDIUM",
+            },
+            {
+                "time": (now - timedelta(minutes=55)).isoformat(),
+                "title": "GATE OPEN BEYOND THRESHOLD",
+                "message": "Garden Gate remained open for 52 seconds",
+                "severity": "MEDIUM",
+            },
+            {
+                "time": (now - timedelta(minutes=74)).isoformat(),
+                "title": "CAMERA RECONNECTED",
+                "message": "Basement Entry camera connection restored",
+                "severity": "LOW",
+            },
+            {
+                "time": (now - timedelta(minutes=96)).isoformat(),
+                "title": "VISITOR ENTRY APPROVED",
+                "message": "Guest approved for Flat B-902",
+                "severity": "LOW",
+            },
+            {
+                "time": (now - timedelta(minutes=125)).isoformat(),
+                "title": "GUARDIAN AI PATROL COMPLETE",
+                "message": "Parking A and Parking B sweep completed — all clear",
+                "severity": "LOW",
+            },
+        ]
+
+        for item in reversed(demo_alerts):
+            push_alert(item)
+
+        print(f"[DEMO] Seeded {len(demo_alerts)} notification alerts")
+
+    except Exception as e:
+        print(f"[DEMO] Alert seed failed: {e}")
+
+
+_seed_demo_alerts()
+
 from recon_detector import start_recon_watch
 start_recon_watch(_alert)
 from panic_routes import register_panic
@@ -564,8 +635,63 @@ def notifications_route():
 
 @app.route("/vehicle_log")
 def vehicle_log_route():
-    with lock:
-        return jsonify(list(vehicle_log))
+
+    import sqlite3
+
+    DB_PATH = "/data/guardiangrid.db"
+
+    try:
+        con = sqlite3.connect(DB_PATH)
+        con.row_factory = sqlite3.Row
+
+        rows = con.execute("""
+            SELECT
+                id,
+                plate,
+                vtype,
+                state,
+                event,
+                confidence,
+                image,
+                access,
+                camera,
+                timestamp
+            FROM vehicle_events
+            ORDER BY timestamp DESC
+            LIMIT 200
+        """).fetchall()
+
+        con.close()
+
+        out = []
+
+        for r in rows:
+
+            ts = r["timestamp"] or ""
+
+            out.append({
+                "vehicle_id": r["id"],
+                "plate": r["plate"],
+                "type": r["vtype"] or "Vehicle",
+                "state": r["state"] or r["access"] or "—",
+                "event": r["event"] or "—",
+                "confidence": r["confidence"] or 0,
+                "image": r["image"] or "",
+                "camera": r["camera"] or "—",
+                "access": r["access"] or "—",
+                "timestamp": ts,
+                "time": ts
+            })
+
+        return jsonify(out)
+
+    except Exception as e:
+
+        print(f"[VEHICLE LOG] DB error: {e}")
+
+        # Fallback to existing in-memory log
+        with lock:
+            return jsonify(list(vehicle_log))
 
 @app.route("/search_vehicle/<plate_query>")
 def search_vehicle(plate_query):
@@ -765,6 +891,82 @@ def camera_heat_route():
     from db import camera_heat
     return jsonify(camera_heat(request.args.get("date")))
 
+
+MEDIAMTX_HLS_BASE = os.environ.get(
+    "MEDIAMTX_HLS_BASE", "http://guardiangrid-mediamtx:8888"
+).rstrip("/")
+MEDIAMTX_PATH_PREFIX = os.environ.get(
+    "MEDIAMTX_PATH_PREFIX", "society1"
+).strip().lower()
+
+
+@app.route("/stream/<path:stream_path>")
+def media_stream_proxy(stream_path):
+    """JWT-protected, same-origin HLS proxy for MediaMTX."""
+    from urllib.error import HTTPError, URLError
+    from urllib.parse import quote
+    from urllib.request import Request as URLRequest, urlopen
+    from flask import stream_with_context
+
+    if ".." in stream_path.split("/"):
+        abort(400)
+
+    safe_path = quote(stream_path, safe="/._-")
+    upstream_url = f"{MEDIAMTX_HLS_BASE}/{safe_path}"
+    if request.query_string:
+        upstream_url += "?" + request.query_string.decode("utf-8", "ignore")
+
+    upstream_request = URLRequest(
+        upstream_url,
+        headers={
+            "Accept": request.headers.get("Accept", "*/*"),
+            "User-Agent": "GuardianGrid-HLS-Proxy/1.0",
+        },
+    )
+
+    try:
+        upstream = urlopen(upstream_request, timeout=30)
+    except HTTPError as exc:
+        return Response(exc.read(), status=exc.code,
+                        content_type=exc.headers.get("Content-Type", "text/plain"))
+    except (URLError, TimeoutError, OSError) as exc:
+        app.logger.warning("MediaMTX HLS proxy unavailable: %s", exc)
+        return jsonify({"error": "Live stream is temporarily unavailable"}), 502
+
+    response_headers = {}
+    for header in ("Content-Type", "Cache-Control", "Content-Length"):
+        value = upstream.headers.get(header)
+        if value:
+            response_headers[header] = value
+
+    @stream_with_context
+    def generate():
+        try:
+            while True:
+                chunk = upstream.read(64 * 1024)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            upstream.close()
+
+    response = Response(generate(), status=getattr(upstream, "status", 200),
+                        headers=response_headers)
+
+    query_token = request.args.get("token")
+    if query_token:
+        response.set_cookie(
+            "gg_stream_token",
+            query_token,
+            httponly=True,
+            secure=request.is_secure,
+            samesite="Strict",
+            path="/stream/",
+        )
+
+    return response
+
+
 @app.route("/cameras")
 def cameras_route():
     from rtmp_proxy import RTSP_CAMERAS
@@ -775,6 +977,7 @@ def cameras_route():
         "status": "online" if anpr_online else "offline",
         "uptime": "—", "fps": 25 if anpr_online else 0,
         "stream": "/video_feed",
+        "stream_type": "mjpeg",
     }]
     for cam in RTSP_CAMERAS:
         if not cam.get("url"):        # skip cameras with no URL yet
@@ -782,7 +985,12 @@ def cameras_route():
         cams.append({
             "name": f"CAM {cam['id']:02d} — {cam['name']}",
             "status": "online", "uptime": "—", "fps": 25,
-            "stream": f"/cam/{cam['id']}",
+            "stream_type": "hls",
+            "stream": (
+                f"/stream/{MEDIAMTX_PATH_PREFIX}-cam{cam['id']:02d}/"
+                "index.m3u8?cookieCheck=1"
+            ),
+            "mjpeg_fallback": f"/cam/{cam['id']}",
         })
     return jsonify(cams)
 
@@ -1005,7 +1213,12 @@ def require_auth():
     if p == "/" or any(p.startswith(e) for e in AUTH_EXEMPT_PREFIXES):
         return
     auth = request.headers.get("Authorization", "")
-    token = auth[7:] if auth.startswith("Bearer ") else request.args.get("token", "")
+    token = (
+        auth[7:]
+        if auth.startswith("Bearer ")
+        else request.args.get("token", "")
+        or request.cookies.get("gg_stream_token", "")
+    )
     if not token:
         return jsonify({"success": False, "message": "Authentication required"}), 401
     try:
@@ -1228,14 +1441,15 @@ def threat_forecast():
 # daily brief (morning_report.collect + compute_score), so the live KPI
 # and the written brief can never disagree. Cached for 60s so frontend
 # polling doesn't hammer SQLite.
-_live_score_cache = {"at": 0.0, "payload": None}
+_live_score_cache = {}   # keyed by hours-window: {12: {"at": ..., "payload": ...}}
 
 @app.route("/api/score/live")
 def live_score():
     now = time.time()
-    if _live_score_cache["payload"] and now - _live_score_cache["at"] < 60:
-        return jsonify(_live_score_cache["payload"])
     hours = min(max(int(request.args.get("hours", 12) or 12), 1), 48)
+    entry = _live_score_cache.get(hours)
+    if entry and now - entry["at"] < 60:
+        return jsonify(entry["payload"])
     try:
         from morning_report import collect, compute_score
         d = collect(hours)
@@ -1254,8 +1468,7 @@ def live_score():
         }
     except Exception as e:
         payload = {"score": None, "label": "Unavailable", "error": str(e), "live": False}
-    _live_score_cache["at"] = now
-    _live_score_cache["payload"] = payload
+    _live_score_cache[hours] = {"at": now, "payload": payload}
     return jsonify(payload)
 
 
@@ -1358,7 +1571,7 @@ WATCHDOG_MIN_SCORE     = 60          # absolute floor → alarm
 WATCHDOG_DROP_POINTS   = 15          # relative drop → alarm
 WATCHDOG_DROP_WINDOW   = 10          # minutes for the drop comparison
 WATCHDOG_COOLDOWN      = 600         # seconds between repeated alarms
-WATCHDOG_HOURS         = 2           # scoring window (match your test window)
+WATCHDOG_HOURS         = 12           # scoring window (match your test window)
 
 _watchdog_state = {"history": deque(maxlen=120), "alerts": deque(maxlen=20),
                    "last_alarm": 0.0}
