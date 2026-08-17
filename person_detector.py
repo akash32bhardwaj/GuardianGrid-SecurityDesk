@@ -31,6 +31,7 @@ import threading
 
 _model = None                 # lazy-loaded YOLO model
 _model_lock = threading.Lock()
+_inference_lock = threading.Lock()
 _MODEL_NAME = "yolov8n.pt"    # 'n' = nano = smallest/fastest. Auto-downloads once.
 
 # Which YOLO class IDs count as what (COCO dataset)
@@ -87,7 +88,15 @@ def detect_boxes(frame, mode="person"):
 
     model = _load_model()
     # verbose=False keeps the console quiet; imgsz small = faster on CPU
-    results = model.predict(frame, conf=_CONF_THRESH, imgsz=_IMG_SIZE, verbose=False)
+    # Ultralytics model instances are not safe for concurrent predict()
+    # calls. All camera workers share this model, so serialize inference.
+    with _inference_lock:
+        results = model.predict(
+            frame,
+            conf=_CONF_THRESH,
+            imgsz=_IMG_SIZE,
+            verbose=False,
+        )
 
     boxes = []
     counts = {"persons": 0, "vehicles": 0}
