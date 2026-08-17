@@ -27,8 +27,10 @@ The model loads ONCE, on first call, so importing this file is cheap.
 
 import cv2
 import numpy as np
+import threading
 
 _model = None                 # lazy-loaded YOLO model
+_model_lock = threading.Lock()
 _MODEL_NAME = "yolov8n.pt"    # 'n' = nano = smallest/fastest. Auto-downloads once.
 
 # Which YOLO class IDs count as what (COCO dataset)
@@ -45,16 +47,21 @@ _IMG_SIZE    = 640
 
 def _load_model():
     global _model
-    if _model is None:
-        # This cloud CPU cannot initialize NNPACK. Disable that unavailable
-        # backend before YOLO inference to prevent thousands of warnings.
-        import torch
-        torch.backends.nnpack.set_flags(False)
 
-        from ultralytics import YOLO   # imported here so the app starts even if not installed
-        print(f"[PERSON] Loading YOLO model ({_MODEL_NAME})…")
-        _model = YOLO(_MODEL_NAME)
-        print("[PERSON] YOLO ready.")
+    if _model is None:
+        with _model_lock:
+            # Another camera thread may have loaded it while we waited.
+            if _model is None:
+                # This cloud CPU cannot initialize NNPACK. Disable that
+                # unavailable backend before YOLO inference.
+                import torch
+                torch.backends.nnpack.set_flags(False)
+
+                from ultralytics import YOLO
+                print(f"[PERSON] Loading YOLO model ({_MODEL_NAME})…")
+                _model = YOLO(_MODEL_NAME)
+                print("[PERSON] YOLO ready.")
+
     return _model
 
 
