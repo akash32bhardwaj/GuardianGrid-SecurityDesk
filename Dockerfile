@@ -7,8 +7,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 COPY requirements.txt .
-RUN grep -v -i "cuda\|nvidia" requirements.txt > req-clean.txt && \
-    pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
+RUN grep -v -E -i 'cuda|nvidia|^torch([<>=!~].*)?$|^torchvision([<>=!~].*)?$' requirements.txt > req-clean.txt && \
+    pip install --no-cache-dir \
+        torch==2.13.0+cpu \
+        torchvision==0.28.0+cpu \
+        --index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir -r req-clean.txt
 
 COPY . /app
