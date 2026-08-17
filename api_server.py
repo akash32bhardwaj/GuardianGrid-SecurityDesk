@@ -983,6 +983,7 @@ def cameras_route():
         if not cam.get("url"):        # skip cameras with no URL yet
             continue
         cams.append({
+            "id": cam["id"],
             "name": f"CAM {cam['id']:02d} — {cam['name']}",
             "status": "online", "uptime": "—", "fps": 25,
             "stream_type": "hls",

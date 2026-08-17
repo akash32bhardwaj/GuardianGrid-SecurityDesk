@@ -256,6 +256,7 @@ _frames: dict = {}
 _locks:  dict = {}
 _stats:  dict = {}
 _status: dict = {}   # cam_id -> {"online", "last_frame_ts", "last_error", "reconnects"}
+_detections: dict = {}  # cam_id -> latest boxes + source dimensions + timestamp
 
 # Shared recorder — set by init_rtsp_cams()
 _recorder = None
@@ -418,6 +419,12 @@ def _camera_worker(cam: dict):
                         last_ai_ts    = now_ts
                         with _locks[cam_id]:
                             _stats[cam_id] = counts
+                            _detections[cam_id] = {
+                                "boxes": [dict(box) for box in boxes],
+                                "frame_width": int(frame.shape[1]),
+                                "frame_height": int(frame.shape[0]),
+                                "updated_at": now_ts,
+                            }
                     except Exception as e:
                         print(f"[CAM {cam_id}] AI error: {e}")
                         last_ai_ts = now_ts   # don't hammer a failing model
@@ -427,6 +434,9 @@ def _camera_worker(cam: dict):
                     cached_boxes = []
                     with _locks[cam_id]:
                         _stats[cam_id] = {"persons": 0, "vehicles": 0}
+                        detection = _detections.setdefault(cam_id, {})
+                        detection["boxes"] = []
+                        detection["updated_at"] = now_ts
             else:
                 has_motion = True   # no AI on this camera
 
@@ -577,6 +587,7 @@ def get_cam_stats(cam_id: int) -> dict:
     with _locks.get(cam_id, threading.Lock()):
         counts = dict(_stats.get(cam_id, {"persons": 0, "vehicles": 0}))
         st = dict(_status.get(cam_id, {}))
+        detection = dict(_detections.get(cam_id, {}))
 
     last_ts = st.get("last_frame_ts", 0) or 0
     return {
@@ -591,6 +602,13 @@ def get_cam_stats(cam_id: int) -> dict:
         "last_frame_age": round(time.time() - last_ts, 1) if last_ts else None,
         "reconnects": st.get("reconnects", 0),
         "last_error": st.get("last_error", ""),
+        "detections": detection.get("boxes", []),
+        "frame_width": detection.get("frame_width"),
+        "frame_height": detection.get("frame_height"),
+        "detection_age": (
+            round(time.time() - detection["updated_at"], 2)
+            if detection.get("updated_at") else None
+        ),
         **counts,
     }
 
