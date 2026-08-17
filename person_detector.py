@@ -46,6 +46,11 @@ _IMG_SIZE    = 640
 def _load_model():
     global _model
     if _model is None:
+        # This cloud CPU cannot initialize NNPACK. Disable that unavailable
+        # backend before YOLO inference to prevent thousands of warnings.
+        import torch
+        torch.backends.nnpack.set_flags(False)
+
         from ultralytics import YOLO   # imported here so the app starts even if not installed
         print(f"[PERSON] Loading YOLO model ({_MODEL_NAME})…")
         _model = YOLO(_MODEL_NAME)
