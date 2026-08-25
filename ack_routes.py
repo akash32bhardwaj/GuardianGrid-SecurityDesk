@@ -160,9 +160,25 @@ def _sweep_once():
             continue
         if str(inc.get("severity", "")).upper() not in _TRACK_SEVERITIES:
             continue
-        seen = cur.execute("SELECT 1 FROM ack_log WHERE incident_id=?",
-                           (iid,)).fetchone()
+        seen = cur.execute(
+            "SELECT acked_at, escalated FROM ack_log WHERE incident_id=?",
+            (iid,)).fetchone()
         if seen:
+            # Restart recovery: an OPEN incident that was neither acked nor
+            # escalated lost its in-memory timer when the server restarted.
+            # Re-arm it (fresh window). Acked/escalated ones stay untracked
+            # so nobody gets re-alerted for the same incident.
+            already_tracked = False
+            try:
+                with ack_watchdog._timers_lock:
+                    already_tracked = iid in ack_watchdog._timers
+            except Exception:
+                pass
+            if (not already_tracked and seen["acked_at"] is None
+                    and not seen["escalated"]):
+                ack_watchdog.register_incident(inc, tier=3,
+                                               deep_night=deep_night)
+                logger.info(f"[ACK] re-armed {iid} after restart")
             continue
         ack_watchdog.register_incident(inc, tier=3, deep_night=deep_night)
         cur.execute(
