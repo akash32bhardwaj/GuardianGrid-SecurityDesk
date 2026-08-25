@@ -138,6 +138,12 @@ from gate_capture import gate_capture_bp, init_gate_capture
 init_gate_capture(base_dir=BASE_DIR)
 app.register_blueprint(gate_capture_bp)
 
+# ── Pattern & Loitering intelligence (pattern_watch.py) ───────────
+# 6-hourly background scan + GET /api/patterns for the dashboard.
+from pattern_watch import pattern_bp, init_pattern_watch
+init_pattern_watch(base_dir=BASE_DIR)
+app.register_blueprint(pattern_bp)
+
 print("\nREGISTERED ROUTES:")
 for rule in app.url_map.iter_rules():
     print(rule)
