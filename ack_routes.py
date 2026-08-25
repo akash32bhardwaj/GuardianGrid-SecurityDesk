@@ -57,7 +57,24 @@ def init_ack_loop(base_dir: str, start_threads: bool = True):
     _ensure_table()
     try:
         import ack_watchdog
-        ack_watchdog.configure(_escalate_to_supervisor)
+        # guardian_wiring.py also configures an escalate_fn (its
+        # send_threat_alert path). We must coexist, not fight over the
+        # single hook: wrap ack_watchdog.configure so that WHOEVER
+        # installs a sender, our ack_log marker always runs first and
+        # exactly one WhatsApp goes out.
+        _orig_configure = ack_watchdog.configure
+
+        def _chained_configure(their_fn):
+            def _both(incident, reason):
+                _mark_escalated(incident)          # our bookkeeping
+                their_fn(incident, reason)          # their sender
+            _orig_configure(_both)
+
+        ack_watchdog.configure = _chained_configure
+        # baseline handler (used unless guardian_wiring replaces it):
+        _orig_configure(lambda inc, reason: (
+            _mark_escalated(inc),
+            _send_escalation_whatsapp(inc, reason)))
         if start_threads:
             ack_watchdog.start_watchdog()
             threading.Thread(target=_sweep_loop, daemon=True,
@@ -173,7 +190,8 @@ def _sweep_loop():
 # Escalation — the watchdog calls this when nobody acknowledged
 # ════════════════════════════════════════════════════════════════════
 
-def _escalate_to_supervisor(incident: dict, reason: str):
+def _mark_escalated(incident: dict):
+    """Bookkeeping only — always runs, regardless of who sends."""
     iid = incident.get("incident_id", "?")
     try:
         con = _con()
@@ -183,6 +201,10 @@ def _escalate_to_supervisor(incident: dict, reason: str):
         con.close()
     except sqlite3.Error:
         pass
+
+
+def _send_escalation_whatsapp(incident: dict, reason: str):
+    iid = incident.get("incident_id", "?")
     try:
         import whatsapp_config as cfg
         from whatsapp_alerts import _send_whatsapp

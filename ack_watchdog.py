@@ -179,8 +179,18 @@ def _run_loop():
         time.sleep(WATCH_INTERVAL)
 
 
+_watchdog_thread = None
+
+
 def start_watchdog():
-    """Start the watchdog in a daemon thread. Call once at server startup."""
-    th = threading.Thread(target=_run_loop, daemon=True, name="ack-watchdog")
-    th.start()
-    return th
+    """Start the watchdog in a daemon thread. Safe to call more than once
+    (ack_routes and guardian_wiring may both call it) — only the first
+    call starts a thread; two watchdog threads risk double escalation."""
+    global _watchdog_thread
+    if _watchdog_thread is not None and _watchdog_thread.is_alive():
+        logger.info("Ack watchdog already running — second start ignored.")
+        return _watchdog_thread
+    _watchdog_thread = threading.Thread(target=_run_loop, daemon=True,
+                                        name="ack-watchdog")
+    _watchdog_thread.start()
+    return _watchdog_thread
