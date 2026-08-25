@@ -40,7 +40,9 @@ def _site_name():
     try:
         with open("site_config.json", encoding="utf-8") as f:
             cfg = json.load(f)
-        return cfg.get("site_name") or cfg.get("name") or "Defender Octa Site"
+        soc = cfg.get("society") or {}
+        return (soc.get("name") or cfg.get("site_name")
+                or cfg.get("name") or "Defender Octa Site")
     except (OSError, json.JSONDecodeError):
         return "Defender Octa Site"
 
