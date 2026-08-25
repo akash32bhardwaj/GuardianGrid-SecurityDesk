@@ -50,6 +50,8 @@ from reportlab.platypus import (
 )
 
 from reportlab.lib.styles import getSampleStyleSheet
+from site_profile import site_bp, is_enabled, feature_required
+from contractors import contractors_bp
 
 
 try:
@@ -109,11 +111,32 @@ from correction_routes import correction_bp
 app.register_blueprint(correction_bp)
 from resident_routes import resident_bp
 app.register_blueprint(resident_bp)
+app.register_blueprint(site_bp)
+app.register_blueprint(contractors_bp)
 
 # False-escalation tracking. Must be registered AFTER app exists (above) and
 # BEFORE the route printout, so it appears in the startup route list.
 from escalation_metrics import escalation_bp
 app.register_blueprint(escalation_bp)
+
+# ── "Google for CCTV" natural-language search (octa_search.py) ────
+# POST /api/search — protected by the before_request JWT guard below.
+from octa_search import search_bp, init_search
+init_search(base_dir=BASE_DIR)
+app.register_blueprint(search_bp)
+
+# ── WhatsApp Clip-on-Demand (whatsapp_inbound.py) ─────────────────
+# Twilio replies ("show"/"photo"/"status") -> clip/snapshot/summary.
+# Routes are auth-exempt; protected by Twilio signature + signed tokens.
+from whatsapp_inbound import whatsapp_bp, init_whatsapp_inbound
+init_whatsapp_inbound(base_dir=BASE_DIR)
+app.register_blueprint(whatsapp_bp)
+
+# ── Octa Assist — guard photo capture for cameraless gates ────────
+# (gate_capture.py) POST /api/gate/capture|log_vehicle|log_person
+from gate_capture import gate_capture_bp, init_gate_capture
+init_gate_capture(base_dir=BASE_DIR)
+app.register_blueprint(gate_capture_bp)
 
 print("\nREGISTERED ROUTES:")
 for rule in app.url_map.iter_rules():
@@ -1190,6 +1213,7 @@ def visitor_exit_route(vid):
 AUTH_EXEMPT_PREFIXES = (
     "/api/auth/login",
     "/api/auth/test",
+    "/api/whatsapp/",     # Twilio webhook (signature-verified) + tokenized media
     "/video_feed",
     "/cam/",
     "/frontend",
@@ -1234,7 +1258,9 @@ def require_auth():
     #     flats and phone numbers are not demo material
     # Structural rule in ONE place, so no route can forget to check.
     if (request.auth_user or {}).get("role") == "VIEWER":
-        if request.method != "GET":
+        # /api/search is a POST but strictly read-only (parameterised
+        # SELECTs) — demo/QR viewers may use it. Everything else: GET only.
+        if request.method != "GET" and p != "/api/search":
             return jsonify({"success": False,
                             "message": "Viewer access is read-only"}), 403
         if p.startswith("/residents"):

@@ -33,3 +33,6 @@ cloudflared.exe
 *.db-wal
 docker-compose.yml.backup-*
 whatsapp_config.py
+config.py
+gate_captures/
+clips_cache/

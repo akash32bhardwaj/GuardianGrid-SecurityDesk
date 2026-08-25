@@ -45,6 +45,14 @@ except Exception:
     logger.warning("escalation_metrics not available — false-escalation "
                    "tracking is OFF")
 
+# ── Clip-on-Demand context (whatsapp_inbound.py) ────────────────
+# After every successful send we remember WHICH event went to WHICH number,
+# so a "show" reply knows what to fetch. Defensive: never block an alert.
+try:
+    from whatsapp_inbound import record_alert_context as _record_wa_context
+except Exception:
+    _record_wa_context = None
+
 # ── Try importing Twilio ────────────────────────────────────────
 try:
     from twilio.rest import Client
@@ -93,6 +101,7 @@ def _format_unknown_message(plate, event, time_str):
         f"🚗 *Plate:* {plate}\n"
         f"🕐 *Time:* {time_str}\n\n"
         f"⚠️ This vehicle is not in your resident database.\n"
+        f"↩️ Reply *show* for the video clip.\n"
         f"_S&N GuardianGrid Security System_"
     )
 
@@ -123,8 +132,29 @@ def _format_threat_message(threat_type, severity, description, time_str):
     )
 
 
+# ── Media URL helper — turn a local snapshot into a public link ──
+def _media_url_for(snapshot_path: str):
+    """Signed, expiring public URL for a snapshot (via whatsapp_inbound).
+    Returns None when there's no file or no public base configured —
+    the alert then goes out as text, exactly like before."""
+    if not snapshot_path:
+        return None
+    try:
+        import os as _os
+        if not _os.path.exists(snapshot_path):
+            return None
+        from whatsapp_inbound import make_media_token
+        base = getattr(cfg, "PUBLIC_BASE_URL", "").rstrip("/") if CONFIG_LOADED else ""
+        if not base:
+            return None
+        return f"{base}/api/whatsapp/media/{make_media_token(snapshot_path)}"
+    except Exception as e:
+        logger.warning(f"media url skipped: {e}")
+        return None
+
+
 # ── Core send function ────────────────────────────────────────────
-def _send_whatsapp(to: str, message: str) -> dict:
+def _send_whatsapp(to: str, message: str, media_url: str = None) -> dict:
     """Send a WhatsApp message via Twilio. Returns result dict."""
     if not CONFIG_LOADED:
         return {"success": False, "error": "whatsapp_config.py not found"}
@@ -143,11 +173,10 @@ def _send_whatsapp(to: str, message: str) -> dict:
 
     try:
         client = Client(cfg.TWILIO_ACCOUNT_SID, cfg.TWILIO_AUTH_TOKEN)
-        msg = client.messages.create(
-            from_=cfg.TWILIO_WHATSAPP_FROM,
-            to=to,
-            body=message,
-        )
+        kwargs = dict(from_=cfg.TWILIO_WHATSAPP_FROM, to=to, body=message)
+        if media_url:
+            kwargs["media_url"] = [media_url]
+        msg = client.messages.create(**kwargs)
         logger.info(f"WhatsApp sent to {to} — SID: {msg.sid}")
         return {"success": True, "sid": msg.sid}
     except Exception as e:
@@ -210,13 +239,18 @@ def send_vehicle_alert(plate: str, event: str,
     status = (resident_info or {}).get("status", "UNKNOWN")
     found  = (resident_info or {}).get("found", False)
     sec_no = _security_number()
+    media  = _media_url_for(snapshot_path)
 
     # ── 🔴 BLACKLISTED — always alerts security, ignores quiet hours ──
     if found and status == "BLACKLISTED":
         if settings.should_alert_security("BLACKLISTED"):
             msg = _format_blacklist_message(plate, event, resident_info, time_str)
-            r = _send_whatsapp(sec_no, msg)
+            r = _send_whatsapp(sec_no, msg, media_url=media)
             results.append({"to": "security", "type": "BLACKLISTED", **r})
+            if r.get("success") and _record_wa_context:
+                _record_wa_context(sec_no, plate=plate,
+                                   camera=camera or "Main Gate",
+                                   snapshot=snapshot_path)
         else:
             results.append({"to": "security", "type": "BLACKLISTED",
                            "success": False, "error": "routing disabled (unexpected)"})
@@ -227,8 +261,12 @@ def send_vehicle_alert(plate: str, event: str,
         if resident_info.get("notify_enabled", True):
             msg = _format_known_message(plate, event, resident_info, time_str)
             to  = _resident_number(resident_info)
-            r   = _send_whatsapp(to, msg)
+            r   = _send_whatsapp(to, msg, media_url=media)
             results.append({"to": "resident", "type": "KNOWN", **r})
+            if r.get("success") and _record_wa_context:
+                _record_wa_context(to, plate=plate,
+                                   camera=camera or "Main Gate",
+                                   snapshot=snapshot_path)
         else:
             results.append({"to": "resident", "type": "KNOWN",
                            "success": False, "error": "resident opted out"})
@@ -236,8 +274,12 @@ def send_vehicle_alert(plate: str, event: str,
         # 2. To security head — OFF by default (notification fatigue fix)
         if settings.should_alert_security("KNOWN"):
             msg2 = _format_known_security_message(plate, event, resident_info, time_str)
-            r2   = _send_whatsapp(sec_no, msg2)
+            r2   = _send_whatsapp(sec_no, msg2, media_url=media)
             results.append({"to": "security", "type": "KNOWN", **r2})
+            if r2.get("success") and _record_wa_context:
+                _record_wa_context(sec_no, plate=plate,
+                                   camera=camera or "Main Gate",
+                                   snapshot=snapshot_path)
         else:
             results.append({"to": "security", "type": "KNOWN",
                            "success": False, "error": "routing disabled or quiet hours"})
@@ -246,8 +288,12 @@ def send_vehicle_alert(plate: str, event: str,
     else:
         if settings.should_alert_security("UNKNOWN"):
             msg = _format_unknown_message(plate, event, time_str)
-            r = _send_whatsapp(sec_no, msg)
+            r = _send_whatsapp(sec_no, msg, media_url=media)
             results.append({"to": "security", "type": "UNKNOWN", **r})
+            if r.get("success") and _record_wa_context:
+                _record_wa_context(sec_no, plate=plate,
+                                   camera=camera or "Main Gate",
+                                   snapshot=snapshot_path)
         else:
             results.append({"to": "security", "type": "UNKNOWN",
                            "success": False, "error": "routing disabled or quiet hours"})
