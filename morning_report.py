@@ -29,8 +29,23 @@ from datetime import datetime, timedelta
 
 # ---------------------------------------------------------------- config ---
 
-DB_FILE      = "guardiangrid.db"
-SITE_NAME    = os.environ.get("GG_SITE_NAME", "Demo Site")
+DB_FILE      = "/data/guardiangrid.db" \
+    if os.path.exists("/data/guardiangrid.db") else "guardiangrid.db"
+
+
+def _site_name():
+    env = os.environ.get("GG_SITE_NAME", "")
+    if env:
+        return env
+    try:
+        with open("site_config.json", encoding="utf-8") as f:
+            cfg = json.load(f)
+        return cfg.get("site_name") or cfg.get("name") or "Defender Octa Site"
+    except (OSError, json.JSONDecodeError):
+        return "Defender Octa Site"
+
+
+SITE_NAME    = _site_name()
 REPORT_DIR   = "reports"
 COMPANY      = "S&N GuardianGrid Technologies"
 TAGLINE      = "AI Night Patrol · 0 human hours required"
@@ -51,6 +66,18 @@ TWILIO_SID   = os.environ.get("TWILIO_ACCOUNT_SID", "")
 TWILIO_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
 WA_FROM      = os.environ.get("TWILIO_WHATSAPP_FROM", "")   # e.g. whatsapp:+14155238886
 WA_TO        = os.environ.get("GG_REPORT_WHATSAPP_TO", "")  # e.g. whatsapp:+91XXXXXXXXXX
+
+# Fall back to whatsapp_config.py (the container's config source) when the
+# env vars are absent — same credentials the alert pipeline already uses.
+try:
+    import whatsapp_config as _wcfg
+    TWILIO_SID   = TWILIO_SID or getattr(_wcfg, "TWILIO_ACCOUNT_SID", "")
+    TWILIO_TOKEN = TWILIO_TOKEN or getattr(_wcfg, "TWILIO_AUTH_TOKEN", "")
+    WA_FROM      = WA_FROM or getattr(_wcfg, "TWILIO_WHATSAPP_FROM", "")
+    WA_TO        = WA_TO or getattr(_wcfg, "REPORT_WHATSAPP", "") \
+        or getattr(_wcfg, "SECURITY_WHATSAPP", "")
+except ImportError:
+    pass
 
 # ------------------------------------------------- directory enforcement ---
 
@@ -207,7 +234,50 @@ def collect(hours):
             "WHERE REPLACE(timestamp,'T',' ') >= ? AND camera IS NOT NULL", (since_iso,))
     ]
 
+    # --- visitors (gate console / visitor register) -------------------------
+    d["visitors_total"] = safe_count(cur,
+        "SELECT COUNT(*) FROM visitors WHERE REPLACE(in_time,'T',' ') >= ?",
+        (since_iso,))
+    d["visitors_inside"] = safe_count(cur,
+        "SELECT COUNT(*) FROM visitors WHERE REPLACE(in_time,'T',' ') >= ? "
+        "AND (out_time IS NULL OR out_time = '')", (since_iso,))
+
+    # --- overnight quiet window: longest gap between events ----------------
+    ev_ts = [str(r["timestamp"]).replace("T", " ")[:19]
+             for r in safe_rows(cur,
+                 "SELECT timestamp FROM vehicle_events "
+                 "WHERE REPLACE(timestamp,'T',' ') >= ? ORDER BY timestamp",
+                 (since_iso,))]
+    d["quiet_from"], d["quiet_to"], d["quiet_minutes"] = None, None, 0
+    try:
+        pts = ([since_iso] + ev_ts +
+               [datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
+        best = (0, None, None)
+        for a, b in zip(pts, pts[1:]):
+            ta = datetime.strptime(a[:19], "%Y-%m-%d %H:%M:%S")
+            tb = datetime.strptime(b[:19], "%Y-%m-%d %H:%M:%S")
+            gap = (tb - ta).total_seconds() / 60
+            if gap > best[0]:
+                best = (gap, ta, tb)
+        if best[1]:
+            d["quiet_minutes"] = int(best[0])
+            d["quiet_from"] = best[1].strftime("%H:%M")
+            d["quiet_to"] = best[2].strftime("%H:%M")
+    except ValueError:
+        pass
+
     con.close()
+
+    # --- watch items from Pattern Watch (defensive) -------------------------
+    d["watch_items"] = []
+    try:
+        import pattern_watch as _pw
+        _pw.init_pattern_watch(os.path.dirname(os.path.abspath(__file__)),
+                               start_thread=False)
+        d["watch_items"] = _pw.run_all_detectors()[:3]
+    except Exception:
+        pass
+
     return d
 
 # --------------------------------------------------------- security score ---
@@ -462,29 +532,82 @@ def render_pdf(d, score, label, color, out_path):
 # ------------------------------------------------------------- WhatsApp ----
 
 def whatsapp_summary_text(d, score, label):
+    """Narrated brief — sentences a person reads, not a table they parse."""
+    now = datetime.now()
+    day = now.strftime("%A, %d %b")
+    greeting = "\u2600\ufe0f *Good morning" if now.hour < 12 else "\U0001F6E1 *Site brief"
+
+    v, u, b = d["vehicles_total"], d["vehicles_unknown"], d["vehicles_blacklisted"]
+    inc, crit = d["incidents_total"], d["incidents_critical"]
+    vis = d.get("visitors_total", 0)
+
+    # --- opening verdict ---
+    if b or crit:
+        mood = "\u26a0\ufe0f An eventful night \u2014 details below."
+    elif inc or u > 2:
+        mood = "Mostly calm, a few things worth a look."
+    else:
+        mood = "Quiet night overall."
+
+    # --- activity sentence ---
+    bits = []
+    if v:
+        bits.append(f"{v} vehicle movement{'s' if v != 1 else ''}"
+                    + (f" ({u} unknown)" if u else ""))
+    if vis:
+        bits.append(f"{vis} visitor{'s' if vis != 1 else ''}"
+                    + (f", {d.get('visitors_inside', 0)} still inside"
+                       if d.get("visitors_inside") else ""))
+    if inc:
+        bits.append(f"{inc} incident{'s' if inc != 1 else ''}"
+                    + (f" ({crit} high severity)" if crit else ""))
+    activity = ("No recorded activity in the window."
+                if not bits else " \u00b7 ".join(bits) + ".")
+
     lines = [
-        f"\U0001F6E1 *GuardianGrid Morning Brief* \u2014 {d['site']}",
-        f"{d['generated_at']} · last {d['window_hours']}h",
+        f"{greeting} \u2014 {d['site']}, {day}*",
+        "",
+        mood,
+        activity,
+    ]
+
+    # --- blacklist / critical callouts first, they matter most ---
+    if b:
+        lines.append(f"\u26d4 {b} blacklist hit{'s' if b != 1 else ''} \u2014 "
+                     f"check Incident Management.")
+    for row in d.get("incident_rows", [])[:2]:
+        if str(row.get("severity", "")).upper() in ("CRITICAL", "HIGH"):
+            lines.append(f"\U0001F6A8 {row.get('title', 'Incident')} "
+                         f"({row.get('status', '')})")
+
+    # --- overnight texture ---
+    if d.get("quiet_minutes", 0) >= 120 and d.get("quiet_from"):
+        lines.append(f"\U0001F319 Longest quiet stretch: "
+                     f"{d['quiet_from']}\u2013{d['quiet_to']} "
+                     f"({d['quiet_minutes'] // 60}h {d['quiet_minutes'] % 60}m "
+                     f"with no movement).")
+    if d.get("overnight_count"):
+        lines.append(f"\U0001F697 {d['overnight_count']} non-resident "
+                     f"vehicle{'s' if d['overnight_count'] != 1 else ''} "
+                     f"stayed overnight.")
+
+    # --- pattern watch items ---
+    icons = {"REPEAT_UNKNOWN": "\U0001F501", "ODD_HOURS": "\U0001F319",
+             "SHORT_VISITS": "\u23f1\ufe0f"}
+    for w in d.get("watch_items", [])[:2]:
+        lines.append(f"{icons.get(w['pattern'], '\u26a0\ufe0f')} Watch: "
+                     f"{w['plate']} \u2014 {w['detail']}")
+
+    # --- risk recommendation (existing analysis) ---
+    if d.get("recommendation"):
+        lines.append(f"\u26a0 Risk focus: {d.get('risk_area', '')} "
+                     f"({d.get('risk_window', '')}). {d['recommendation']}")
+
+    lines += [
         "",
         f"*Security score: {score}/100 ({label})*",
-        "",
-        f"\U0001F697 Vehicle movements: {d['vehicles_total']}",
-        f"\u2753 Unknown vehicles: {d['vehicles_unknown']}",
-        f"\u26D4 Blacklist hits: {d['vehicles_blacklisted']}",
-        f"\U0001F4CB Incidents: {d['incidents_total']} "
-        f"({d['incidents_critical']} critical, {d['incidents_medium']} medium)",
+        "Reply *status* anytime for a live summary.",
     ]
-    if d["incidents_total"] == 0 and d["vehicles_blacklisted"] == 0:
-        lines.append("")
-        lines.append("\u2705 Quiet night. AI patrol monitored all cameras \u2014 no threats.")
-    if d.get("overnight_count"):
-        lines.append(f"\U0001F319 Vehicles still inside overnight: {d['overnight_count']}")
-    if d.get("recommendation"):
-        lines.append("")
-        lines.append(f"⚠ Risk focus: {d['risk_area']} ({d['risk_window']})")
-        lines.append(d["recommendation"])
-    lines.append("")
-    lines.append("Full PDF report available on your Defender Octa dashboard.")
     return "\n".join(lines)
 
 def send_whatsapp(body):
