@@ -605,6 +605,15 @@ def whatsapp_summary_text(d, score, label):
         lines.append(f"\u26a0 Risk focus: {d.get('risk_area', '')} "
                      f"({d.get('risk_window', '')}). {d['recommendation']}")
 
+    # --- anomaly note (defensive import) ---
+    try:
+        from anomaly_score import brief_line as _anom_line
+        _al = _anom_line(d)
+        if _al:
+            lines.append(_al)
+    except Exception:
+        pass
+
     lines += [
         "",
         f"*Security score: {score}/100 ({label})*",

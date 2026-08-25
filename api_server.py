@@ -144,6 +144,13 @@ from pattern_watch import pattern_bp, init_pattern_watch
 init_pattern_watch(base_dir=BASE_DIR)
 app.register_blueprint(pattern_bp)
 
+# ── Anomaly Score (anomaly_score.py) ──────────────────────────────
+# Learns the site's normal hourly rhythm; hourly deviation check +
+# GET /api/anomaly for the dashboard.
+from anomaly_score import anomaly_bp, init_anomaly
+init_anomaly(base_dir=BASE_DIR)
+app.register_blueprint(anomaly_bp)
+
 print("\nREGISTERED ROUTES:")
 for rule in app.url_map.iter_rules():
     print(rule)
