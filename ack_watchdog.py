@@ -53,7 +53,7 @@ logger = logging.getLogger("ack-watchdog")
 # ─────────────────────────────────────────────────────────────────────────────
 # CONFIG — windows in seconds. Tune to your society.
 # ─────────────────────────────────────────────────────────────────────────────
-ACK_WINDOW_DEFAULT   = 4 * 60    # 3–5 min band → 4 min default
+ACK_WINDOW_DEFAULT   = 3 * 60    # agreed: 3 minutes
 ACK_WINDOW_DEEPNIGHT = 2 * 60    # tighter for deep-night worst case
 RESOLUTION_WINDOW    = 15 * 60   # acknowledged-but-unresolved re-raise
 WATCH_INTERVAL       = 10        # how often the watchdog checks, seconds

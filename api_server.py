@@ -151,6 +151,13 @@ from anomaly_score import anomaly_bp, init_anomaly
 init_anomaly(base_dir=BASE_DIR)
 app.register_blueprint(anomaly_bp)
 
+# ── Guard Accountability Loop (ack_routes.py + ack_watchdog.py) ───
+# Auto-registers HIGH/CRITICAL incidents, dashboard acknowledge,
+# 3-min escalation to SECURITY_WHATSAPP, response-time stats.
+from ack_routes import ack_bp, init_ack_loop
+init_ack_loop(base_dir=BASE_DIR)
+app.register_blueprint(ack_bp)
+
 print("\nREGISTERED ROUTES:")
 for rule in app.url_map.iter_rules():
     print(rule)
