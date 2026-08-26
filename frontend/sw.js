@@ -9,7 +9,7 @@
    - New deploys: bump CACHE_VERSION to invalidate old assets
    ========================================================================== */
 
-const CACHE_VERSION = "octa-v1";
+const CACHE_VERSION = "octa-v2";   // bumped: navigation policy fix
 const APP_SHELL = ["/frontend/", "/frontend/manifest.webmanifest"];
 
 self.addEventListener("install", (e) => {
@@ -48,7 +48,33 @@ self.addEventListener("fetch", (e) => {
     return; // fall through to network untouched
   }
 
-  // Static assets under /frontend/: cache-first with background refresh
+  // NAVIGATIONS + index.html: NETWORK-FIRST. This is the fix that ends
+  // stale builds: index.html references the hashed JS/CSS names, so if
+  // it comes from cache, the ENTIRE old app loads. Fresh from network
+  // every time; cache only as the offline fallback.
+  const isNavigation =
+    e.request.mode === "navigate" ||
+    url.pathname === "/frontend/" ||
+    url.pathname.endsWith("/index.html");
+  if (isNavigation) {
+    e.respondWith(
+      fetch(e.request)
+        .then((res) => {
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE_VERSION).then((c) => c.put(e.request, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(e.request)) // offline → last known shell
+    );
+    return;
+  }
+
+  // Hashed static assets under /frontend/assets/: cache-first is SAFE —
+  // the filename changes with every build, so a cached copy can never be
+  // stale. Other /frontend/ statics (manifest, icons): cache-first with
+  // background refresh, as before.
   if (url.pathname.startsWith("/frontend/")) {
     e.respondWith(
       caches.match(e.request).then((cached) => {
