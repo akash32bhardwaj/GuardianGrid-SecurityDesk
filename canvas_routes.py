@@ -312,6 +312,45 @@ def canvas_resolve():
                     "resolution": resolution})
 
 
+@canvas_bp.route("/api/canvas/<iid>/stats")
+def canvas_stats(iid):
+    """Measured numbers for the post-resolve stats card:
+    detection -> acknowledgment -> resolution, all platform-timed."""
+    con = _con()
+    ack = con.execute(
+        "SELECT created_at, acked_at, response_seconds, escalated"
+        " FROM ack_log WHERE incident_id=?", (iid,)).fetchone()
+    res = None
+    try:
+        res = con.execute(
+            "SELECT resolution, note, resolved_by, resolved_at"
+            " FROM canvas_resolutions WHERE incident_id=?",
+            (iid,)).fetchone()
+    except sqlite3.Error:
+        pass
+    con.close()
+    out = {"success": True, "incident_id": iid,
+           "ack_seconds": None, "resolve_seconds": None,
+           "escalated": False, "resolution": None, "resolved_by": None}
+    if ack:
+        out["ack_seconds"] = ack["response_seconds"]
+        out["escalated"] = bool(ack["escalated"])
+        if res and ack["created_at"] and res["resolved_at"]:
+            try:
+                t0 = datetime.strptime(ack["created_at"],
+                                       "%Y-%m-%d %H:%M:%S")
+                t1 = datetime.strptime(res["resolved_at"],
+                                       "%Y-%m-%d %H:%M:%S")
+                out["resolve_seconds"] = max(
+                    0, round((t1 - t0).total_seconds(), 1))
+            except ValueError:
+                pass
+    if res:
+        out["resolution"] = res["resolution"]
+        out["resolved_by"] = res["resolved_by"]
+    return jsonify(out)
+
+
 @canvas_bp.route("/api/canvas/<iid>/report.pdf")
 def canvas_report(iid):
     """Prove-stage artifact: the incident report PDF."""
