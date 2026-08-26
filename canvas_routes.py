@@ -271,6 +271,16 @@ def canvas_resolve():
     if resolution not in ("RESOLVED", "FALSE_ALARM"):
         resolution = "RESOLVED"
     note = str(data.get("note") or "").strip()[:300]
+
+    # Discipline: a CRITICAL incident cannot close without a note —
+    # the SOP says "physically verified"; the record must say by what.
+    inc_check = next((i for i in _all_incidents()
+                      if i.get("incident_id") == iid), None)
+    if inc_check and str(inc_check.get("severity", "")).upper() == \
+            "CRITICAL" and not note:
+        return jsonify({"success": False,
+                        "message": "A resolution note is required for "
+                                   "CRITICAL incidents."}), 400
     proof = str(data.get("proof_image") or "").strip()[:300]
     if not iid:
         return jsonify({"success": False,
@@ -300,6 +310,25 @@ def canvas_resolve():
         logger.warning(f"[CANVAS] resolution log failed: {e}")
     return jsonify({"success": True, "incident_id": iid,
                     "resolution": resolution})
+
+
+@canvas_bp.route("/api/canvas/<iid>/report.pdf")
+def canvas_report(iid):
+    """Prove-stage artifact: the incident report PDF."""
+    from flask import send_file, abort
+    import incident_report
+    incident_report.init_report(_DB_PATH.rsplit("/", 1)[0]
+                                if _DB_PATH.startswith("/data")
+                                else os.path.dirname(os.path.abspath(__file__)))
+    out_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           "reports", "incidents")
+    os.makedirs(out_dir, exist_ok=True)
+    safe = "".join(c for c in iid if c.isalnum() or c in "-_")
+    out = os.path.join(out_dir, f"incident_{safe}.pdf")
+    if not incident_report.generate_pdf(iid, out):
+        abort(404)
+    return send_file(out, mimetype="application/pdf",
+                     download_name=f"Incident_{safe}.pdf")
 
 
 @canvas_bp.route("/api/canvas/escalate_now", methods=["POST"])
