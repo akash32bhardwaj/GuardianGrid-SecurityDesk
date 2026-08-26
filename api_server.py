@@ -158,6 +158,12 @@ from ack_routes import ack_bp, init_ack_loop
 init_ack_loop(base_dir=BASE_DIR)
 app.register_blueprint(ack_bp)
 
+# ── Incident Command Canvas (canvas_routes.py) ────────────────────
+# One-screen incident takeover: evidence, subject, SOP, actions.
+from canvas_routes import canvas_bp, init_canvas
+init_canvas(base_dir=BASE_DIR)
+app.register_blueprint(canvas_bp)
+
 print("\nREGISTERED ROUTES:")
 for rule in app.url_map.iter_rules():
     print(rule)
@@ -1617,15 +1623,18 @@ WATCHDOG_INTERVAL      = 60          # seconds between checks
 WATCHDOG_MIN_SCORE     = 60          # absolute floor → alarm
 WATCHDOG_DROP_POINTS   = 15          # relative drop → alarm
 WATCHDOG_DROP_WINDOW   = 10          # minutes for the drop comparison
-WATCHDOG_COOLDOWN      = 600         # seconds between repeated alarms
+WATCHDOG_COOLDOWN      = 600         # seconds between DROP alarms only
+WATCHDOG_REMIND_HOURS  = 8           # low-score summary cadence while below floor
 WATCHDOG_HOURS         = 12           # scoring window (match your test window)
 
 _watchdog_state = {"history": deque(maxlen=120), "alerts": deque(maxlen=20),
-                   "last_alarm": 0.0}
+                   "last_alarm": 0.0,
+                   "below_floor_since": None,   # ts when score crossed below
+                   "last_low_summary": 0.0}
 
-def _watchdog_alarm(kind, message, score):
+def _watchdog_alarm(kind, message, score, force=False):
     now = time.time()
-    if now - _watchdog_state["last_alarm"] < WATCHDOG_COOLDOWN:
+    if not force and now - _watchdog_state["last_alarm"] < WATCHDOG_COOLDOWN:
         return
     _watchdog_state["last_alarm"] = now
     alert = {"kind": kind, "message": message, "score": score,
@@ -1661,12 +1670,39 @@ def _watchdog_loop():
                     baseline = s
                 else:
                     break
+            # ── floor check: alert on the CROSSING, then one summary every
+            # WATCHDOG_REMIND_HOURS while it stays low, and a recovery note
+            # when it climbs back. Never a message-per-check.
+            below_since = _watchdog_state["below_floor_since"]
             if score < WATCHDOG_MIN_SCORE:
-                _watchdog_alarm(
-                    "threshold",
-                    f"Security score fell to {score} ({label}) — below alert floor "
-                    f"{WATCHDOG_MIN_SCORE}. Review incidents now.", score)
-            elif baseline is not None and baseline - score >= WATCHDOG_DROP_POINTS:
+                if below_since is None:
+                    _watchdog_state["below_floor_since"] = now
+                    _watchdog_state["last_low_summary"] = now
+                    _watchdog_alarm(
+                        "threshold",
+                        f"Security score fell to {score} ({label}) — below "
+                        f"alert floor {WATCHDOG_MIN_SCORE}. Review incidents "
+                        f"now. (Next update in {WATCHDOG_REMIND_HOURS}h "
+                        f"unless it recovers.)", score, force=True)
+                elif (now - _watchdog_state["last_low_summary"]
+                      >= WATCHDOG_REMIND_HOURS * 3600):
+                    _watchdog_state["last_low_summary"] = now
+                    low_h = (now - below_since) / 3600
+                    _watchdog_alarm(
+                        "low_summary",
+                        f"Security score still low: {score} ({label}) — "
+                        f"below {WATCHDOG_MIN_SCORE} for {low_h:.0f}h. "
+                        f"({WATCHDOG_REMIND_HOURS}-hourly summary)", score,
+                        force=True)
+            else:
+                if below_since is not None:
+                    _watchdog_state["below_floor_since"] = None
+                    _watchdog_alarm(
+                        "recovered",
+                        f"Security score recovered to {score} ({label}).",
+                        score, force=True)
+            if score >= WATCHDOG_MIN_SCORE and baseline is not None \
+                    and baseline - score >= WATCHDOG_DROP_POINTS:
                 _watchdog_alarm(
                     "drop",
                     f"Security score dropped {baseline - score} points in "
