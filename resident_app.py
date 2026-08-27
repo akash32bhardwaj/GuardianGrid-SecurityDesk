@@ -421,7 +421,14 @@ def _send_wa(to: str, body: str) -> dict:
         return {"success": False, "error": "no number"}
     try:
         from whatsapp_alerts import _send_whatsapp
-        r = _send_whatsapp(to, body)
+        # whatsapp_alerts expects the Twilio channel form ("whatsapp:+91...")
+        # — that's how SECURITY_WHATSAPP is stored. Try that first; if the
+        # helper ever starts adding the prefix itself, Twilio reports a
+        # channel mismatch (error 21910) and we retry with the plain number.
+        r = _send_whatsapp("whatsapp:" + to, body)
+        if isinstance(r, dict) and not r.get("success") and \
+                "channel" in str(r.get("error", "")).lower():
+            r = _send_whatsapp(to, body)
         if isinstance(r, dict):
             return r
         return {"success": bool(r)}
@@ -500,9 +507,10 @@ def otp_request():
     if not r.get("success"):
         logger.warning(f"[RESIDENT] OTP send failed for {phone}: "
                        f"{r.get('error')}")
-        print(f"[RESIDENT] OTP for {phone}: {otp}  (WhatsApp send failed: "
-              f"{r.get('error')})")
-        if not debug:
+        if debug:
+            print(f"[RESIDENT] OTP for {phone}: {otp}  (WhatsApp send failed: "
+                  f"{r.get('error')})")
+        else:
             return jsonify({"success": False,
                             "message": "Couldn't send the code on WhatsApp "
                                        "right now. Try again in a minute."}), 502
