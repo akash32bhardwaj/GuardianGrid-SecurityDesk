@@ -1272,7 +1272,11 @@ def require_auth():
     if request.method == "OPTIONS":          # CORS preflight
         return
     p = request.path
-    if p == "/" or any(p.startswith(e) for e in AUTH_EXEMPT_PREFIXES):
+    # "/" and "/resident" are the two SPA entry points — the HTML shell must
+    # load before anyone can log in. Exact match + "/resident/" only, so the
+    # resident-directory API at /residents/... stays behind the JWT wall.
+    if (p == "/" or p == "/resident" or p.startswith("/resident/")
+            or any(p.startswith(e) for e in AUTH_EXEMPT_PREFIXES)):
         return
     auth = request.headers.get("Authorization", "")
     token = (
