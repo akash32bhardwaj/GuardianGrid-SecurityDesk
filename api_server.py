@@ -168,6 +168,12 @@ from resident_app import resident_app_bp, init_resident_app
 init_resident_app(base_dir=BASE_DIR)
 app.register_blueprint(resident_app_bp)
 
+# ── Bulk onboarding (resident_import.py) ──────────────────────────
+# Residents page: Excel import (flats + vehicles), counts, WhatsApp invite.
+from resident_import import resident_import_bp, init_resident_import
+init_resident_import(base_dir=BASE_DIR)
+app.register_blueprint(resident_import_bp)
+
 # ── Incident Command Canvas (canvas_routes.py) ────────────────────
 # One-screen incident takeover: evidence, subject, SOP, actions.
 from canvas_routes import canvas_bp, init_canvas

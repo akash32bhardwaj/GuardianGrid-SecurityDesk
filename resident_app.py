@@ -241,6 +241,9 @@ def _ensure_tables():
         CREATE TABLE IF NOT EXISTS resident_state (
             key TEXT PRIMARY KEY, value TEXT
         );
+        CREATE TABLE IF NOT EXISTS resident_logins (
+            phone TEXT PRIMARY KEY, flat_no TEXT, first_login TEXT, last_login TEXT, logins INTEGER DEFAULT 0
+        );
         """)
         con.commit()
         con.close()
@@ -321,6 +324,8 @@ def _all_directory_flats() -> list:
         tables = [r[0] for r in con.execute(
             "SELECT name FROM sqlite_master WHERE type='table'")]
         for t in tables:
+            if "flat" not in t.lower():
+                continue          # never mistake visitors/residents tables for the directory
             cols = [c[1] for c in con.execute(f"PRAGMA table_info({t})")]
             lc = [c.lower() for c in cols]
             flat_col = next((c for c in cols if c.lower() in
@@ -612,6 +617,15 @@ def otp_verify():
     res = _resolve_resident_by_phone(phone)
     if not res:
         return jsonify({"success": False, "message": "Number no longer registered"}), 404
+    try:
+        con = _con()
+        con.execute("INSERT INTO resident_logins (phone, flat_no, first_login, last_login, logins) "
+                    "VALUES (?,?,?,?,1) ON CONFLICT(phone) DO UPDATE SET last_login=excluded.last_login, "
+                    "flat_no=excluded.flat_no, logins=logins+1",
+                    (phone, res["flat_no"], _now_str(), _now_str()))
+        con.commit(); con.close()
+    except sqlite3.Error:
+        pass
     return jsonify({"success": True, "token": _make_token(res),
                     "resident": res, "site": _site_name()})
 
