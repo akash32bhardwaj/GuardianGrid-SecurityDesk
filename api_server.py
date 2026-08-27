@@ -158,6 +158,16 @@ from ack_routes import ack_bp, init_ack_loop
 init_ack_loop(base_dir=BASE_DIR)
 app.register_blueprint(ack_bp)
 
+# ── Resident App (resident_app.py) ────────────────────────────────
+# Flat-owner PWA at /resident: WhatsApp-OTP login, "my flat today",
+# gate passes (+ guard check at /api/gate/pass/<code>), Ask-Octa scoped
+# to the flat, society pulse, Resident SOS -> CRITICAL incident in the
+# ack loop. Resident tokens are separate from the dashboard JWT, so
+# /api/resident/ is auth-exempt below and guarded inside the module.
+from resident_app import resident_app_bp, init_resident_app
+init_resident_app(base_dir=BASE_DIR)
+app.register_blueprint(resident_app_bp)
+
 # ── Incident Command Canvas (canvas_routes.py) ────────────────────
 # One-screen incident takeover: evidence, subject, SOP, actions.
 from canvas_routes import canvas_bp, init_canvas
@@ -1254,6 +1264,7 @@ AUTH_EXEMPT_PREFIXES = (
     "/guardian",
     "/api/guardian/",
     "/internal/",        # rtmp_proxy posts face alerts here (local, tokenless)
+    "/api/resident/",    # resident app — own OTP token, enforced in resident_app.py
 )
 
 @app.before_request
