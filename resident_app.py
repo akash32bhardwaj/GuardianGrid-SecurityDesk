@@ -1084,6 +1084,11 @@ def gate_pass_use(code):
     except Exception as e:
         logger.warning(f"[RESIDENT] add_visitor failed: {e}")
 
+    _push_to_phones([p["resident_phone"]], {
+        "title": f"✅ {p['visitor_name']} entered",
+        "body": f"On your pass {p['code']} at {_fmt_time(now)}.",
+        "tag": f"pass-{p['code']}", "url": "/resident"})
+
     # Tell the resident their guest is in (WhatsApp, background)
     def _notify():
         msg = (f"✅ *Defender Octa* — {_site_name()}\n\n"
@@ -1531,7 +1536,13 @@ def gate_arrival():
     row = con.execute("SELECT * FROM arrival_requests WHERE id=?", (aid,)).fetchone()
     con.close()
 
-    # Nudge the resident on WhatsApp (the app itself polls every few seconds)
+    # Ring the phone instantly (push), then WhatsApp as the fallback nudge
+    _push_to_phones(_flat_phones(flat), {
+        "title": f"🚪 {name} is at your gate",
+        "body": f"{purpose or 'Visitor'} for flat {flat} — guard is holding. "
+                f"Let in / Wait / Decline (3 min).",
+        "tag": f"arrival-{aid}", "urgent": True, "url": "/resident"})
+
     def _nudge():
         phones = _flat_phones(flat)
         msg = (f"🚪 *Defender Octa* — {_site_name()}\n\n"
@@ -1552,12 +1563,13 @@ def _flat_phones(flat_no: str) -> list:
             ph = f.get("whatsapp") or f.get("phone") or ""
             if ph:
                 out.append(ph)
-    if not out:
-        for v in _resident_plates():
-            fl = v.get("flat_number") or ""
-            bl = v.get("block") or ""
-            if _flat_matches(f"{bl}-{fl}" if bl and "-" not in fl else fl, flat_no) and v.get("phone"):
-                out.append(v["phone"])
+    # union with the vehicle DB — a flat often has two numbers on file
+    # (directory = who gets visitor messages, vehicle DB = who owns the car)
+    for v in _resident_plates():
+        fl = v.get("flat_number") or ""
+        bl = v.get("block") or ""
+        if _flat_matches(f"{bl}-{fl}" if bl and "-" not in fl else fl, flat_no) and v.get("phone"):
+            out.append(v["phone"])
     seen, uniq = set(), []
     for p in out:
         n = _norm_phone(p)
@@ -1882,6 +1894,9 @@ def _vehicle_alert_tick():
             continue
         _alert_last[plate + ev] = time.time()
         verb = "left" if ("EXIT" in ev or "OUT" in ev) else "entered"
+        _push_to_phones(phones, {"title": f"🚗 {plate} {verb}",
+                                 "body": f"{r['camera'] or 'Gate'} · {_fmt_time(r['timestamp'])}",
+                                 "tag": f"veh-{plate}", "url": "/resident"})
         msg = (f"🚗 *Defender Octa* — {_site_name()}\n\n"
                f"{plate} {verb} {r['camera'] or 'the gate'} at {_fmt_time(r['timestamp'])}."
                f"\n_You asked to be told when your vehicle moves — turn this off in the app._")
@@ -1982,3 +1997,192 @@ def icon_192():
 def icon_512():
     return Response(base64.b64decode(ICON_512), mimetype="image/png",
                     headers={"Cache-Control": "public, max-age=604800"})
+
+
+# ════════════════════════════════════════════════════════════════════
+# v1.2 — Instant notifications (Web Push) + service worker + Play Store
+# ════════════════════════════════════════════════════════════════════
+# Web Push rings the phone even when the app is closed — the piece that
+# makes the installed PWA feel native. Uses pywebpush (add `pywebpush`
+# to requirements.txt). If the library is missing, every push route
+# degrades gracefully and the app quietly falls back to polling +
+# WhatsApp nudges, so deploying before the rebuild is safe.
+
+def _push_available():
+    try:
+        import pywebpush  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def _vapid_keys():
+    """Load or create the site's VAPID keypair (data/vapid_private.pem)."""
+    priv_path = os.path.join(_data_dir(), "vapid_private.pem")
+    from py_vapid import Vapid02, b64urlencode
+    if os.path.exists(priv_path):
+        v = Vapid02.from_file(priv_path)
+    else:
+        v = Vapid02()
+        v.generate_keys()
+        v.save_key(priv_path)
+    raw = v.public_key.public_bytes(
+        __import__("cryptography.hazmat.primitives.serialization", fromlist=["Encoding"]).Encoding.X962,
+        __import__("cryptography.hazmat.primitives.serialization", fromlist=["PublicFormat"]).PublicFormat.UncompressedPoint)
+    return priv_path, b64urlencode(raw)
+
+
+@resident_app_bp.route("/api/resident/push/key")
+def push_key():
+    if not _push_available():
+        return jsonify({"success": False, "supported": False,
+                        "message": "Push not enabled on this server yet"}), 200
+    try:
+        _, pub = _vapid_keys()
+        return jsonify({"success": True, "supported": True, "key": pub})
+    except Exception as e:
+        logger.error(f"[RESIDENT] vapid: {e}")
+        return jsonify({"success": False, "supported": False, "message": str(e)[:120]}), 200
+
+
+@resident_app_bp.route("/api/resident/push/subscribe", methods=["POST"])
+@resident_required
+def push_subscribe():
+    sub = (request.get_json(silent=True) or {}).get("subscription")
+    if not sub or "endpoint" not in sub:
+        return jsonify({"success": False, "message": "subscription required"}), 400
+    con = _con()
+    con.execute("CREATE TABLE IF NOT EXISTS resident_push (endpoint TEXT PRIMARY KEY, "
+                "phone TEXT, flat_no TEXT, subscription TEXT, created_at TEXT)")
+    con.execute("INSERT OR REPLACE INTO resident_push (endpoint, phone, flat_no, subscription, created_at) "
+                "VALUES (?,?,?,?,?)",
+                (sub["endpoint"], request.resident["phone"], request.resident["flat_no"],
+                 json.dumps(sub), _now_str()))
+    con.commit(); con.close()
+    return jsonify({"success": True})
+
+
+@resident_app_bp.route("/api/resident/push/unsubscribe", methods=["POST"])
+@resident_required
+def push_unsubscribe():
+    ep = (request.get_json(silent=True) or {}).get("endpoint", "")
+    con = _con()
+    try:
+        con.execute("DELETE FROM resident_push WHERE endpoint=? AND phone=?",
+                    (ep, request.resident["phone"]))
+        con.commit()
+    except sqlite3.Error:
+        pass
+    con.close()
+    return jsonify({"success": True})
+
+
+def _push_to_phones(phones: list, payload: dict):
+    """Fire-and-forget web push to every subscription of these phones.
+    Dead subscriptions (404/410) are pruned. Never raises."""
+    if not _push_available() or not phones:
+        return
+    phones = [_norm_phone(p) for p in phones]
+
+    def _run():
+        try:
+            from pywebpush import webpush, WebPushException
+            priv_path, _ = _vapid_keys()
+            con = _con()
+            try:
+                rows = con.execute(
+                    "SELECT endpoint, subscription FROM resident_push WHERE phone IN (%s)"
+                    % ",".join("?" * len(phones)), phones).fetchall()
+            except sqlite3.Error:
+                rows = []
+            data = json.dumps(payload)
+            for r in rows:
+                try:
+                    webpush(subscription_info=json.loads(r["subscription"]), data=data,
+                            vapid_private_key=priv_path,
+                            vapid_claims={"sub": "mailto:alerts@snguardiangrid.com"},
+                            ttl=180)
+                except WebPushException as e:
+                    code = getattr(getattr(e, "response", None), "status_code", None)
+                    if code in (404, 410):
+                        con.execute("DELETE FROM resident_push WHERE endpoint=?", (r["endpoint"],))
+                        con.commit()
+                    else:
+                        logger.debug(f"[PUSH] {code}: {e}")
+                except Exception as e:
+                    logger.debug(f"[PUSH] send: {e}")
+            con.close()
+        except Exception as e:
+            logger.debug(f"[PUSH] loop: {e}")
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
+# ── Service worker (root-scoped so it controls /resident) ────────
+_SW_JS = r"""
+/* Defender Octa Resident — service worker (push + notification click) */
+self.addEventListener('install', (e) => self.skipWaiting());
+self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+
+self.addEventListener('push', (event) => {
+  let d = {};
+  try { d = event.data ? event.data.json() : {}; } catch (e) {}
+  const title = d.title || 'Defender Octa';
+  const opts = {
+    body: d.body || '',
+    icon: '/api/resident/icon-192.png',
+    badge: '/api/resident/icon-192.png',
+    tag: d.tag || 'octa',
+    renotify: !!d.urgent,
+    vibrate: d.urgent ? [200, 80, 200, 80, 200] : [120],
+    data: { url: d.url || '/resident' },
+    requireInteraction: !!d.urgent,
+  };
+  event.waitUntil(self.registration.showNotification(title, opts));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/resident';
+  event.waitUntil((async () => {
+    const all = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const c of all) {
+      if (c.url.includes('/resident')) { c.focus(); c.navigate(url); return; }
+    }
+    await clients.openWindow(url);
+  })());
+});
+"""
+
+
+@resident_app_bp.route("/resident-sw.js")
+def resident_sw():
+    return Response(_SW_JS, mimetype="application/javascript",
+                    headers={"Cache-Control": "no-cache"})
+
+
+# ── Play Store (TWA) trust file ──────────────────────────────────
+# Android checks https://<site>/.well-known/assetlinks.json to open the
+# wrapped app full-screen without browser chrome. Put the SHA-256 of the
+# Play signing key in data/assetlinks_fingerprint.txt (one line) or the
+# OCTA_TWA_FINGERPRINT env var; until then this serves an empty list,
+# which is harmless.
+
+@resident_app_bp.route("/.well-known/assetlinks.json")
+def assetlinks():
+    fp = os.environ.get("OCTA_TWA_FINGERPRINT", "").strip()
+    if not fp:
+        try:
+            with open(os.path.join(_data_dir(), "assetlinks_fingerprint.txt")) as f:
+                fp = f.read().strip()
+        except OSError:
+            fp = ""
+    body = []
+    if fp:
+        body = [{
+            "relation": ["delegate_permission/common.handle_all_urls"],
+            "target": {"namespace": "android_app",
+                       "package_name": os.environ.get("OCTA_TWA_PACKAGE", "in.defenderocta.resident"),
+                       "sha256_cert_fingerprints": [fp]},
+        }]
+    return Response(json.dumps(body), mimetype="application/json")
