@@ -9,7 +9,17 @@ WHO CALLS WHAT
   Guard console (existing dashboard)  ->  /api/gate/pass/* (guard JWT)
                                           /api/gate/notices (guard JWT)
 
-RESIDENT LOGIN  (phone number + WhatsApp OTP)
+RESIDENT LOGIN — two doors, resident picks either:
+  A) phone number + WhatsApp OTP (default, zero setup for the resident)
+  B) flat number + PIN — for residents who don't want to share a number.
+     The committee generates PIN slips from the dashboard; no phone is
+     stored, WhatsApp alerts stay off, push notifications still work.
+  POST /api/resident/pin/login        {flat, pin} -> {token, resident}
+  Admin: GET  /api/admin/flats/pins           status per flat
+         POST /api/admin/flats/pins/generate  {only_missing?} -> one-time PIN list
+         POST /api/admin/flats/pins/reset     {flat} -> new PIN (one-time view)
+
+RESIDENT LOGIN A  (phone number + WhatsApp OTP)
   POST /api/resident/otp/request   {phone}        -> OTP sent on WhatsApp
   POST /api/resident/otp/verify    {phone, otp}   -> {token, resident}
   The phone must already be on file: flat_directory (whatsapp) or the
@@ -241,6 +251,13 @@ def _ensure_tables():
         CREATE TABLE IF NOT EXISTS resident_state (
             key TEXT PRIMARY KEY, value TEXT
         );
+        CREATE TABLE IF NOT EXISTS flat_pins (
+            flat_no TEXT PRIMARY KEY,
+            pin_hash TEXT,
+            created_at TEXT, created_by TEXT,
+            attempts INTEGER DEFAULT 0, locked_until REAL DEFAULT 0,
+            last_login TEXT
+        );
         CREATE TABLE IF NOT EXISTS resident_logins (
             phone TEXT PRIMARY KEY, flat_no TEXT, first_login TEXT, last_login TEXT, logins INTEGER DEFAULT 0
         );
@@ -269,6 +286,10 @@ def _norm_phone(s: str) -> str:
     if len(d) == 11 and d.startswith("0"):
         return "+91" + d[1:]
     return "+" + d if d else ""
+
+
+def _is_pin_id(p: str) -> bool:
+    return str(p or "").startswith("flat:")
 
 
 def _same_phone(a: str, b: str) -> bool:
@@ -405,6 +426,30 @@ def _resolve_resident_by_phone(phone: str):
     }
 
 
+def _resolve_resident_by_flat(flat_no: str):
+    """PIN-login identity: no phone stored. prefs/push key = 'flat:<FLAT>'."""
+    flat_no = _canonical_flat(flat_no)
+    if not flat_no:
+        return None
+    name = ""
+    for f in _all_directory_flats():
+        if _flat_matches(f.get("flat_no") or f.get("flat") or "", flat_no):
+            name = f.get("owner_name") or f.get("name") or ""
+            break
+    plates = []
+    for v in _resident_plates():
+        fl = _norm_flat(v.get("flat_number") or "")
+        bl = _norm_flat(v.get("block") or "")
+        combos = {fl, f"{bl}-{fl}" if bl else fl, (bl + fl) if bl else fl}
+        if flat_no in combos:
+            plates.append({"plate": _norm_plate(v.get("plate_number")),
+                           "model": v.get("vehicle_model") or "",
+                           "color": v.get("vehicle_color") or "",
+                           "type": v.get("vehicle_type") or "Car"})
+    return {"flat_no": flat_no, "name": name or "Resident",
+            "phone": f"flat:{flat_no}", "pin_login": True, "plates": plates}
+
+
 # ════════════════════════════════════════════════════════════════════
 # Resident token (HMAC-signed, separate from the dashboard JWT)
 # ════════════════════════════════════════════════════════════════════
@@ -452,9 +497,14 @@ def resident_required(fn):
             return jsonify({"success": False,
                             "message": "Please log in again"}), 401
         # refresh the resident's record each call (plates may change)
-        res = _resolve_resident_by_phone(p["sub"]) or {
-            "flat_no": p["flat"], "name": p["name"], "phone": p["sub"],
-            "plates": []}
+        if _is_pin_id(p["sub"]):
+            res = _resolve_resident_by_flat(p["flat"]) or {
+                "flat_no": p["flat"], "name": p["name"], "phone": p["sub"],
+                "pin_login": True, "plates": []}
+        else:
+            res = _resolve_resident_by_phone(p["sub"]) or {
+                "flat_no": p["flat"], "name": p["name"], "phone": p["sub"],
+                "plates": []}
         request.resident = res
         return fn(*a, **kw)
     return _wrap
@@ -475,7 +525,10 @@ def _twilio():
 
 def _send_wa(to: str, body: str) -> dict:
     """Send a WhatsApp text. Tries whatsapp_alerts._send_whatsapp first
-    (the path every other Octa alert uses), then the Twilio client."""
+    (the path every other Octa alert uses), then the Twilio client.
+    PIN-login identities ('flat:B-302') have no number — silently skipped."""
+    if _is_pin_id(to):
+        return {"success": False, "error": "pin identity — no number on file"}
     to = _norm_phone(to)
     if not to:
         return {"success": False, "error": "no number"}
@@ -1537,7 +1590,7 @@ def gate_arrival():
     con.close()
 
     # Ring the phone instantly (push), then WhatsApp as the fallback nudge
-    _push_to_phones(_flat_phones(flat), {
+    _push_to_phones(_flat_phones(flat) + [f"flat:{flat}"], {
         "title": f"🚪 {name} is at your gate",
         "body": f"{purpose or 'Visitor'} for flat {flat} — guard is holding. "
                 f"Let in / Wait / Decline (3 min).",
@@ -2082,7 +2135,8 @@ def _push_to_phones(phones: list, payload: dict):
     Dead subscriptions (404/410) are pruned. Never raises."""
     if not _push_available() or not phones:
         return
-    phones = [_norm_phone(p) for p in phones]
+    phones = [p if _is_pin_id(p) else _norm_phone(p) for p in phones]
+    phones = [p for p in phones if p]
 
     def _run():
         try:
@@ -2186,3 +2240,149 @@ def assetlinks():
                        "sha256_cert_fingerprints": [fp]},
         }]
     return Response(json.dumps(body), mimetype="application/json")
+
+
+# ════════════════════════════════════════════════════════════════════
+# Flat + PIN login (privacy option: no phone number stored)
+# ════════════════════════════════════════════════════════════════════
+
+PIN_MAX_ATTEMPTS = 5
+PIN_LOCK_SECONDS = 10 * 60
+
+
+def _canonical_flat(entered: str) -> str:
+    """Match whatever the resident typed ("b302", "B 302", "302-B") to the
+    flat as stored in the directory / PIN table. Falls back to the
+    normalised input."""
+    n = _norm_flat(entered)
+    if not n:
+        return ""
+    candidates = [_norm_flat(f.get("flat_no") or f.get("flat") or "")
+                  for f in _all_directory_flats()]
+    try:
+        con = _con()
+        candidates += [r[0] for r in con.execute("SELECT flat_no FROM flat_pins")]
+        con.close()
+    except sqlite3.Error:
+        pass
+    for c in candidates:
+        if c and _flat_matches(c, n):
+            return c
+    return n
+
+
+def _pin_hash(flat_no: str, pin: str) -> str:
+    return hmac.new(_SECRET, f"pin:{_norm_flat(flat_no)}:{pin}".encode(),
+                    hashlib.sha256).hexdigest()
+
+
+@resident_app_bp.route("/api/resident/pin/login", methods=["POST"])
+def pin_login():
+    data = request.get_json(silent=True) or {}
+    flat = _canonical_flat(data.get("flat", ""))
+    pin = _digits(data.get("pin", ""))
+    if not flat or len(pin) != 6:
+        return jsonify({"success": False, "message": "Enter your flat and the 6-digit PIN"}), 400
+    con = _con()
+    row = con.execute("SELECT * FROM flat_pins WHERE flat_no=?", (flat,)).fetchone()
+    if not row:
+        con.close()
+        return jsonify({"success": False,
+                        "message": "No PIN is set for this flat — ask your committee for your PIN slip"}), 404
+    if row["locked_until"] and row["locked_until"] > time.time():
+        con.close()
+        mins = int((row["locked_until"] - time.time()) / 60) + 1
+        return jsonify({"success": False,
+                        "message": f"Too many wrong tries — locked for {mins} more minute{'s' if mins > 1 else ''}"}), 429
+    if not hmac.compare_digest(row["pin_hash"], _pin_hash(flat, pin)):
+        att = (row["attempts"] or 0) + 1
+        lock = time.time() + PIN_LOCK_SECONDS if att >= PIN_MAX_ATTEMPTS else 0
+        con.execute("UPDATE flat_pins SET attempts=?, locked_until=? WHERE flat_no=?",
+                    (0 if lock else att, lock, flat))
+        con.commit(); con.close()
+        return jsonify({"success": False, "message": "That PIN isn't right"}), 401
+    con.execute("UPDATE flat_pins SET attempts=0, locked_until=0, last_login=? WHERE flat_no=?",
+                (_now_str(), flat))
+    con.commit(); con.close()
+    res = _resolve_resident_by_flat(flat)
+    try:
+        con = _con()
+        con.execute("INSERT INTO resident_logins (phone, flat_no, first_login, last_login, logins) "
+                    "VALUES (?,?,?,?,1) ON CONFLICT(phone) DO UPDATE SET last_login=excluded.last_login, "
+                    "logins=logins+1", (res["phone"], flat, _now_str(), _now_str()))
+        con.commit(); con.close()
+    except sqlite3.Error:
+        pass
+    return jsonify({"success": True, "token": _make_token(res), "resident": res,
+                    "site": _site_name()})
+
+
+# ── Admin: generate / reset / status (dashboard JWT via global guard) ──
+
+def _gen_pin() -> str:
+    return f"{secrets.randbelow(10**6):06d}"
+
+
+@resident_app_bp.route("/api/admin/flats/pins")
+def pins_status():
+    con = _con()
+    have = {r["flat_no"]: r for r in con.execute("SELECT * FROM flat_pins")}
+    con.close()
+    flats = sorted({_norm_flat(f.get("flat_no") or f.get("flat") or "")
+                    for f in _all_directory_flats()} - {""})
+    out = [{"flat_no": f, "has_pin": f in have,
+            "last_login": have[f]["last_login"] if f in have else None} for f in flats]
+    for f, r in have.items():          # PINs for flats not in the directory yet
+        if f not in {x["flat_no"] for x in out}:
+            out.append({"flat_no": f, "has_pin": True, "last_login": r["last_login"]})
+    return jsonify({"success": True, "flats": out,
+                    "with_pin": sum(1 for x in out if x["has_pin"]),
+                    "total": len(out)})
+
+
+@resident_app_bp.route("/api/admin/flats/pins/generate", methods=["POST"])
+def pins_generate():
+    """Generate PINs. Returns the plain PINs ONCE — they are stored only as
+    hashes, so this response is the moment to print the slips."""
+    data = request.get_json(silent=True) or {}
+    only_missing = data.get("only_missing", True)
+    wanted = [_norm_flat(f) for f in (data.get("flats") or [])]
+    who = (getattr(request, "auth_user", None) or {}).get("username") or "committee"
+    flats = wanted or sorted({_norm_flat(f.get("flat_no") or f.get("flat") or "")
+                              for f in _all_directory_flats()} - {""})
+    if not flats:
+        return jsonify({"success": False,
+                        "message": "No flats on file yet — import residents first, or pass a flats list"}), 400
+    con = _con()
+    have = {r[0] for r in con.execute("SELECT flat_no FROM flat_pins")}
+    made = []
+    for f in flats:
+        if only_missing and f in have and f not in wanted:
+            continue
+        pin = _gen_pin()
+        con.execute("INSERT OR REPLACE INTO flat_pins (flat_no, pin_hash, created_at, created_by, "
+                    "attempts, locked_until, last_login) VALUES (?,?,?,?,0,0,"
+                    "(SELECT last_login FROM flat_pins WHERE flat_no=?))",
+                    (f, _pin_hash(f, pin), _now_str(), who, f))
+        made.append({"flat_no": f, "pin": pin})
+    con.commit(); con.close()
+    return jsonify({"success": True, "generated": len(made), "pins": made,
+                    "site": _site_name(),
+                    "note": "PINs are shown only once — print the slips now. "
+                            "Generating again replaces a flat's PIN."})
+
+
+@resident_app_bp.route("/api/admin/flats/pins/reset", methods=["POST"])
+def pins_reset():
+    flat = _norm_flat((request.get_json(silent=True) or {}).get("flat", ""))
+    if not flat:
+        return jsonify({"success": False, "message": "flat required"}), 400
+    who = (getattr(request, "auth_user", None) or {}).get("username") or "committee"
+    pin = _gen_pin()
+    con = _con()
+    con.execute("INSERT OR REPLACE INTO flat_pins (flat_no, pin_hash, created_at, created_by, "
+                "attempts, locked_until, last_login) VALUES (?,?,?,?,0,0,NULL)",
+                (flat, _pin_hash(flat, pin), _now_str(), who))
+    con.commit(); con.close()
+    return jsonify({"success": True, "flat_no": flat, "pin": pin,
+                    "note": "Shown once — hand it to the resident."})
