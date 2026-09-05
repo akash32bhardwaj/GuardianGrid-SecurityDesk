@@ -1272,6 +1272,8 @@ AUTH_EXEMPT_PREFIXES = (
     "/internal/",        # rtmp_proxy posts face alerts here (local, tokenless)
     "/api/resident/",    # resident app — own OTP token, enforced in resident_app.py
     "/.well-known/",     # Android/Google verification files — public by definition
+    "/resident-sw.js",   # resident app service worker (push) — browser fetches it
+                         # with no auth header; must be public or push dies with 401
 )
 
 @app.before_request
