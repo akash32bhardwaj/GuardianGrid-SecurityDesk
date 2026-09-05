@@ -1562,7 +1562,10 @@ def gate_arrival():
         data = request.get_json(silent=True) or {}
         photo_file = None
     name = (data.get("name") or "").strip()[:60]
-    flat = _norm_flat(data.get("flat") or "")
+    # Canonicalise the flat exactly like resident logins do — guards type
+    # "B302", "b 302", etc.; pushes and the app's pending-poll are keyed to
+    # the canonical "B-302", so storing as-typed silently breaks both.
+    flat = _canonical_flat(data.get("flat") or "")
     purpose = (data.get("purpose") or "").strip()[:80]
     guard = (data.get("operator") or
              (getattr(request, "auth_user", None) or {}).get("username") or "guard")
