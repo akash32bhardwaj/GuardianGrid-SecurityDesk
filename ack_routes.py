@@ -64,10 +64,10 @@ def init_ack_loop(base_dir: str, start_threads: bool = True):
         # exactly one WhatsApp goes out.
         _orig_configure = ack_watchdog.configure
 
-        def _chained_configure(their_fn):
+        def _chained_configure(escalate_fn):
             def _both(incident, reason):
-                _mark_escalated(incident)          # our bookkeeping
-                their_fn(incident, reason)          # their sender
+                _mark_escalated(incident)           # our bookkeeping
+                escalate_fn(incident, reason)       # their sender
             _orig_configure(_both)
 
         ack_watchdog.configure = _chained_configure

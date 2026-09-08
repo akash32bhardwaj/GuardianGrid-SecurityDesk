@@ -38,15 +38,22 @@ logger = logging.getLogger("guardian-wiring")
 # ── False-escalation tracking ────────────────────────────────────────────────
 # Defensive: metrics must never be able to stop an alarm going out.
 try:
-    from escalation_metrics import (
-        record_escalation as _record_escalation,
-        link_incident as _link_incident,
-    )
+    from escalation_metrics import record_escalation as _record_escalation
 except Exception:                                    # pragma: no cover
     _record_escalation = None
-    _link_incident = None
     logger.warning("escalation_metrics unavailable — false-escalation "
                    "tracking is OFF")
+
+# link_incident is not implemented in escalation_metrics yet. It used to be
+# imported in the same statement as record_escalation, so its ImportError
+# silently disabled false-escalation tracking altogether. Imported
+# separately, a missing link_incident now costs only the back-link.
+try:
+    from escalation_metrics import link_incident as _link_incident
+except Exception:                                    # pragma: no cover
+    _link_incident = None
+    logger.warning("escalation_metrics.link_incident missing — escalation "
+                   "rows will not be linked back to their incident")
 
 # WhatsApp: import your existing sender, degrade gracefully if unavailable.
 try:
