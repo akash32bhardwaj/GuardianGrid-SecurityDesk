@@ -1280,6 +1280,60 @@ AUTH_EXEMPT_PREFIXES = (
                          # with no auth header; must be public or push dies with 401
 )
 
+# ── VIEWER personal-data filter ─────────────────────────────────────────────
+# The role guard refuses VIEWER accounts the /residents directory outright,
+# but resident names and flat numbers travel in the vehicle log, the activity
+# feed and incident payloads too — all GET, all allowed. Blocking one door of
+# four is not a privacy control, and "guards never see resident numbers" is a
+# claim made to clients.
+#
+# One filter on the way out covers every route, present and future, instead of
+# each one having to remember. Set OCTA_VIEWER_PII=show to disable it — demo
+# sites carry invented residents, and a prospect walking through a demo full
+# of dashes sees less of what they are buying.
+# Deliberately NOT "name" on its own — that key also carries camera names,
+# site names and feature names, and masking those would gut the view rather
+# than protect anyone.
+_VIEWER_PII_KEYS = {
+    "resident_name", "owner_name", "flat_number", "flat_no", "flat",
+    "whatsapp", "phone", "phone_number", "mobile", "contact",
+}
+_VIEWER_PII_MASK = "—"
+
+
+def _redact_pii(node):
+    if isinstance(node, dict):
+        out = {}
+        for k, v in node.items():
+            if k in _VIEWER_PII_KEYS and isinstance(v, str) and v.strip() not in ("", "--"):
+                out[k] = _VIEWER_PII_MASK
+            else:
+                out[k] = _redact_pii(v)
+        return out
+    if isinstance(node, list):
+        return [_redact_pii(x) for x in node]
+    return node
+
+
+@app.after_request
+def _viewer_pii_filter(response):
+    try:
+        if os.environ.get("OCTA_VIEWER_PII", "redact").lower() == "show":
+            return response
+        if (getattr(request, "auth_user", None) or {}).get("role") != "VIEWER":
+            return response
+        if response.direct_passthrough or not response.is_json:
+            return response
+        payload = response.get_json(silent=True)
+        if payload is None:
+            return response
+        response.set_data(json.dumps(_redact_pii(payload)))
+    except Exception:
+        # A filter must never be the reason a page fails to load.
+        pass
+    return response
+
+
 def _internal_caller_ok() -> bool:
     """True for the local camera bridge, false for the internet.
 
