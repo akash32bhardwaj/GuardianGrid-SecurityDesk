@@ -25,7 +25,13 @@ import sys
 import sqlite3
 from datetime import datetime
 
-DB_FILE = "guardiangrid.db"
+# Resolve the society's persistent database the same way every other
+# module does. This used to be a bare relative path that only landed on
+# the right file because the container entrypoint happens to "cd /data"
+# first — run from anywhere else (a cron, the CLI below, an ops script)
+# and it silently opened a different, empty database.
+DB_FILE = "/data/guardiangrid.db" \
+    if os.path.exists("/data/guardiangrid.db") else "guardiangrid.db"
 
 # +, then 10-15 digits, nothing else (e.g. +919876543210)
 PHONE_RE = re.compile(r"^\+\d{10,15}$")
