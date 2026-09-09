@@ -10,6 +10,7 @@ Usage:
 """
 
 import cv2
+import hmac
 import os
 import sys
 import json
@@ -1256,8 +1257,9 @@ AUTH_EXEMPT_PREFIXES = (
     "/api/auth/login",
     "/api/auth/test",
     "/api/whatsapp/",     # Twilio webhook (signature-verified) + tokenized media
-    "/video_feed",
-    "/cam/",
+    # NOT exempt any more: "/video_feed" and "/cam/" served a client's LIVE
+    # CAMERA to anyone who knew the hostname, with no account. They accept the
+    # same ?token= the guard already reads, so the <img> tags carry one now.
     "/frontend",
     "/static",
     "/assets",           # React JS/CSS bundle (must load before login)
@@ -1269,18 +1271,52 @@ AUTH_EXEMPT_PREFIXES = (
     "/robots",           # robots.txt, if present
     "/guardian",
     "/api/guardian/",
-    "/internal/",        # rtmp_proxy posts face alerts here (local, tokenless)
+    # NOT exempt any more: "/internal/" is handled explicitly in require_auth
+    # below. "local, tokenless" described an assumption, not a control — the
+    # tunnel forwards /internal/* straight through from the public internet.
     "/api/resident/",    # resident app — own OTP token, enforced in resident_app.py
     "/.well-known/",     # Android/Google verification files — public by definition
     "/resident-sw.js",   # resident app service worker (push) — browser fetches it
                          # with no auth header; must be public or push dies with 401
 )
 
+def _internal_caller_ok() -> bool:
+    """True for the local camera bridge, false for the internet.
+
+    /internal/face_alert creates incidents and fires alerts. Left open, anyone
+    could POST a fabricated "WATCHLIST FACE DETECTED" into a client's system.
+    Two ways in, so this keeps working wherever rtmp_proxy runs:
+      * the request came from loopback — the normal case, rtmp_proxy posts to
+        127.0.0.1:5000 in this container; or
+      * it carries the shared secret in X-Octa-Internal.
+    The secret defaults to this site's JWT_SECRET, so nothing new has to be
+    configured and it differs per site.
+    """
+    if (request.remote_addr or "") in ("127.0.0.1", "::1"):
+        return True
+    secret = os.environ.get("OCTA_INTERNAL_SECRET", "")
+    if not secret:
+        try:
+            from config import JWT_SECRET as secret
+        except Exception:
+            secret = ""
+    sent = request.headers.get("X-Octa-Internal", "")
+    return bool(secret) and hmac.compare_digest(str(sent), str(secret))
+
+
 @app.before_request
 def require_auth():
     if request.method == "OPTIONS":          # CORS preflight
         return
     p = request.path
+
+    # The camera bridge's private sink — loopback or shared secret only.
+    if p.startswith("/internal/"):
+        if not _internal_caller_ok():
+            return jsonify({"success": False,
+                            "message": "Internal endpoint"}), 403
+        return
+
     # "/" and "/resident" are the two SPA entry points — the HTML shell must
     # load before anyone can log in. Exact match + "/resident/" only, so the
     # resident-directory API at /residents/... stays behind the JWT wall.

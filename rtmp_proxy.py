@@ -161,6 +161,23 @@ def _get_face():
     return _face
 
 
+def _internal_headers():
+    """Shared secret for /internal/* on the API.
+
+    The API accepts loopback without it, which covers the normal case, but
+    sending it means this keeps working if the bridge ever runs on a
+    different host from the server. Defaults to the site's JWT_SECRET so
+    there is nothing extra to configure.
+    """
+    sec = os.environ.get("OCTA_INTERNAL_SECRET", "")
+    if not sec:
+        try:
+            from config import JWT_SECRET as sec
+        except Exception:
+            sec = ""
+    return {"X-Octa-Internal": sec} if sec else {}
+
+
 def _fire_face_alert(cam_id, camera_name, fr, frame):
     if _requests is None:
         return
@@ -172,6 +189,7 @@ def _fire_face_alert(cam_id, camera_name, fr, frame):
                        json={"name": fr["name"], "status": fr["status"],
                              "reason": fr.get("reason", ""),
                              "camera": camera_name, "snapshot": fname},
+                       headers=_internal_headers(),
                        timeout=3)
     except Exception as e:
         print(f"[CAM {cam_id}] face alert post failed: {e}")
