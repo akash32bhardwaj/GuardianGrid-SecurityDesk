@@ -74,12 +74,23 @@ def init_flats():
 
 
 # ── CRUD ─────────────────────────────────────────────────────────
-def set_flat(flat_no: str, owner_name: str, whatsapp: str) -> bool:
+def set_flat(flat_no: str, owner_name: str, whatsapp: str,
+             allow_no_phone: bool = False) -> bool:
+    """Create or update a flat.
+
+    allow_no_phone=True stores a flat with an EMPTY whatsapp. That is a real
+    resident: flat-number + PIN login exists precisely for people who will not
+    hand over a mobile number, and such a flat must still appear in the
+    directory or bulk PIN generation skips it. A malformed number is still
+    rejected either way — only a genuinely blank one is allowed through.
+    """
     flat_no = _norm_flat(flat_no)
     whatsapp = (whatsapp or "").strip().replace(" ", "").replace("-", "")
     if not flat_no or not owner_name:
         return False
-    if not PHONE_RE.match(whatsapp):
+    if not whatsapp and allow_no_phone:
+        whatsapp = ""            # column is NOT NULL, so store empty, not NULL
+    elif not PHONE_RE.match(whatsapp):
         print(f"[FLATS] ERROR: '{whatsapp}' is not a valid number. "
               "Use + followed by digits only, e.g. +919876543210 "
               "(replace every X with a real digit!)")

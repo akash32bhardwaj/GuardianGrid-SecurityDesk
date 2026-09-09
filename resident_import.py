@@ -179,6 +179,12 @@ def parse_sheet(rows):
         f = flats.setdefault(flat_no, {"flat_no": flat_no, "owner_name": "", "whatsapp": "", "row": n})
         if name and not f["owner_name"]:
             f["owner_name"] = name
+        elif name and f["owner_name"] and \
+                name.strip().lower() != f["owner_name"].strip().lower():
+            issues.append({"row": n, "level": "error", "flat": flat_no,
+                           "text": f"{flat_no} appears again with a different owner "
+                                   f"('{f['owner_name']}' then '{name}') — "
+                                   f"fix the sheet and upload again"})
         if phone and not f["whatsapp"]:
             f["whatsapp"] = phone
         elif phone and f["whatsapp"] and phone != f["whatsapp"]:
@@ -202,7 +208,9 @@ def parse_sheet(rows):
     no_phone = [k for k, v in flats.items() if not v["whatsapp"]]
     if no_phone:
         issues.append({"row": 0, "level": "warn", "flat": "",
-                       "text": f"{len(no_phone)} flat(s) have no mobile — they can't log in to the app: "
+                       "text": f"{len(no_phone)} flat(s) have no mobile — they are imported and "
+                               f"can log in with a printed flat + PIN slip, but will get no "
+                               f"WhatsApp alerts until a number is added: "
                                + ", ".join(no_phone[:8]) + (" …" if len(no_phone) > 8 else "")})
     return {"flats": flats, "vehicles": vehicles, "issues": issues}
 
@@ -225,18 +233,29 @@ def _write_flats(flats: dict) -> tuple:
             fd.init_flats()
         except Exception:
             pass
-        n, skipped = 0, 0
+        n, no_phone = 0, 0
         for v in flats.values():
             if not v["whatsapp"]:
-                skipped += 1
-                continue
+                no_phone += 1
             try:
+                # allow_no_phone: a flat with no mobile is still a real flat and
+                # MUST reach the directory, or bulk PIN generation skips exactly
+                # the residents that flat + PIN login exists for.
+                ok = fd.set_flat(v["flat_no"], v["owner_name"] or "Resident",
+                                 v["whatsapp"], allow_no_phone=True)
+            except TypeError:
+                # older flat_directory without the parameter
+                if not v["whatsapp"]:
+                    logger.warning(f"[IMPORT] {v['flat_no']}: no mobile and this "
+                                   f"flat_directory build cannot store one — "
+                                   f"PIN login will not find it")
+                    continue
                 ok = fd.set_flat(v["flat_no"], v["owner_name"] or "Resident", v["whatsapp"])
             except Exception as e:
                 logger.warning(f"[IMPORT] set_flat {v['flat_no']}: {e}")
                 ok = False
             n += 1 if ok else 0
-        return n, "flat_directory.set_flat", skipped
+        return n, "flat_directory.set_flat", no_phone
     # Fallback for a different flat_directory build: its own table, detected by name
     try:
         con = sqlite3.connect(_DB_PATH)
@@ -250,10 +269,10 @@ def _write_flats(flats: dict) -> tuple:
             ph_col = next((lc[k] for k in ("whatsapp", "phone", "mobile", "owner_phone") if k in lc), None)
             nm_col = next((lc[k] for k in ("owner_name", "name", "resident_name") if k in lc), None)
             if flat_col and ph_col:
-                n, skipped = 0, 0
+                n, no_phone = 0, 0
                 for v in flats.values():
                     if not v["whatsapp"]:
-                        skipped += 1; continue
+                        no_phone += 1        # still written; PIN login needs it
                     ex = con.execute(f"SELECT 1 FROM {t} WHERE UPPER({flat_col})=?", (v["flat_no"],)).fetchone()
                     if ex:
                         sets, vals = [f"{ph_col}=?"], [v["whatsapp"]]
@@ -267,7 +286,7 @@ def _write_flats(flats: dict) -> tuple:
                         con.execute(f"INSERT INTO {t} ({', '.join(cols_i)}) VALUES ({', '.join('?' * len(vals))})", vals)
                     n += 1
                 con.commit(); con.close()
-                return n, f"table {t}", skipped
+                return n, f"table {t}", no_phone
         con.close()
         return 0, "no flats table found", 0
     except Exception as e:
@@ -319,10 +338,29 @@ def import_residents():
     }
     if dry:
         return jsonify(out)
-    fw, how, skipped = _write_flats(flats)
+
+    # An import is all-or-nothing. An error-level issue means the sheet itself
+    # is wrong — a mobile that is not a phone number, a plate claimed by two
+    # flats, a flat listed twice under different owners. Half-importing a
+    # client's society and reporting success is worse than importing none of
+    # it, so the write is refused and the operator fixes the sheet. force=1 is
+    # the deliberate, explicit override.
+    force = (request.form.get("force", "0") == "1")
+    if out["errors"] and not force:
+        out.update({
+            "success": False, "written": False,
+            "message": f"{out['errors']} error(s) in this sheet — nothing was imported. "
+                       f"Fix the rows listed and upload again, or re-send with "
+                       f"force=1 to import everything except the bad rows.",
+        })
+        return jsonify(out), 409
+
+    fw, how, no_phone = _write_flats(flats)
     vw = _write_vehicles(vehicles)
-    out.update({"flats_written": fw, "flats_how": how, "flats_skipped_no_phone": skipped,
-                "vehicles_written": vw})
+    out.update({"flats_written": fw, "flats_how": how,
+                "flats_without_phone": no_phone,
+                "flats_skipped_no_phone": 0,   # nothing is skipped any more
+                "vehicles_written": vw, "written": True, "forced": force})
     try:
         con = sqlite3.connect(_DB_PATH)
         con.execute("INSERT INTO resident_imports (filename, flats, vehicles, issues, imported_at, by_user) "
@@ -395,20 +433,31 @@ def residents_template():
                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 
-def _welcome_text(site, flat, name):
+def _welcome_text(site, flat, name, link=""):
     return (f"👋 *Defender Octa* — {site}\n\n"
             f"Hi {name or 'there'}, your society has switched on Defender Octa, the AI gate "
             f"security system. Flat {flat} now has its own app:\n\n"
-            f"🔗 {_app_link()}\n\n"
+            f"🔗 {link or _app_link()}\n\n"
             f"See who came to your flat, pre-approve guests with a gate pass, approve "
             f"visitors from your phone, and raise an SOS that reaches the guard in seconds.\n"
             f"Log in with this WhatsApp number — no password.\n"
             f"_Reply STOP to opt out._")
 
 
-def _app_link():
-    return os.environ.get("OCTA_PUBLIC_URL", "").rstrip("/") + "/resident" \
-        if os.environ.get("OCTA_PUBLIC_URL") else "https://agi.snguardiangrid.com/resident"
+def _app_link(host_url: str = ""):
+    """Public URL of THIS site's resident app.
+
+    The old fallback was a hard-coded former client's hostname, which would
+    have invited a new society's residents to somebody else's deployment.
+    Order is now: configured value, then the host this request arrived on,
+    then a relative path.
+    """
+    env = os.environ.get("OCTA_PUBLIC_URL", "").strip().rstrip("/")
+    if env:
+        return env + "/resident"
+    if host_url:
+        return host_url.rstrip("/") + "/resident"
+    return "/resident"
 
 
 def _site_name():
@@ -439,15 +488,40 @@ def invite_residents():
     if not targets:
         return jsonify({"success": False, "message": "No mobiles to invite — import residents first"}), 400
 
+    link = _app_link(request.host_url)
+
+    def _body(flat, name):
+        if custom:
+            return (custom.replace("{flat}", flat)
+                          .replace("{name}", name or "there")
+                          .replace("{link}", link))
+        return _welcome_text(site, flat, name, link)
+
+    # "sample" used to mean "send to the first N", which is a live send wearing
+    # the word sample. Sending real WhatsApp messages to a client's residents
+    # must be deliberate, so: no confirm, no send. dry_run renders the exact
+    # messages and returns them for review without touching Twilio.
+    dry_run = bool(data.get("dry_run"))
+    confirm = bool(data.get("confirm"))
+    if dry_run or not confirm:
+        return jsonify({
+            "success": True, "dry_run": True, "sent": 0,
+            "would_send": len(targets),
+            "preview": [{"phone": ph, "flat_no": flat, "name": name,
+                         "message": _body(flat, name)}
+                        for ph, flat, name in targets[:10]],
+            "message": f"Preview only — nothing was sent. {len(targets)} resident"
+                       f"{'s' if len(targets) != 1 else ''} would receive this. "
+                       f"Send for real by confirming.",
+        })
+
     def _run():
         from resident_app import _send_wa
         _invite_job.update(running=True, total=len(targets), sent=0, failed=0,
                            started=datetime.now().strftime("%H:%M:%S"), finished=None, last_error="")
         con = sqlite3.connect(_DB_PATH)
         for ph, flat, name in targets:
-            body = custom.replace("{flat}", flat).replace("{name}", name or "there").replace("{link}", _app_link()) \
-                if custom else _welcome_text(site, flat, name)
-            r = _send_wa(ph, body)
+            r = _send_wa(ph, _body(flat, name))
             ok = bool(r.get("success"))
             with _lock:
                 _invite_job["sent" if ok else "failed"] += 1
