@@ -1,7 +1,17 @@
 FROM python:3.12-slim
 
+# Site-local time. Every "today" boundary in the app — daily counts, the
+# morning brief, reports, the ack windows — is built on datetime.now(), which
+# reads the container's clock. With no timezone set that clock is UTC, so a
+# day rolled over at 05:30 IST and the whole overnight window, the part that
+# matters most on a security site, landed in the wrong day.
+# Override per site with -e TZ=... if a client is ever in another zone.
+ENV TZ=Asia/Kolkata
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg libgl1 libglib2.0-0 \
+    ffmpeg libgl1 libglib2.0-0 tzdata \
+    && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
+    && echo $TZ > /etc/timezone \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
