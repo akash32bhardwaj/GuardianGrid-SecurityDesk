@@ -37,7 +37,9 @@ from db import init_db, record_event, hourly_stats as db_hourly, \
 
 from core.anpr_engine import ANPREngine, PlateResult, PlateVoter
 from resident_db import db as resident_db	
-from config import ADMIN_USERNAME, ADMIN_PASSWORD
+# (ADMIN_USERNAME / ADMIN_PASSWORD are no longer imported — the only
+#  consumer was the legacy /api/login route removed above. Real
+#  credentials live as bcrypt hashes in site_config.json.)
 from backend.auth.auth_routes import register_auth_routes
 from backend.incidents.incident_service import create_new_incident
 from rtmp_proxy import (
@@ -99,7 +101,18 @@ app = Flask(
     static_folder=str(FRONTEND_DIR) if FRONTEND_DIR.exists() else None,
     static_url_path="/frontend",
 )
-CORS(app)
+# The dashboard, the resident app and the API are all served from the same
+# origin, so production needs no cross-origin access at all. `CORS(app)` with
+# no arguments allowed every site on the internet to call this API from a
+# visitor's browser. The only legitimate cross-origin caller is the Vite dev
+# server on a developer's own machine. OCTA_CORS_ORIGINS (comma-separated)
+# can widen it if a real need ever appears.
+_CORS_ORIGINS = [o.strip() for o in os.environ.get(
+    "OCTA_CORS_ORIGINS",
+    "http://localhost:5173,http://localhost:5174,"
+    "http://127.0.0.1:5173,http://127.0.0.1:5174",
+).split(",") if o.strip()]
+CORS(app, origins=_CORS_ORIGINS, supports_credentials=False)
 
 
 register_auth_routes(app)
@@ -187,32 +200,15 @@ for rule in app.url_map.iter_rules():
 print()
 
 # ── Authentication API ─────────────────────────────────────
-
-@app.route("/api/login", methods=["POST"])
-def login():
-    data = request.get_json()
-
-    username = data.get("username", "").strip()
-    password = data.get("password", "")
-
-    if (
-        username == ADMIN_USERNAME and
-        password == ADMIN_PASSWORD
-    ):
-        return jsonify({
-            "success": True,
-            "token": f"gg-{username}-{int(time.time())}",
-            "user": {
-                "id": username,
-                "name": "GuardianGrid Administrator",
-                "role": "admin"
-            }
-        })
-
-    return jsonify({
-        "success": False,
-        "error": "Invalid username or password"
-    }), 401
+# The real login is /api/auth/login (backend/auth/auth_routes.py): bcrypt
+# hashes from site_config.json, a signed JWT, and per-IP throttling.
+#
+# A second, older /api/login used to live here. It compared a plaintext
+# password from config.py with == and handed back an UNSIGNED string,
+# "gg-<username>-<timestamp>", as if it were a token — forgeable by anyone
+# who could guess a username. It had no caller in the frontend and was
+# unreachable through the auth guard, but one edit to the exemption list
+# would have made it a way in, so it is gone rather than left lying around.
 
 # ── Shared state ─────────────────────────────────────────────────
 lock = threading.Lock()
