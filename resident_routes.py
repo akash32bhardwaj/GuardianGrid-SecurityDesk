@@ -98,24 +98,63 @@ def blacklist_plate(plate):
 
 @resident_bp.route("/residents/import", methods=["POST"])
 def import_residents():
-    """Import residents from uploaded Excel or CSV file."""
+    """Import residents from an uploaded Excel or CSV file.
+
+    This route used to carry its OWN parser: it saved the client's sheet to
+    disk and wrote every row straight into the database — no duplicate
+    detection, no all-or-nothing guarantee, and no write to the flat
+    directory, so imported flats never got PIN login. The Residents page
+    offers this uploader and the hardened one side by side, which meant the
+    rules that applied depended on which button you happened to click.
+
+    It now delegates to the single hardened importer, so there is one parser
+    and one set of rules whatever calls it. The raw sheet is no longer
+    written to disk — it holds residents' names and phone numbers and there
+    was never a reason to keep a copy.
+    """
     if "file" not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
 
-    file     = request.files["file"]
-    filename = secure_filename(file.filename)
-    filepath = UPLOAD_DIR / filename
-    file.save(str(filepath))
+    from resident_import import (parse_sheet, _read_rows,
+                                 _write_flats, _write_vehicles)
 
-    ext = filename.lower().rsplit(".", 1)[-1]
-    if ext in ("xlsx", "xls"):
-        result = db.import_from_excel(str(filepath))
-    elif ext == "csv":
-        result = db.import_from_csv(str(filepath))
-    else:
+    f = request.files["file"]
+    if not (f.filename or "").lower().endswith((".xlsx", ".xls", ".csv")):
         return jsonify({"error": "Only .xlsx or .csv files supported"}), 415
 
-    return jsonify(result)
+    try:
+        rows = _read_rows(f)
+    except Exception as e:
+        return jsonify({"error": f"Couldn't read the file: {e}"}), 400
+
+    parsed = parse_sheet(rows)
+    if "error" in parsed:
+        return jsonify({"error": parsed["error"]}), 400
+
+    flats, vehicles, issues = parsed["flats"], parsed["vehicles"], parsed["issues"]
+    errors = [i for i in issues if i["level"] == "error"]
+    force = (request.form.get("force", "0") == "1")
+
+    if errors and not force:
+        return jsonify({
+            "success": False,
+            "error": f"{len(errors)} error(s) in this sheet — nothing was "
+                     f"imported. Fix the rows listed and upload again.",
+            "issues": issues[:60],
+            "errors": len(errors),
+            "warnings": len(issues) - len(errors),
+        }), 409
+
+    fw, how, no_phone = _write_flats(flats)
+    vw = _write_vehicles(vehicles)
+    return jsonify({
+        "success": True,
+        "imported": vw, "vehicles_written": vw,
+        "flats_written": fw, "flats_without_phone": no_phone,
+        "issues": issues[:60],
+        "errors": 0, "warnings": len(issues) - len(errors),
+        "message": f"Imported {fw} flat(s) and {vw} vehicle(s).",
+    })
 
 
 @resident_bp.route("/residents/export", methods=["GET"])
