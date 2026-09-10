@@ -49,6 +49,10 @@ import os
 import sys
 from datetime import datetime, timedelta
 
+# Client-facing PDFs must render Gurmukhi and Devanagari names. The
+# base-14 Helvetica this file used cannot, so those came out blank.
+from pdf_fonts import BODY, BOLD, bold_for
+
 # Resolve the site's database explicitly rather than relying on the caller's
 # working directory, the way every other module does.
 DB_FILE    = "/data/guardiangrid.db" \
@@ -217,14 +221,14 @@ def render_pdf(w, out_path):
     c.setFillColor(HexColor(NAVY))
     c.rect(0, H - 40 * mm, W, 40 * mm, fill=1, stroke=0)
     c.setFillColor(HexColor(CYAN))
-    c.setFont("Helvetica-Bold", 18)
+    c.setFont(bold_for(SITE_NAME), 18)
     c.drawString(18 * mm, H - 17 * mm, "Weekly AI Security Audit")
     c.setFillColor(HexColor(LIGHT))
-    c.setFont("Helvetica", 10)
+    c.setFont(BODY, 10)
     c.drawString(18 * mm, H - 24 * mm,
                  f"{SITE_NAME}  \u00b7  {w['dates'][0]} to {w['dates'][-1]}")
     c.setFillColor(HexColor(MUTED))
-    c.setFont("Helvetica", 8)
+    c.setFont(BODY, 8)
     c.drawString(18 * mm, H - 30 * mm, f"{COMPANY}  \u00b7  autonomous AI monitoring")
 
     # average score ring
@@ -234,9 +238,9 @@ def render_pdf(w, out_path):
         cx, cy, r = W - 38 * mm, H - 20 * mm, 11 * mm
         c.setStrokeColor(HexColor(col)); c.setLineWidth(3)
         c.circle(cx, cy, r, stroke=1, fill=0)
-        c.setFillColor(HexColor(LIGHT)); c.setFont("Helvetica-Bold", 18)
+        c.setFillColor(HexColor(LIGHT)); c.setFont(BOLD, 18)
         c.drawCentredString(cx, cy - 3, str(s))
-        c.setFillColor(HexColor(col)); c.setFont("Helvetica", 7)
+        c.setFillColor(HexColor(col)); c.setFont(BODY, 7)
         c.drawCentredString(cx, cy - r - 4 * mm, "avg weekly score")
 
     # totals row
@@ -253,24 +257,24 @@ def render_pdf(w, out_path):
     for label, val, col in totals:
         c.setFillColor(HexColor("#f2f4f9"))
         c.roundRect(x, y, bw, 20 * mm, 3 * mm, fill=1, stroke=0)
-        c.setFillColor(HexColor(col)); c.setFont("Helvetica-Bold", 16)
+        c.setFillColor(HexColor(col)); c.setFont(BOLD, 16)
         c.drawString(x + 3.5 * mm, y + 10 * mm, str(val))
-        c.setFillColor(HexColor("#444")); c.setFont("Helvetica", 7)
+        c.setFillColor(HexColor("#444")); c.setFont(BODY, 7)
         c.drawString(x + 3.5 * mm, y + 4.5 * mm, label)
         x += bw + 5 * mm
 
     # per-day table
     y -= 12 * mm
-    c.setFillColor(HexColor(NAVY)); c.setFont("Helvetica-Bold", 12)
+    c.setFillColor(HexColor(NAVY)); c.setFont(BOLD, 12)
     c.drawString(18 * mm, y, "Day-by-day breakdown")
     y -= 7 * mm
-    c.setFont("Helvetica-Bold", 8); c.setFillColor(HexColor(MUTED))
+    c.setFont(BOLD, 8); c.setFillColor(HexColor(MUTED))
     headers = ["Date", "Score", "Vehicles", "Unknown", "Blacklist", "Incidents"]
     xs = [18, 55, 85, 115, 145, 175]
     for h_, x_ in zip(headers, xs):
         c.drawString(x_ * mm, y, h_)
     y -= 5.5 * mm
-    c.setFont("Helvetica", 9)
+    c.setFont(BODY, 9)
     for day in w["per_day"]:
         sc = day["score"]
         sc_col = (GREEN if sc is not None and sc >= 90 else
@@ -291,10 +295,10 @@ def render_pdf(w, out_path):
 
     # risk analysis
     y -= 6 * mm
-    c.setFillColor(HexColor(NAVY)); c.setFont("Helvetica-Bold", 12)
+    c.setFillColor(HexColor(NAVY)); c.setFont(BOLD, 12)
     c.drawString(18 * mm, y, "Risk analysis")
     y -= 7 * mm
-    c.setFont("Helvetica", 9)
+    c.setFont(BODY, 9)
     if w["cam_flagged"]:
         for cam, weight in w["cam_flagged"]:
             c.setFillColor(HexColor(AMBER))
@@ -309,10 +313,10 @@ def render_pdf(w, out_path):
 
     # recommendations
     y -= 6 * mm
-    c.setFillColor(HexColor(NAVY)); c.setFont("Helvetica-Bold", 12)
+    c.setFillColor(HexColor(NAVY)); c.setFont(BOLD, 12)
     c.drawString(18 * mm, y, "AI recommendations")
     y -= 7 * mm
-    c.setFont("Helvetica", 9)
+    c.setFont(BODY, 9)
     for reco in recommendations(w):
         c.setFillColor(HexColor(CYAN)); c.drawString(18 * mm, y, "\u25b8")
         c.setFillColor(HexColor("#222"))
@@ -325,7 +329,7 @@ def render_pdf(w, out_path):
         c.drawString(24 * mm, y, line)
         y -= 6 * mm
 
-    c.setFillColor(HexColor(MUTED)); c.setFont("Helvetica", 7)
+    c.setFillColor(HexColor(MUTED)); c.setFont(BODY, 7)
     c.drawString(18 * mm, 14 * mm,
                  f"Generated automatically by Defender Octa \u00b7 {COMPANY} \u00b7 snguardiangrid.com")
     c.save()
