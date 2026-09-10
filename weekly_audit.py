@@ -49,10 +49,33 @@ import os
 import sys
 from datetime import datetime, timedelta
 
-DB_FILE    = "guardiangrid.db"
+# Resolve the site's database explicitly rather than relying on the caller's
+# working directory, the way every other module does.
+DB_FILE    = "/data/guardiangrid.db" \
+    if os.path.exists("/data/guardiangrid.db") else "guardiangrid.db"
 REPORT_DIR = "reports"
 AUDIT_DIR  = os.path.join(REPORT_DIR, "audits")
-SITE_NAME  = os.environ.get("GG_SITE_NAME", "Demo Site")
+
+
+def _site_name():
+    """This society's name, for the cover of a document a client will read.
+
+    It used to be os.environ["GG_SITE_NAME"] with "Demo Site" as the fallback,
+    and nothing ever set that variable — so every audit PDF, on every site,
+    was headed "Demo Site". The name already lives in site_config.json, which
+    is per-site and always correct.
+    """
+    try:
+        from site_config import CONFIG
+        name = (CONFIG.society_name or "").strip()
+        if name and name.lower() not in ("defender octa", "demo site"):
+            return name
+    except Exception:
+        pass
+    return os.environ.get("GG_SITE_NAME", "").strip() or "Your Society"
+
+
+SITE_NAME  = _site_name()
 COMPANY    = "S&N GuardianGrid Technologies"
 
 NAVY, CYAN, BLUE  = "#0a0e1a", "#00c2ff", "#1a6bff"
