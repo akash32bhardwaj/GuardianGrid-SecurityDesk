@@ -1079,13 +1079,19 @@ def list_reports():
                 continue  # skip corrupt/partial files instead of crashing
     return jsonify(out[:30])
 
+REPORTS_DIR_ABS = os.path.abspath("reports")
+
+
 @app.route("/api/reports/<date>/pdf")
 def report_pdf(date):
+    # Same absolute-path reason as AUDITS_DIR above: this route had the
+    # identical mismatch, so the daily brief PDF was never downloadable in a
+    # container either.
     safe = re.sub(r"[^0-9-]", "", date)
-    path = os.path.join("reports", f"brief_{safe}.pdf")
+    path = os.path.join(REPORTS_DIR_ABS, f"brief_{safe}.pdf")
     if not os.path.exists(path):
         return jsonify({"error": "report not found"}), 404
-    return send_from_directory("reports", f"brief_{safe}.pdf")
+    return send_from_directory(REPORTS_DIR_ABS, f"brief_{safe}.pdf")
 
 # ── Weekly audit ───────────────────────────────────────────────────
 # weekly_audit.py has carried these two routes in its own docstring as
@@ -1094,7 +1100,12 @@ def report_pdf(date):
 # honestly, which is why it looked like a missing feature rather than a bug.
 # Paths follow the daily-brief routes above: relative to the working directory,
 # which the container entrypoint sets to /data.
-AUDITS_DIR = os.path.join("reports", "audits")
+# ABSOLUTE, deliberately. send_from_directory() resolves a relative directory
+# against Flask's root_path (/app), while os.path.exists() resolves against the
+# working directory (/data, set by the entrypoint). A relative path therefore
+# passes the existence check and then 404s inside Flask — the file is found and
+# not served. abspath() is evaluated at import, when the cwd is still /data.
+AUDITS_DIR = os.path.abspath(os.path.join("reports", "audits"))
 
 
 @app.route("/api/audits")
