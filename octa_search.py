@@ -248,17 +248,61 @@ def _rule_parse(q: str) -> dict:
         f["time_from"] = f"{today} 00:00:00"
     elif re.search(r"this week|is hafte", ql):
         f["time_from"] = (now - timedelta(days=7)).strftime("%Y-%m-%d 00:00:00")
-    m = re.search(r"after (\d{1,2})\s*(am|pm|baje)?", ql)
-    if m:
-        h = int(m.group(1)) % 12
-        if (m.group(2) or "") == "pm" or (m.group(2) == "baje" and h < 6):
-            h += 12
-        base = f["time_from"][:10] if f["time_from"] else today
-        f["time_from"] = f"{base} {h:02d}:00:00"
+    # An explicit range: "between 2 and 4 am", "2am to 4am", "10pm till 2am".
+    # Without this, "between 2am and 4am yesterday" matched the "yesterday"
+    # branch above and quietly returned the WHOLE DAY — an answer that looks
+    # right and is wrong, which is worse than an error. Guarded so it cannot
+    # fire on a number pair inside a plate: it needs either the word
+    # "between" or an am/pm/baje marker on one of the two sides.
+    rng = re.search(
+        r"(?:(between)\s+)?\b(\d{1,2})(?::(\d{2}))?\s*(am|pm|baje)?\s*"
+        r"(?:to|and|till|until|se)\s*"
+        r"(\d{1,2})(?::(\d{2}))?\s*(am|pm|baje)?\b", ql)
+
+    def _h24(hour, mer, fallback_mer):
+        hour = int(hour)
+        mer = mer or fallback_mer or ""
+        if mer == "pm":
+            return hour if hour == 12 else hour + 12
+        if mer == "am":
+            return 0 if hour == 12 else hour
+        if mer == "baje":
+            return hour + 12 if hour < 6 else hour
+        return hour
+
+    matched_range = False
+    if rng:
+        has_word, h1, m1, mer1, h2, m2, mer2 = rng.groups()
+        if (has_word or mer1 or mer2) and int(h1) <= 24 and int(h2) <= 24:
+            start = _h24(h1, mer1, mer2)
+            end = _h24(h2, mer2, mer1)
+            if 0 <= start <= 24 and 0 <= end <= 24:
+                base = f["time_from"][:10] if f["time_from"] else today
+                end_day = base
+                if end <= start:          # crosses midnight: "10pm to 2am"
+                    end_day = (datetime.strptime(base, "%Y-%m-%d")
+                               + timedelta(days=1)).strftime("%Y-%m-%d")
+                f["time_from"] = f"{base} {start:02d}:{int(m1 or 0):02d}:00"
+                f["time_to"] = f"{end_day} {end:02d}:{int(m2 or 0):02d}:59"
+                matched_range = True
+
+    if not matched_range:
+        m = re.search(r"after (\d{1,2})\s*(am|pm|baje)?", ql)
+        if m:
+            h = int(m.group(1)) % 12
+            if (m.group(2) or "") == "pm" or (m.group(2) == "baje" and h < 6):
+                h += 12
+            base = f["time_from"][:10] if f["time_from"] else today
+            f["time_from"] = f"{base} {h:02d}:00:00"
 
     # --- attributes ---------------------------------------------------
-    m = re.search(r"\b([A-Z]{2}\s?\d{1,2}\s?[A-Z]{0,3}\s?\d{0,4})\b", q.upper())
-    if m and len(re.sub(r"[^A-Z0-9]", "", m.group(1))) >= 4:
+    # Indian plate shape. The trailing group used to allow \d{0,4}, i.e. no
+    # digits at all, so "10pm TO 2AM" parsed as the plate "TO2AM" and filtered
+    # every result away — the search answered "nothing found" for a question it
+    # had understood. Requiring at least two trailing digits keeps real plates
+    # and drops the accidents.
+    m = re.search(r"\b([A-Z]{2}\s?\d{1,2}\s?[A-Z]{0,3}\s?\d{2,4})\b", q.upper())
+    if m and len(re.sub(r"[^A-Z0-9]", "", m.group(1))) >= 6:
         f["plate"] = re.sub(r"[^A-Z0-9]", "", m.group(1))
     if re.search(r"bike|scooter|two.?wheeler|activa", ql):
         f["vtype"] = "bike"
