@@ -111,6 +111,19 @@ echo "── [5/5] Installing ops scripts ──"
 install_script() {
   SRC="$1"; DEST="$2"
   [ -f "$SRC" ] || { echo "  ⚠️  $SRC missing in repo — skipped"; return; }
+
+  # Always ensure the executable bit, whatever else happens. Git does not
+  # reliably carry it across a Windows commit, and the first version of this
+  # function skipped chmod whenever the contents matched — which for a script
+  # already living in the checkout (source and destination the same file) was
+  # every single time. The result was a script present, current, and not
+  # runnable: "command not found" for a file plainly there.
+  chmod +x "$DEST" 2>/dev/null || true
+
+  if [ "$SRC" = "$DEST" ]; then
+    echo "  ·  $DEST in place (executable)"
+    return
+  fi
   if cmp -s "$SRC" "$DEST" 2>/dev/null; then
     echo "  ·  $DEST unchanged"
     return
