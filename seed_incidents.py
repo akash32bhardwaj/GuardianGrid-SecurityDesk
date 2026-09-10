@@ -9,6 +9,8 @@ Same philosophy as seed_demo.py / seed_briefs.py:
 Creates 4–6 incidents spread over the last N days:
   mostly MEDIUM (loitering, unknown vehicle), one resolved HIGH for
   drama, exactly ONE left OPEN so prospects see a live workflow.
+  The open one is never HIGH, so the ack watchdog does not page Akash
+  after each nightly re-seed.
 Also drops matching rows into the escalations table so escalation
 metrics have demo data to chew on.
 
@@ -23,6 +25,25 @@ import random
 import sqlite3
 import uuid
 from datetime import datetime, timedelta
+
+# Verdict vocabulary, imported rather than retyped.
+# The seeder used to write "true_positive" / "false_positive", which are not
+# values this system recognises: escalation_metrics counts by exact match on
+# "genuine" / "false" / "ambiguous", so every seeded verdict fell through to
+# "unreviewed" and the demo's false-escalation rate read 0%. That is the
+# number a prospect is shown to prove the system does not cry wolf, so it has
+# to be right. Importing the constants means the two can never drift again.
+try:
+    from escalation_metrics import (VERDICT_GENUINE, VERDICT_FALSE,
+                                    VERDICT_AMBIGUOUS)
+except Exception:                                    # pragma: no cover
+    VERDICT_GENUINE, VERDICT_FALSE, VERDICT_AMBIGUOUS = (
+        "genuine", "false", "ambiguous")
+
+# Weighted so a demo shows a believable mix: mostly real, a meaningful
+# minority false, the occasional judgement call.
+_SEED_VERDICTS = ([VERDICT_GENUINE] * 6 + [VERDICT_FALSE] * 3
+                  + [VERDICT_AMBIGUOUS])
 
 DB = "guardiangrid.db"
 
@@ -82,6 +103,10 @@ def seed(days):
     cur = con.cursor()
     n = random.randint(4, 6)
     picks = random.sample(SCENARIOS, min(n, len(SCENARIOS)))
+    # The OPEN incident (slot 0, "today") must never be HIGH: the ack
+    # watchdog auto-registers HIGH/CRITICAL and would WhatsApp Akash
+    # 3 minutes after every nightly re-seed. Non-HIGH first.
+    picks.sort(key=lambda s: s[2] == "HIGH")
     # one incident per distinct day; force the newest slot to be today
     day_slots = sorted(random.sample(range(0, days), len(picks)))
     day_slots[0] = 0
@@ -143,8 +168,7 @@ def seed(days):
              created.hour,
              "whatsapp" if tier < 3 else "voice+whatsapp",
              title,
-             None if is_open else random.choice(
-                 ["true_positive", "false_positive"]),
+             None if is_open else random.choice(_SEED_VERDICTS),
              resolved_at, None if is_open else "DEMO-SEED",
              None,
              None if is_open else
