@@ -28,5 +28,13 @@ COPY . /app
 RUN mkdir -p /data
 
 ENV PYTHONUNBUFFERED=1
+
+# The commit this image was built from. deploy.sh passes it and then
+# reads it back out of the running container, so "deployed" is a fact
+# rather than a claim. Three times in one session a fix looked broken
+# when it simply had not reached the server.
+ARG GIT_SHA=unknown
+ENV OCTA_GIT_SHA=$GIT_SHA
+
 EXPOSE 5000
 ENTRYPOINT ["/app/docker-entrypoint.sh"]

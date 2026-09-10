@@ -27,8 +27,10 @@ git fetch origin
 git reset --hard "origin/$BRANCH"
 echo "    now at: $(git log --oneline -1)"
 
+SHA="$(git log --format=%h -1)"
+
 echo "── [2/4] Building image (shared by all sites) ──"
-docker build -t "$IMAGE" .
+docker build --build-arg GIT_SHA="$SHA" -t "$IMAGE" .
 
 if [ ! -f "$SITES_CONF" ]; then
   echo "❌ $SITES_CONF missing. Create it, e.g.:"
@@ -78,8 +80,16 @@ while IFS='|' read -r SLUG PORT DATA CFG ENVF; do
   CONTAINER="octa-$SLUG"
   STATUS=$(docker inspect -f '{{.State.Status}}' "$CONTAINER" 2>/dev/null || echo missing)
   CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$PORT/api/search/ping" || echo 000)
-  if [ "$STATUS" = "running" ] && { [ "$CODE" = "401" ] || [ "$CODE" = "200" ]; }; then
-    echo "  ✅ $CONTAINER: $STATUS, ping $CODE"
+  RUNSHA=$(docker exec "$CONTAINER" printenv OCTA_GIT_SHA 2>/dev/null || echo "?")
+  if [ "$STATUS" = "running" ] && { [ "$CODE" = "401" ] || [ "$CODE" = "200" ]; } \
+     && [ "$RUNSHA" = "$SHA" ]; then
+    echo "  ✅ $CONTAINER: $STATUS, ping $CODE, running $RUNSHA"
+  elif [ "$STATUS" = "running" ] && [ "$RUNSHA" != "$SHA" ]; then
+    # The container is up and answering, but on OTHER code. Every previous
+    # version of this script would have printed a green tick here.
+    echo "  ❌ $CONTAINER: up and answering, but running $RUNSHA — expected $SHA"
+    echo "     The deploy did not take. Check the build context and sites.conf."
+    FAIL=1
   else
     echo "  ❌ $CONTAINER: $STATUS, ping $CODE — logs:"
     docker logs --tail 15 "$CONTAINER" 2>&1 | sed 's/^/     /'

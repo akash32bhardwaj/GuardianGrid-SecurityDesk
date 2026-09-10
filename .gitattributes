@@ -1,0 +1,26 @@
+# Line endings are decided here, not by whichever machine committed.
+#
+# Shell scripts and the Dockerfile MUST be LF: a script checked out with CRLF
+# has "#!/usr/bin/env bash\r" as its first line, Linux looks for an
+# interpreter literally called "bash\r", and reports "command not found" for
+# a file that is plainly there and executable. That cost an hour to diagnose.
+* text=auto
+
+*.sh            text eol=lf
+Dockerfile      text eol=lf
+docker-entrypoint.sh text eol=lf
+*.py            text eol=lf
+*.json          text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+
+*.bat           text eol=crlf
+*.ps1           text eol=crlf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.pdf binary
+*.xlsx binary
+*.pptx binary
+*.db binary
