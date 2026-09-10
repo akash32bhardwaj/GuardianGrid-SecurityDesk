@@ -1087,6 +1087,40 @@ def report_pdf(date):
         return jsonify({"error": "report not found"}), 404
     return send_from_directory("reports", f"brief_{safe}.pdf")
 
+# ── Weekly audit ───────────────────────────────────────────────────
+# weekly_audit.py has carried these two routes in its own docstring as
+# "requires in api_server.py" since it was written. They were never added, so
+# the Weekly Audit tab has always 404'd — the frontend detected it and said so
+# honestly, which is why it looked like a missing feature rather than a bug.
+# Paths follow the daily-brief routes above: relative to the working directory,
+# which the container entrypoint sets to /data.
+AUDITS_DIR = os.path.join("reports", "audits")
+
+
+@app.route("/api/audits")
+def list_audits():
+    out = []
+    if os.path.isdir(AUDITS_DIR):
+        for f in sorted(os.listdir(AUDITS_DIR), reverse=True):
+            if not f.endswith(".json"):
+                continue
+            try:
+                with open(os.path.join(AUDITS_DIR, f), encoding="utf-8") as fh:
+                    out.append(json.load(fh))
+            except (json.JSONDecodeError, OSError):
+                continue          # skip a partial file rather than 500
+    return jsonify(out[:12])
+
+
+@app.route("/api/audits/<date>/pdf")
+def audit_pdf(date):
+    safe = re.sub(r"[^0-9-]", "", date)
+    path = os.path.join(AUDITS_DIR, f"audit_{safe}.pdf")
+    if not os.path.exists(path):
+        return jsonify({"error": "audit not found"}), 404
+    return send_from_directory(AUDITS_DIR, f"audit_{safe}.pdf")
+
+
 @app.route("/api/day/<date>")
 def day_detail(date):
     safe = re.sub(r"[^0-9-]", "", date)
