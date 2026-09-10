@@ -57,6 +57,7 @@ cat > "$CFG/site_config.json" <<JSON
 {
   "society": {
     "name": "$NAME",
+    "site_id": "$SLUG",
     "slug": "$SLUG"
   },
   "server": { "port": 5000 },

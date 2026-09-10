@@ -65,7 +65,17 @@ class _Config:
 
         # Society
         self.society_name = cfg["society"]["name"]
-        self.site_id      = cfg["society"]["site_id"]
+
+        # new_site.sh writes "slug" where this expects "site_id", so the
+        # default filled in instead and EVERY site issued tokens saying
+        # society_id: site-000. Prefer an explicit site_id, fall back to the
+        # slug, and only then to the placeholder — which repairs sites already
+        # deployed with the old template without editing their JSON by hand.
+        _soc = cfg["society"]
+        _sid = str(_soc.get("site_id") or "").strip()
+        if _sid in ("", "site-000", "demo-001"):
+            _sid = str(_soc.get("slug") or "").strip() or _sid or "site-000"
+        self.site_id      = _sid
         self.location     = cfg["society"].get("location", "")
 
         # Server
