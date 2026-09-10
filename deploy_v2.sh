@@ -22,14 +22,14 @@ ONLY="$1"
 
 cd /opt/octa
 
-echo "── [1/4] Pulling latest $BRANCH ──"
+echo "── [1/5] Pulling latest $BRANCH ──"
 git fetch origin
 git reset --hard "origin/$BRANCH"
 echo "    now at: $(git log --oneline -1)"
 
 SHA="$(git log --format=%h -1)"
 
-echo "── [2/4] Building image (shared by all sites) ──"
+echo "── [2/5] Building image (shared by all sites) ──"
 docker build --build-arg GIT_SHA="$SHA" -t "$IMAGE" .
 
 if [ ! -f "$SITES_CONF" ]; then
@@ -38,7 +38,7 @@ if [ ! -f "$SITES_CONF" ]; then
   exit 1
 fi
 
-echo "── [3/4] Recreating site containers ──"
+echo "── [3/5] Recreating site containers ──"
 DEPLOYED=0
 while IFS='|' read -r SLUG PORT DATA CFG ENVF; do
   [ -z "$SLUG" ] && continue
@@ -70,7 +70,7 @@ if [ "$DEPLOYED" = 0 ]; then
   echo "❌ no site matched '$ONLY' in $SITES_CONF"; exit 1
 fi
 
-echo "── [4/4] Verifying ──"
+echo "── [4/5] Verifying ──"
 sleep 6
 FAIL=0
 while IFS='|' read -r SLUG PORT DATA CFG ENVF; do
@@ -98,4 +98,30 @@ while IFS='|' read -r SLUG PORT DATA CFG ENVF; do
 done < "$SITES_CONF"
 
 [ "$FAIL" = 1 ] && exit 1
+# ── [5/5] Install the ops scripts from the repo ─────────────────────────────
+# These used to exist twice — once in git, once hand-edited under /opt — with
+# nothing keeping them in step. reset_demo.sh drifted that way and failed
+# every night for a week. The repo is the only source now; this step puts
+# each script where it is actually run from.
+#
+# cp would truncate a running script in place (this file is one of them), so
+# write beside it and mv, which swaps the inode and leaves the running
+# process on the old one.
+echo "── [5/5] Installing ops scripts ──"
+install_script() {
+  SRC="$1"; DEST="$2"
+  [ -f "$SRC" ] || { echo "  ⚠️  $SRC missing in repo — skipped"; return; }
+  if cmp -s "$SRC" "$DEST" 2>/dev/null; then
+    echo "  ·  $DEST unchanged"
+    return
+  fi
+  cp "$SRC" "$DEST.new" && chmod +x "$DEST.new" && mv "$DEST.new" "$DEST"
+  echo "  ✅ $DEST updated"
+}
+
+install_script /opt/octa/deploy_v2.sh   /opt/octa/deploy.sh
+install_script /opt/octa/reset_demo.sh  /opt/octa/reset_demo.sh
+install_script /opt/octa/run_job.sh     /opt/octa/run_job.sh
+install_script /opt/octa/new_site.sh    /opt/octa-ops/new_site.sh
+
 echo "✅ Deployed $(git log --oneline -1) to all matching sites"
