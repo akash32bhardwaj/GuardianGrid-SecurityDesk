@@ -215,6 +215,43 @@ def record_escalation(incident_id=None, tier=None, trigger_type="other",
         return None
 
 
+def link_incident(row_id, incident_id):
+    """
+    Attach an incident to an escalation row logged before that incident
+    existed.
+
+    The order is forced by the pipeline: tiering_brain records the escalation
+    the moment the alert reaches a human, and the incident case file is
+    created a moment later in guardian_wiring. Without this back-link the
+    escalation row keeps a NULL incident_id, so a guard resolving that case
+    has no escalation to pass a verdict on — and the false-escalation rate
+    quietly loses exactly the Tier-3 events it exists to measure.
+
+    Only fills a row that has no incident yet, so a later call can never
+    reassign an escalation to a different case.
+
+    Returns True when a row was updated. Never raises: a metrics failure must
+    not take down an alert path.
+    """
+    if not row_id or incident_id in (None, ""):
+        return False
+    try:
+        conn = _connect()
+        try:
+            cur = conn.execute(
+                """UPDATE escalations SET incident_id = ?
+                   WHERE id = ? AND incident_id IS NULL""",
+                (str(incident_id), int(row_id))
+            )
+            conn.commit()
+            return cur.rowcount > 0
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"[ESCALATION] incident link failed: {e}")
+        return False
+
+
 def record_acknowledgement(incident_id, at=None):
     """
     Record that a human acknowledged the escalation. Used for ack latency,
