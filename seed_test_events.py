@@ -4,10 +4,11 @@ seed_test_events.py — DEFENDER OCTA demo data seeder
 Inserts realistic vehicle events, incidents and visitors spread across
 "last night" and "today", so every wow-demo search query returns hits.
 
-Run from C:\GuardianGrid\GuardianGrid-SecurityDesk :
+Run from the folder that holds guardiangrid.db:
 
     python seed_test_events.py           -> insert demo rows
     python seed_test_events.py --remove  -> delete ONLY rows this script added
+    (container: docker exec -w /data octa-demo python /app/seed_test_events.py)
 
 Safe by design:
   * Every seeded row is tagged (image = 'SEED.jpg' for vehicles,
@@ -21,8 +22,10 @@ import sys
 import os
 from datetime import datetime, timedelta
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB = os.path.join(BASE_DIR, "guardiangrid.db")
+# DB is resolved from the CURRENT FOLDER, not the script folder, so this
+# works both on the laptop (cd SecurityDesk) and inside a container
+# (docker exec -w /data ... python /app/seed_test_events.py).
+DB = os.path.join(os.getcwd(), "guardiangrid.db")
 
 TAG_IMG = "SEED.jpg"          # vehicle_events marker
 TAG_INC = "SEED-"             # incidents marker (incident_id prefix)
@@ -127,7 +130,7 @@ def remove(con):
 
 if __name__ == "__main__":
     if not os.path.exists(DB):
-        sys.exit(f"DB not found: {DB} — run this from the SecurityDesk folder.")
+        sys.exit(f"DB not found: {DB} — cd to the folder holding guardiangrid.db first.")
     con = sqlite3.connect(DB)
     if "--remove" in sys.argv:
         remove(con)
