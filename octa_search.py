@@ -8,8 +8,15 @@ Natural-language search over vehicle_events, incidents and visitors.
 
 Design:
   1. Parse the question into a structured filter JSON.
-       - Primary parser : Claude API (Anthropic) — handles English + Hinglish.
-       - Fallback parser: pure-regex rules — works offline, keeps demos alive.
+       - Primary parser : pure-regex rules — free, instant, offline. Handles
+         English + the common Hinglish patterns and answers most questions
+         a guard actually types.
+       - Escalation     : Claude API (Anthropic), called ONLY when the rules
+         report low confidence. Handles free-form phrasing and visitor names,
+         which the rules cannot reach. No key configured = never called.
+     Every response says which parser ran ("parser") and whether the query
+     was actually understood ("understood" / "hint" / "interpretation"), so
+     the UI can show a guess as a guess instead of as an answer.
   2. Run safe, parameterised SQL over guardiangrid.db.
   3. Return a human "answer line" + result cards (plate / incident / visitor),
      including confident negatives ("No entries found. Last movement: ...").
@@ -227,7 +234,7 @@ def _rule_parse(q: str) -> dict:
     src = set()
     if re.search(r"alert|incident|threat|watchlist|face|chehra|problem", ql):
         src.add("incidents")
-    if re.search(r"visitor|guest|delivery|maid|mehmaan|milkman|courier|"
+    if re.search(r"visit|guest|delivery|maid|mehmaan|milkman|courier|"
                  r"kaam ?wali|servant", ql):
         src.add("visitors")
     if re.search(r"vehicle|car|gaadi|gadi|bike|scooter|truck|plate|number|"
@@ -246,7 +253,7 @@ def _rule_parse(q: str) -> dict:
         f["time_from"], f["time_to"] = f"{today} 05:00:00", f"{today} 12:00:00"
     elif re.search(r"\btoday\b|\baaj\b", ql):
         f["time_from"] = f"{today} 00:00:00"
-    elif re.search(r"this week|is hafte", ql):
+    elif re.search(r"this week|is hafte|last week|pichle hafte", ql):
         f["time_from"] = (now - timedelta(days=7)).strftime("%Y-%m-%d 00:00:00")
     # An explicit range: "between 2 and 4 am", "2am to 4am", "10pm till 2am".
     # Without this, "between 2am and 4am yesterday" matched the "yesterday"
@@ -304,6 +311,16 @@ def _rule_parse(q: str) -> dict:
     m = re.search(r"\b([A-Z]{2}\s?\d{1,2}\s?[A-Z]{0,3}\s?\d{2,4})\b", q.upper())
     if m and len(re.sub(r"[^A-Z0-9]", "", m.group(1))) >= 6:
         f["plate"] = re.sub(r"[^A-Z0-9]", "", m.group(1))
+    else:
+        # Partial plates are how people actually search — "PB10 wali gaadi".
+        # The >= 6 rule above exists to stop "10PM TO 2AM" being read as a
+        # plate, so the short form is accepted only as a whole token of the
+        # exact shape two letters + one or two digits, with no am/pm/baje
+        # clinging to it. "PB10" qualifies; "TO2AM" and "10PM" do not.
+        for tok in re.findall(r"\b[A-Z]{2}\s?\d{1,2}\b", q.upper()):
+            if not re.search(rf"{re.escape(tok)}\s*(AM|PM|BAJE)", q.upper()):
+                f["plate"] = tok.replace(" ", "")
+                break
     if re.search(r"bike|scooter|two.?wheeler|activa", ql):
         f["vtype"] = "bike"
     elif re.search(r"truck|tempo|lorry", ql):
@@ -328,6 +345,138 @@ def _rule_parse(q: str) -> dict:
                 f["sources"].append("incidents")
             break
     return f
+
+
+# ════════════════════════════════════════════════════════════════════
+# 3b) DID THE RULES ACTUALLY UNDERSTAND THE QUESTION?
+# ════════════════════════════════════════════════════════════════════
+#
+# The rule parser never fails loudly. Handed a question it has no words
+# for, it returns the defaults — all vehicles, all time — and the screen
+# fills with fifty unrelated rows presented as the answer. A wrong answer
+# that looks right is worse than an error, especially in a demo.
+#
+# So we measure two things before trusting a rule parse:
+#
+#   signals  — how many concrete filters it actually extracted
+#   coverage — how much of the question its vocabulary recognised
+#
+# Weak on either, and we hand the question to the LLM if a key is
+# configured, or tell the operator plainly that we guessed if not.
+
+# Every single word the rule parser can act on. Kept as single words
+# (not the phrases used in _rule_parse) because coverage is measured word
+# by word — "night" has to match on its own, not only inside "last night".
+_VOCAB = re.compile(
+    r"alert|incident|threat|watchlist|face|chehra|problem|"
+    r"visit|guest|delivery|maid|mehmaan|milkman|courier|kaam|servant|"
+    r"vehicle|car|gaadi|gadi|bike|scooter|truck|plate|number|activa|"
+    r"swift|sedan|tempo|lorry|wheeler|"
+    r"kaun|kon|who|"
+    r"night|raat|rat|yesterday|kal|morning|subah|today|aaj|week|hafte|"
+    r"between|after|till|until|baje|last|next|"
+    r"unknown|unregister|stranger|anjaan|suspicious|blacklist|banned|"
+    r"enter|came|aaya|aayi|exit|left|gaya|gayi|nikla|"
+    r"gate|block|main|back|"
+    r"critical|high|medium|low")
+
+# Words that carry no filter meaning. Recognising them is not understanding,
+# so they are excluded from the coverage denominator rather than counted as
+# hits — otherwise "please show me all of the" would score a perfect 100%.
+_STOPWORDS = {
+    "show", "list", "find", "search", "all", "any", "the", "an", "of",
+    "at", "in", "on", "to", "and", "or", "me", "my", "is", "are", "was",
+    "were", "did", "do", "does", "please", "give", "get", "see", "there",
+    "that", "this", "it", "for", "from", "with",
+    "ko", "ka", "ki", "ke", "se", "hai", "tha", "thi", "kya", "mujhe",
+    "dikhao", "batao", "wali", "wala", "par", "pe", "mein", "kab",
+    "koi", "bhi", "ek",
+}
+
+
+def _rule_signals(f: dict) -> list:
+    """Which concrete filters the rule parser managed to fill."""
+    named = [k for k in ("time_from", "time_to", "plate", "vtype", "access",
+                         "event", "camera", "severity", "person") if f.get(k)]
+    # A from/to pair is one signal about time, not two.
+    if "time_from" in named and "time_to" in named:
+        named.remove("time_to")
+    return named
+
+
+def _rule_coverage(q: str, f: dict) -> float:
+    """Fraction of the question's meaningful words the vocabulary knows.
+
+    1.0 means every word either drives a filter or is filler. A low score
+    means the operator used words we have never seen — so whatever we did
+    extract is probably not what they were asking for.
+    """
+    ql = q.lower()
+    if f.get("plate"):
+        # The plate is understood, so its letters must not be counted as
+        # unknown words. Match the plate we actually extracted, spaced or
+        # not ("PB10" and "PB 10" are the same plate).
+        spaced = r"\s?".join(re.escape(c) for c in f["plate"].lower())
+        ql = re.sub(rf"\b{spaced}\b", " ", ql)
+    # Clock tokens are understood by the time branches above; counting
+    # "10pm" as an unrecognised word would fail a query we parsed perfectly.
+    ql = re.sub(r"\b\d{1,2}(:\d{2})?\s?(am|pm|baje)\b", " ", ql)
+    words = [w for w in re.findall(r"[a-z]{2,}", ql) if w not in _STOPWORDS]
+    if not words:
+        return 1.0
+    known = sum(1 for w in words if _VOCAB.search(w))
+    return known / len(words)
+
+
+# Words that promise a time window. If one is present and no window came
+# out of the parse, we heard "raat" and then filtered by nothing — the
+# classic answer-shaped wrong answer.
+_TIME_WORDS = re.compile(
+    r"night|raat|\brat\b|yesterday|\bkal\b|morning|subah|today|aaj|"
+    r"week|hafte|baje|between|after|till|until")
+
+
+def _rule_is_confident(q: str, f: dict) -> bool:
+    """True when the rule parse is worth trusting without calling the LLM."""
+    if not _rule_signals(f):
+        return False                      # extracted nothing: a pure guess
+    ql = q.lower()
+    if _TIME_WORDS.search(ql) and not (f["time_from"] or f["time_to"]):
+        return False                      # heard a time, filtered by none
+    # The rules can never fill `person` — no regex knows that "Sharma" is a
+    # name. So a question that asks *who* and contains a word we do not
+    # recognise is probably naming someone we are about to ignore, and
+    # "here is everyone who came" is the wrong answer to "did Ramesh come".
+    if (re.search(r"\bwho\b|kaun|kon|naam|name", ql)
+            and not f["person"] and _rule_coverage(q, f) < 1.0):
+        return False
+    return _rule_coverage(q, f) >= 0.5
+
+
+def _interpretation(f: dict) -> list:
+    """What the search believes it was asked, as short label/value pairs.
+
+    Rendered as chips above the results. When the parser misreads a
+    question the operator sees the misreading immediately, instead of
+    trusting fifty rows that answer a question nobody asked.
+    """
+    chips = [{"k": "Searching", "v": " + ".join(f["sources"])}]
+    if f["time_from"] and f["time_to"]:
+        chips.append({"k": "Between",
+                      "v": f"{f['time_from'][5:16]} and {f['time_to'][5:16]}"})
+    elif f["time_from"]:
+        chips.append({"k": "Since", "v": f["time_from"][5:16]})
+    elif f["time_to"]:
+        chips.append({"k": "Until", "v": f["time_to"][5:16]})
+    else:
+        chips.append({"k": "Period", "v": "all time"})
+    for key, label in (("plate", "Plate"), ("vtype", "Type"),
+                       ("access", "Status"), ("event", "Direction"),
+                       ("camera", "Camera"), ("severity", "Severity"),
+                       ("person", "Name")):
+        if f.get(key):
+            chips.append({"k": label, "v": str(f[key])})
+    return chips
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -493,10 +642,28 @@ def octa_search():
     if len(q) > 300:
         q = q[:300]
 
-    filters = _llm_parse(q) or _sanitize(_rule_parse(q))
-    parser = "llm" if (_API_KEY and filters is not None
-                       and filters is not _EMPTY) else "rules"
-    # (parser label is approximate; the important thing is the result)
+    # Rules first. They are free, instant, and right about most of what a
+    # guard actually types — "PB10", "unknown vehicles last night", "high
+    # alerts this week". Calling the API on every one of those was paying
+    # for an answer we already had. The LLM is now the exception handler:
+    # it runs only when the rules admit they did not understand.
+    filters = _sanitize(_rule_parse(q))
+    confident = _rule_is_confident(q, filters)
+    parser = "rules"
+
+    if not confident:
+        llm = _llm_parse(q)          # returns None when no key / on failure
+        if llm:
+            filters, parser, confident = llm, "llm", True
+
+    # Still guessing means no key, or the LLM was unreachable. Say so
+    # rather than dressing a default filter up as an answer.
+    hint = None
+    if not confident:
+        hint = ("Only part of that was understood, so this is the closest "
+                "match rather than a direct answer. Try naming a time "
+                "(\"last night\", \"kal raat\"), a plate, or a type "
+                "(\"unknown vehicles\", \"bikes at main gate\").")
 
     vehicles, incidents, visitors = [], [], []
     try:
@@ -520,6 +687,9 @@ def octa_search():
         "success": True,
         "query": q,
         "parser": parser,
+        "understood": confident,
+        "hint": hint,
+        "interpretation": _interpretation(filters),
         "filters": filters,          # shown in UI dev-mode; great for debugging
         "answer": _answer_line(filters, len(vehicles), len(incidents),
                                len(visitors), last_move),
