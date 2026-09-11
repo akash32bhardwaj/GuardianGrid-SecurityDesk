@@ -75,9 +75,15 @@ JSON
 
 cat > "$CFG/config.py" <<PY
 # Site-local secrets for $NAME — NEVER commit this file.
+#
+# The name matters: auth_service.py does "from config import JWT_SECRET"
+# at module level with no fallback. This file used to define SECRET_KEY
+# instead, so a site provisioned by this script produced a container that
+# died on import — and the traceback blamed the import, not this script.
 ADMIN_USERNAME = "admin-$SLUG"
 ADMIN_PASSWORD = "$ADMIN_PASS"
-SECRET_KEY = "$JWT_SECRET"
+JWT_SECRET = "$JWT_SECRET"
+SECRET_KEY = "$JWT_SECRET"   # Flask's own name, kept for anything expecting it
 PY
 
 cat > "$CFG/whatsapp_config.py" <<PY
