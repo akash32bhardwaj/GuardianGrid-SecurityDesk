@@ -308,6 +308,27 @@ def canvas_resolve():
         con.close()
     except sqlite3.Error as e:
         logger.warning(f"[CANVAS] resolution log failed: {e}")
+
+    # Record the verdict against the escalation that raised this incident.
+    #
+    # The Canvas is the PRIMARY way a HIGH or CRITICAL incident gets closed —
+    # exactly the incidents escalation_metrics exists to measure — and it was
+    # writing its disposition only to canvas_resolutions, a side table nothing
+    # else reads. The false-escalation rate therefore had no data for the very
+    # alerts it is meant to judge. That rate answers "how often does your
+    # system cry wolf?", which is the first question a factory owner asks.
+    #
+    # RESOLVED means the alert was real and action followed; FALSE_ALARM means
+    # it should not have escalated. Wrapped, because a metrics failure must
+    # never stop an incident being closed.
+    try:
+        from escalation_metrics import record_verdict
+        record_verdict(iid,
+                       "false" if resolution == "FALSE_ALARM" else "genuine",
+                       by=who, note=note or None)
+    except Exception as e:
+        logger.warning(f"[CANVAS] verdict not recorded for {iid}: {e}")
+
     return jsonify({"success": True, "incident_id": iid,
                     "resolution": resolution})
 
