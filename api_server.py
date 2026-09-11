@@ -1326,8 +1326,15 @@ _MEDIA_PATHS = (
     "/vehicle_image/",                 # evidence snapshots
     "/api/replays/",                   # generated reels
     "/api/replay/clip/",               # single clips inside a reel
-    "/generate_report",                # PDF opened in a new tab
     "/api/admin/residents/template",   # spreadsheet download link
+)
+
+# Matched whole, not by prefix. "/api/stream" must be exact: a prefix
+# match would also cover "/api/stream/ticket", and a ticket able to mint
+# its own replacement would never really expire.
+_MEDIA_EXACT = (
+    "/api/stream",                     # SSE alert feed (EventSource)
+    "/generate_report",                # PDF opened in a new tab
 )
 _TICKET_TTL = 900                      # 15 minutes
 _MEDIA_COOKIE = "gg_media"
@@ -1337,7 +1344,7 @@ _tickets_lock = threading.Lock()
 
 
 def _is_media_path(p: str) -> bool:
-    return any(p.startswith(x) for x in _MEDIA_PATHS)
+    return p in _MEDIA_EXACT or any(p.startswith(x) for x in _MEDIA_PATHS)
 
 
 def _issue_ticket(user: dict) -> str:
