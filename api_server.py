@@ -12,6 +12,7 @@ Usage:
 import cv2
 import hmac
 import os
+import secrets
 import sys
 import json
 import sqlite3
@@ -1015,15 +1016,21 @@ def media_stream_proxy(stream_path):
     response = Response(generate(), status=getattr(upstream, "status", 200),
                         headers=response_headers)
 
-    query_token = request.args.get("token")
-    if query_token:
+    # HLS playlists reference their own segment files, and the <video> tag
+    # fetches those without any credential of its own, so the first request
+    # leaves one behind as a cookie for the rest to use. It carries the
+    # media ticket now, never the session JWT — a JWT sitting in a cookie
+    # is the same credential in a different hiding place.
+    ticket = request.args.get("t")
+    if ticket and _redeem_ticket(ticket):
         response.set_cookie(
-            "gg_stream_token",
-            query_token,
+            _MEDIA_COOKIE,
+            ticket,
+            max_age=_TICKET_TTL,
             httponly=True,
             secure=request.is_secure,
             samesite="Strict",
-            path="/stream/",
+            path="/",
         )
 
     return response
@@ -1292,6 +1299,90 @@ def visitor_exit_route(vid):
     ok = visitor_exit(vid)
     return jsonify({"success": ok})
 
+# ── Media tickets ────────────────────────────────────────────────
+#
+# An <img> or <video> tag cannot send an Authorization header, so a camera
+# stream or an evidence snapshot has to carry its own credential. It used
+# to carry the session JWT in the query string, and the guard honoured
+# ?token= on EVERY route — so one camera URL copied out of an access log,
+# a browser history or a Referer header was the whole account until that
+# token expired.
+#
+# It now carries an opaque ticket instead: minted only for a caller who
+# has already proved who they are, accepted on media paths and nowhere
+# else, expiring in minutes rather than hours, and revocable by
+# restarting the process. The ticket also goes back as an httponly
+# cookie, so on the normal same-origin deployment the browser sends it by
+# itself and no credential needs to appear in a URL at all.
+#
+# "Media" here means any path the browser fetches with a tag or a link
+# rather than with our own fetch() — <img>, <video>, and <a download>.
+# Those are exactly the requests that cannot set a header, and so exactly
+# the ones that were carrying a JWT in the URL.
+_MEDIA_PATHS = (
+    "/video_feed",                     # MJPEG gate camera
+    "/cam/",                           # RTSP cameras via rtmp_proxy
+    "/stream/",                        # HLS playlists + segments
+    "/vehicle_image/",                 # evidence snapshots
+    "/api/replays/",                   # generated reels
+    "/api/replay/clip/",               # single clips inside a reel
+    "/generate_report",                # PDF opened in a new tab
+    "/api/admin/residents/template",   # spreadsheet download link
+)
+_TICKET_TTL = 900                      # 15 minutes
+_MEDIA_COOKIE = "gg_media"
+
+_tickets = {}                          # ticket -> (expires_at, user dict)
+_tickets_lock = threading.Lock()
+
+
+def _is_media_path(p: str) -> bool:
+    return any(p.startswith(x) for x in _MEDIA_PATHS)
+
+
+def _issue_ticket(user: dict) -> str:
+    ticket = secrets.token_urlsafe(32)
+    now = time.time()
+    with _tickets_lock:
+        # Opportunistic prune; the store is small and everything in it is
+        # short-lived, so this never needs its own sweeper thread.
+        for k in [k for k, (exp, _) in _tickets.items() if exp <= now]:
+            _tickets.pop(k, None)
+        _tickets[ticket] = (now + _TICKET_TTL, dict(user or {}))
+    return ticket
+
+
+def _redeem_ticket(ticket: str):
+    """The user a ticket belongs to, or None. Expired tickets are dropped."""
+    if not ticket:
+        return None
+    with _tickets_lock:
+        found = _tickets.get(ticket)
+        if not found:
+            return None
+        exp, user = found
+        if exp <= time.time():
+            _tickets.pop(ticket, None)
+            return None
+    return user
+
+
+@app.route("/api/stream/ticket", methods=["POST"])
+def stream_ticket():
+    """Mint a media ticket for the caller. Requires a real session."""
+    user = getattr(request, "auth_user", None)
+    if not user:
+        return jsonify({"success": False,
+                        "message": "Authentication required"}), 401
+    ticket = _issue_ticket(user)
+    resp = jsonify({"success": True, "ticket": ticket,
+                    "expires_in": _TICKET_TTL})
+    resp.set_cookie(_MEDIA_COOKIE, ticket, max_age=_TICKET_TTL,
+                    httponly=True, secure=request.is_secure,
+                    samesite="Strict", path="/")
+    return resp
+
+
 # ── API authentication guard ────────────────────────────────────
 # Every route requires a valid JWT except the exempt list below.
 AUTH_EXEMPT_PREFIXES = (
@@ -1299,8 +1390,9 @@ AUTH_EXEMPT_PREFIXES = (
     "/api/auth/test",
     "/api/whatsapp/",     # Twilio webhook (signature-verified) + tokenized media
     # NOT exempt any more: "/video_feed" and "/cam/" served a client's LIVE
-    # CAMERA to anyone who knew the hostname, with no account. They accept the
-    # same ?token= the guard already reads, so the <img> tags carry one now.
+    # CAMERA to anyone who knew the hostname, with no account. They are
+    # guarded now, and the <img> tags reach them with a short-lived media
+    # ticket (see _MEDIA_PATHS above) rather than the session JWT.
     "/frontend",
     "/static",
     "/assets",           # React JS/CSS bundle (must load before login)
@@ -1419,18 +1511,33 @@ def require_auth():
             or any(p.startswith(e) for e in AUTH_EXEMPT_PREFIXES)):
         return
     auth = request.headers.get("Authorization", "")
-    token = (
-        auth[7:]
-        if auth.startswith("Bearer ")
-        else request.args.get("token", "")
-        or request.cookies.get("gg_stream_token", "")
-    )
-    if not token:
-        return jsonify({"success": False, "message": "Authentication required"}), 401
-    try:
-        request.auth_user = decode_token(token)   # available to routes if needed
-    except Exception:
-        return jsonify({"success": False, "message": "Invalid or expired token"}), 401
+    token = auth[7:] if auth.startswith("Bearer ") else ""
+    user = None
+
+    # Media paths — and ONLY media paths — may present a ticket instead,
+    # because the tags that request them cannot send a header. Everything
+    # else needs the header, so a URL alone is never a credential.
+    if not token and _is_media_path(p):
+        user = _redeem_ticket(request.args.get("t", "")
+                              or request.cookies.get(_MEDIA_COOKIE, ""))
+        if user is None:
+            # Legacy: a raw JWT in ?token= or the old stream cookie. Still
+            # honoured here so embeds made before tickets existed keep
+            # working, but no longer on any other route.
+            token = (request.args.get("token", "")
+                     or request.cookies.get("gg_stream_token", ""))
+
+    if user is None:
+        if not token:
+            return jsonify({"success": False,
+                            "message": "Authentication required"}), 401
+        try:
+            user = decode_token(token)
+        except Exception:
+            return jsonify({"success": False,
+                            "message": "Invalid or expired token"}), 401
+
+    request.auth_user = user                  # available to routes if needed
 
     # ── VIEWER role: read-only enforcement ─────────────────────────
     # Viewers (demo/QR visitors) may look but never touch:
@@ -1439,9 +1546,12 @@ def require_auth():
     #     flats and phone numbers are not demo material
     # Structural rule in ONE place, so no route can forget to check.
     if (request.auth_user or {}).get("role") == "VIEWER":
-        # /api/search is a POST but strictly read-only (parameterised
-        # SELECTs) — demo/QR viewers may use it. Everything else: GET only.
-        if request.method != "GET" and p != "/api/search":
+        # Two POSTs are read-only in effect and viewers need both:
+        # /api/search runs parameterised SELECTs and nothing else, and
+        # /api/stream/ticket only mints the credential that lets their
+        # own <img> tags load — without it a viewer sees broken cameras.
+        if (request.method != "GET"
+                and p not in ("/api/search", "/api/stream/ticket")):
             return jsonify({"success": False,
                             "message": "Viewer access is read-only"}), 403
         if p.startswith("/residents"):
