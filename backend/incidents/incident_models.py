@@ -17,9 +17,15 @@ import sqlite3
 from pathlib import Path
 from datetime import datetime
 
-# Same database file as db.py. Path is relative to the folder
-# api_server.py runs from (the project root).
-DB_PATH = Path("guardiangrid.db")
+# Same database file as db.py. In Docker the live DB is volume-mounted at
+# /data/guardiangrid.db; locally it sits next to api_server.py. This used
+# to be the bare relative path "guardiangrid.db", which happened to work
+# only because the container entrypoint does `cd /data` first — a process
+# started from anywhere else would silently create a second, empty
+# database and report no incidents at all.
+DB_PATH = (Path("/data/guardiangrid.db")
+           if Path("/data/guardiangrid.db").exists()
+           else Path("guardiangrid.db"))
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS incidents (
@@ -74,6 +80,51 @@ def _row_to_dict(row):
     return d
 
 
+# ── Disposition: genuine incident, or false alarm? ────────────────────
+#
+# The Command Canvas records that judgement in its own table,
+# canvas_resolutions, which nothing outside the Canvas ever read. So the
+# case file — the screen you would actually show a client to prove an
+# alert was worth acting on — could tell you an incident was RESOLVED but
+# not whether it had turned out to be real. The distinction survived only
+# in a toast that vanished on refresh.
+#
+# Rather than duplicate the column, the case file now reads the table the
+# Canvas already writes. A missing table is normal on a fresh install and
+# means exactly what it says: nothing has been dispositioned yet.
+
+_DISPO_FIELDS = ("resolution", "note", "resolved_by", "resolved_at")
+
+
+def _dispositions(c, incident_ids):
+    """{incident_id: {resolution, note, by, at}} for the ids given."""
+    if not incident_ids:
+        return {}
+    try:
+        marks = ",".join("?" * len(incident_ids))
+        rows = c.execute(
+            f"SELECT incident_id, resolution, note, resolved_by, resolved_at"
+            f"  FROM canvas_resolutions WHERE incident_id IN ({marks})",
+            tuple(incident_ids),
+        ).fetchall()
+    except sqlite3.Error:
+        return {}            # table not created yet: nothing dispositioned
+    return {r["incident_id"]: {
+        "resolution": r["resolution"],
+        "note": r["note"],
+        "by": r["resolved_by"],
+        "at": r["resolved_at"],
+    } for r in rows}
+
+
+def _attach_disposition(c, incidents):
+    """Fold the Canvas verdict into each incident dict, in place."""
+    found = _dispositions(c, [i["incident_id"] for i in incidents])
+    for inc in incidents:
+        inc["disposition"] = found.get(inc["incident_id"])
+    return incidents
+
+
 def _next_incident_id(c) -> str:
     row = c.execute("SELECT MAX(id) AS m FROM incidents").fetchone()
     return f"GG-{(row['m'] or 0) + 1:04d}"
@@ -116,7 +167,7 @@ def get_all_incidents():
         rows = c.execute(
             "SELECT * FROM incidents ORDER BY id DESC"
         ).fetchall()
-    return [_row_to_dict(r) for r in rows]
+        return _attach_disposition(c, [_row_to_dict(r) for r in rows])
 
 
 def update_incident(incident_id, updates):
@@ -168,4 +219,6 @@ def get_incident_by_id(incident_id):
         row = c.execute(
             "SELECT * FROM incidents WHERE incident_id = ?", (incident_id,)
         ).fetchone()
-    return _row_to_dict(row) if row else None
+        if not row:
+            return None
+        return _attach_disposition(c, [_row_to_dict(row)])[0]
