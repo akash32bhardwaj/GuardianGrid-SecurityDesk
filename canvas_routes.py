@@ -223,11 +223,64 @@ def _subject_context(inc: dict):
 # Routes
 # ════════════════════════════════════════════════════════════════════
 
+def _canvas_payload(inc: dict, others_waiting: int) -> dict:
+    """Everything the Command Canvas needs to draw one incident.
+
+    Split out of canvas_active() so the same screen can be opened for an
+    incident the operator chose, not only for the one the server ranked
+    highest. The Canvas used to appear on its own and could be reached no
+    other way — a guard who dismissed it had no route back in.
+    """
+    iid = inc.get("incident_id")
+    sev = str(inc.get("severity", "HIGH")).upper()
+    created = inc.get("created_at", "")
+    return {
+        "incident_id": iid,
+        "title": inc.get("title", "Incident"),
+        "description": inc.get("description") or "",
+        "severity": sev,
+        "status": inc.get("status"),
+        "camera": inc.get("camera_name") or inc.get("camera") or "",
+        "created_at": created,
+        "evidence_image": inc.get("evidence_image"),
+        "others_waiting": others_waiting,
+        "ack": _ack_state(iid),
+        "ack_log": _ack_log_row(iid),
+        "sop": SOPS.get(sev, SOPS["HIGH"]),
+        "subject": _subject_context(inc),
+        "evidence": _evidence_strip(
+            inc.get("camera_name") or "", created,
+            inc.get("plate_number")),
+    }
+
+
 @canvas_bp.route("/api/canvas/active")
 def canvas_active():
+    """The incident the Canvas should show.
+
+    Without ?id= this is the most urgent open HIGH/CRITICAL, which is the
+    takeover behaviour. With ?id= it is that specific incident, so the
+    incident list can hand an operator into the command view deliberately.
+    """
     active = [i for i in _all_incidents()
               if i.get("status") in ("OPEN", "IN_PROGRESS")
               and str(i.get("severity", "")).upper() in _ACTIVE_SEVERITIES]
+
+    wanted = (request.args.get("id") or "").strip()
+    if wanted:
+        # An explicitly requested incident is shown whatever its severity
+        # or status — the operator asked for it. Falling back to the
+        # ranked pick here would silently show them a different incident
+        # than the row they clicked, which is worse than showing nothing.
+        match = next((i for i in _all_incidents()
+                      if str(i.get("incident_id")) == wanted), None)
+        if not match:
+            return jsonify({"success": True, "active": None})
+        others = len([i for i in active
+                      if str(i.get("incident_id")) != wanted])
+        return jsonify({"success": True,
+                        "active": _canvas_payload(match, others)})
+
     if not active:
         return jsonify({"success": True, "active": None})
 
@@ -235,32 +288,8 @@ def canvas_active():
     active.sort(key=lambda i: str(i.get("created_at", "")), reverse=True)
     active.sort(key=lambda i:
                 0 if str(i.get("severity")).upper() == "CRITICAL" else 1)
-    inc = active[0]
-
-    iid = inc.get("incident_id")
-    sev = str(inc.get("severity", "HIGH")).upper()
-    created = inc.get("created_at", "")
-    return jsonify({
-        "success": True,
-        "active": {
-            "incident_id": iid,
-            "title": inc.get("title", "Incident"),
-            "description": inc.get("description") or "",
-            "severity": sev,
-            "status": inc.get("status"),
-            "camera": inc.get("camera_name") or inc.get("camera") or "",
-            "created_at": created,
-            "evidence_image": inc.get("evidence_image"),
-            "others_waiting": len(active) - 1,
-            "ack": _ack_state(iid),
-            "ack_log": _ack_log_row(iid),
-            "sop": SOPS.get(sev, SOPS["HIGH"]),
-            "subject": _subject_context(inc),
-            "evidence": _evidence_strip(
-                inc.get("camera_name") or "", created,
-                inc.get("plate_number")),
-        },
-    })
+    return jsonify({"success": True,
+                    "active": _canvas_payload(active[0], len(active) - 1)})
 
 
 @canvas_bp.route("/api/canvas/resolve", methods=["POST"])
