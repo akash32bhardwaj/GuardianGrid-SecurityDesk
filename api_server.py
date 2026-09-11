@@ -1626,6 +1626,19 @@ def access_mix_route():
     return jsonify(access_mix(request.args.get("date")))
 
 # ── Serve React frontend ──────────────────────────────────────────
+# Prefixes that belong to the API, not to the single-page app. Anything
+# under one of these that did not match a route is a 404, not a page.
+_API_LIKE = ("api/", "residents", "visitors", "gate/", "cameras",
+             "internal/", "stream/", "cam/", "video_feed", "vehicle_image/",
+             "generate_report", "access_mix", "threat_status",
+             "camera_heat", ".well-known/")
+
+
+def _looks_like_api(path: str) -> bool:
+    p = (path or "").lstrip("/")
+    return any(p == x.rstrip("/") or p.startswith(x) for x in _API_LIKE)
+
+
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
 def serve_frontend(path):
@@ -1647,6 +1660,15 @@ def serve_frontend(path):
     file_path = FRONTEND_DIR / path
     if path and file_path.exists():
         return send_from_directory(str(FRONTEND_DIR), path)
+
+    # An unmatched /api/... path is a mistake, not a page. Serving the
+    # React shell for it meant a typo'd endpoint came back as HTML with
+    # status 200, and the caller failed later with "Unexpected token '<'"
+    # — a parse error that says nothing about the actual problem. Say 404
+    # in the format the caller is already expecting.
+    if _looks_like_api(path):
+        return jsonify({"success": False,
+                        "message": f"No such endpoint: /{path}"}), 404
 
     # Otherwise serve index.html (React Router handles the rest)
     index = FRONTEND_DIR / "index.html"
