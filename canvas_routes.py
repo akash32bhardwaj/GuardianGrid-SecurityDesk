@@ -223,6 +223,37 @@ def _subject_context(inc: dict):
 # Routes
 # ════════════════════════════════════════════════════════════════════
 
+# ── SOP checklist progress ───────────────────────────────────────────
+#
+# Which procedure steps a guard has completed is part of what happened
+# during an incident, so it belongs in the case file, not in one browser.
+# Kept in the browser, the ticks did not follow the incident to the
+# supervisor who took over at shift change, did not survive a dead tablet,
+# and could not be shown to anyone afterwards as proof the procedure was
+# actually followed. One row per completed step, with who and when.
+
+_SOP_SCHEMA = (
+    "CREATE TABLE IF NOT EXISTS canvas_sop ("
+    " incident_id TEXT NOT NULL, step INTEGER NOT NULL,"
+    " done_by TEXT, done_at TEXT,"
+    " PRIMARY KEY (incident_id, step))")
+
+
+def _sop_done(iid: str) -> list:
+    """Indexes of the SOP steps completed for this incident."""
+    try:
+        con = _con()
+        con.execute(_SOP_SCHEMA)
+        rows = con.execute(
+            "SELECT step FROM canvas_sop WHERE incident_id=? ORDER BY step",
+            (iid,)).fetchall()
+        con.close()
+        return [r["step"] for r in rows]
+    except sqlite3.Error as e:
+        logger.warning(f"[CANVAS] sop read failed: {e}")
+        return []
+
+
 def _canvas_payload(inc: dict, others_waiting: int) -> dict:
     """Everything the Command Canvas needs to draw one incident.
 
@@ -247,6 +278,7 @@ def _canvas_payload(inc: dict, others_waiting: int) -> dict:
         "ack": _ack_state(iid),
         "ack_log": _ack_log_row(iid),
         "sop": SOPS.get(sev, SOPS["HIGH"]),
+        "sop_done": _sop_done(iid),
         "subject": _subject_context(inc),
         "evidence": _evidence_strip(
             inc.get("camera_name") or "", created,
@@ -290,6 +322,50 @@ def canvas_active():
                 0 if str(i.get("severity")).upper() == "CRITICAL" else 1)
     return jsonify({"success": True,
                     "active": _canvas_payload(active[0], len(active) - 1)})
+
+
+@canvas_bp.route("/api/canvas/sop", methods=["POST"])
+def canvas_sop():
+    """Tick or untick one SOP step: {incident_id, step, done}.
+
+    Idempotent on purpose — a guard tapping twice on a slow tablet, or two
+    people working the same incident, must not produce a different answer
+    than tapping once.
+    """
+    data = request.get_json(silent=True) or {}
+    iid = str(data.get("incident_id") or "").strip()
+    if not iid:
+        return jsonify({"success": False,
+                        "message": "incident_id required"}), 400
+    try:
+        step = int(data.get("step"))
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "message": "step required"}), 400
+    if not 0 <= step < 50:
+        return jsonify({"success": False, "message": "step out of range"}), 400
+
+    done = bool(data.get("done", True))
+    who = (getattr(request, "auth_user", None) or {}).get("username", "guard")
+    try:
+        con = _con()
+        con.execute(_SOP_SCHEMA)
+        if done:
+            con.execute(
+                "INSERT OR REPLACE INTO canvas_sop VALUES (?,?,?,?)",
+                (iid, step, who,
+                 datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        else:
+            con.execute(
+                "DELETE FROM canvas_sop WHERE incident_id=? AND step=?",
+                (iid, step))
+        con.commit()
+        con.close()
+    except sqlite3.Error as e:
+        logger.warning(f"[CANVAS] sop write failed: {e}")
+        return jsonify({"success": False,
+                        "message": "could not save checklist"}), 500
+
+    return jsonify({"success": True, "sop_done": _sop_done(iid)})
 
 
 @canvas_bp.route("/api/canvas/resolve", methods=["POST"])
