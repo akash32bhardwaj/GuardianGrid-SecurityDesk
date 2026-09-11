@@ -21,6 +21,12 @@ import os
 import sqlite3
 from datetime import datetime
 
+# Incident reports carry resident names and free-text notes to a client.
+# ReportLab's built-in fonts cover Latin only, so a Gurmukhi or Devanagari
+# name printed as empty boxes on the document that proves an incident was
+# handled. See pdf_fonts.py.
+from pdf_fonts import BODY, BOLD, bold_for, font_for
+
 logger = logging.getLogger(__name__)
 
 _DB_PATH = "guardiangrid.db"
@@ -125,15 +131,27 @@ def generate_pdf(iid: str, out_path: str) -> bool:
         logger.error(f"[REPORT] reportlab missing: {e}")
         return False
 
+    # One font for the whole document rather than one per cell. A society's
+    # report is written in a single language, and Noto's Indic faces carry
+    # Latin glyphs too — so choosing by the document's own text handles a
+    # mixed line correctly, while the reverse would not.
+    _doc_text = " ".join(str(x or "") for x in (
+        _site_name(),
+        inc.get("title"), inc.get("description"),
+        inc.get("resident_name"), inc.get("camera_name"),
+        (res or {}).get("resolved_by"), (res or {}).get("note"),
+    ))
+    F, FB = font_for(_doc_text), bold_for(_doc_text)
+
     styles = getSampleStyleSheet()
     h1 = ParagraphStyle("h1", parent=styles["Title"], fontSize=16,
-                        spaceAfter=2)
+                        spaceAfter=2, fontName=FB)
     sub = ParagraphStyle("sub", parent=styles["Normal"], fontSize=9,
-                         textColor=colors.grey)
+                         textColor=colors.grey, fontName=F)
     sec = ParagraphStyle("sec", parent=styles["Heading2"], fontSize=11,
-                         spaceBefore=10, spaceAfter=4)
+                         spaceBefore=10, spaceAfter=4, fontName=FB)
     body = ParagraphStyle("body", parent=styles["Normal"], fontSize=9.5,
-                          leading=13)
+                          leading=13, fontName=F)
 
     sev = str(inc.get("severity", "")).upper()
     sev_color = colors.HexColor(
@@ -163,11 +181,12 @@ def generate_pdf(iid: str, out_path: str) -> bool:
     ]
     t = Table(rows, colWidths=[26 * mm, 68 * mm, 26 * mm, 58 * mm])
     t.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), F),
         ("FONTSIZE", (0, 0), (-1, -1), 9),
         ("TEXTCOLOR", (0, 0), (0, -1), colors.grey),
         ("TEXTCOLOR", (2, 0), (2, -1), colors.grey),
         ("TEXTCOLOR", (3, 0), (3, 0), sev_color),
-        ("FONTNAME", (3, 0), (3, 0), "Helvetica-Bold"),
+        ("FONTNAME", (3, 0), (3, 0), FB),
         ("LINEBELOW", (0, 0), (-1, -2), 0.3, colors.HexColor("#e2e8f0")),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
         ("TOPPADDING", (0, 0), (-1, -1), 4),
@@ -202,8 +221,9 @@ def generate_pdf(iid: str, out_path: str) -> bool:
                       else "")])
     tt = Table(tl, colWidths=[48 * mm, 36 * mm, 94 * mm])
     tt.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), F),
         ("FONTSIZE", (0, 0), (-1, -1), 8.5),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (0, 0), (-1, 0), FB),
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
         ("LINEBELOW", (0, 0), (-1, -1), 0.3, colors.HexColor("#e2e8f0")),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -223,8 +243,9 @@ def generate_pdf(iid: str, out_path: str) -> bool:
         et = Table(ev_rows, colWidths=[22 * mm, 34 * mm, 22 * mm,
                                        30 * mm, 70 * mm])
         et.setStyle(TableStyle([
-            ("FONTSIZE", (0, 0), (-1, -1), 8.5),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTNAME", (0, 0), (-1, -1), F),
+        ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+            ("FONTNAME", (0, 0), (-1, 0), FB),
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
             ("LINEBELOW", (0, 0), (-1, -1), 0.3,
              colors.HexColor("#e2e8f0")),
