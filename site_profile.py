@@ -73,6 +73,78 @@ _LEGACY_DEFAULT_ON = [
     "whatsapp_alerts",
 ]
 
+# ---------------------------------------------------------------------------
+# Pricing tiers
+# ---------------------------------------------------------------------------
+# Watch / Guard / Command are the three things a client can buy, and they are
+# steps of the same loop rather than three arbitrary bundles:
+#
+#   Watch    detect  — the site is read and you are told what happened
+#   Guard    verify  — a guard can close the loop on what was detected
+#   Command  prove   — the closed loop leaves evidence someone else accepts
+#
+# Each tier CONTAINS the one below, so upgrading never removes anything.
+#
+# The resident app sits in every tier deliberately. Residents are who make a
+# society renew, and a Watch site with no resident app is a camera the
+# committee never sees the value of.
+#
+# A site_config.json may still list "features" explicitly; that wins, so a
+# one-off arrangement with a client needs no code change. Tier is the
+# default, not a cage.
+
+TIER_WATCH = "watch"
+TIER_GUARD = "guard"
+TIER_COMMAND = "command"
+
+_TIER_ADDS = {
+    # detect, plus the resident-facing app
+    TIER_WATCH: [
+        "anpr",
+        "whatsapp_alerts",
+        "morning_brief",
+        "resident_directory",
+        "visitor_management",
+        "flat_visitor_notifications",
+        "bulk_resident_import",
+    ],
+    # verify: a guard can act on a detection and the action is recorded
+    TIER_GUARD: [
+        "guard_decision_flow",
+        "dvr_recording",
+        "pdf_reports",
+        "contractor_passes",
+        "security_score",
+    ],
+    # prove: the record stands up afterwards, to a committee or an auditor
+    TIER_COMMAND: [
+        "face_watchlist",
+        "smart_replay",
+        "intelligence_hub",
+        "floor_heatmap",
+        "voice_assistant",
+        "weekly_audit",
+    ],
+}
+
+_TIER_ORDER = [TIER_WATCH, TIER_GUARD, TIER_COMMAND]
+
+
+def features_for_tier(tier: str) -> dict:
+    """Every feature name -> True/False for one tier, cumulative."""
+    tier = (tier or "").strip().lower()
+    if tier not in _TIER_ORDER:
+        tier = TIER_COMMAND        # unknown tier: assume the full product
+    on = set()
+    for t in _TIER_ORDER:
+        on.update(_TIER_ADDS[t])
+        if t == tier:
+            break
+    every = {n for names in _TIER_ADDS.values() for n in names}
+    every.update(_LEGACY_DEFAULT_ON)
+    return {name: (name in on) for name in sorted(every)}
+
+
 _lock = threading.Lock()
 _cache = None  # loaded config lives here after first read
 
@@ -96,8 +168,17 @@ def load_config(force_reload=False):
         try:
             with open(CONFIG_PATH, "r", encoding="utf-8") as fh:
                 data = json.load(fh)
+            # A tier is the normal way to configure a site; an explicit
+            # "features" object overrides it for one-off arrangements.
+            tier = str(data.get("tier", "")).strip().lower()
             if not isinstance(data.get("features"), dict):
-                raise ValueError("'features' must be an object of true/false")
+                if tier:
+                    data["features"] = features_for_tier(tier)
+                else:
+                    raise ValueError(
+                        "site_config.json needs either 'tier' "
+                        "(watch|guard|command) or a 'features' object")
+            data.setdefault("tier", tier or "custom")
             data.setdefault("site_name", "Unnamed Site")
             data.setdefault("site_type", "residential")
             data["_source"] = CONFIG_PATH
@@ -120,6 +201,11 @@ def is_enabled(feature_name: str) -> bool:
 
 def site_type() -> str:
     return load_config().get("site_type", "residential")
+
+
+def tier() -> str:
+    """watch | guard | command | custom — what this site has bought."""
+    return load_config().get("tier", "custom")
 
 
 def site_name() -> str:
