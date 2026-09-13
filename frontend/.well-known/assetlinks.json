@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "in.defenderocta.resident",
+      "sha256_cert_fingerprints": [
+        "2F:04:9A:80:09:97:31:E1:25:C9:96:EA:4F:D7:79:D1:08:B5:2F:C1:67:20:17:47:EC:C7:34:D9:1E:13:1C:33"
+      ]
+    }
+  }
+]
