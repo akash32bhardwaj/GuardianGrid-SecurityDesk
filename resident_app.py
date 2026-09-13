@@ -2220,10 +2220,21 @@ def resident_sw():
 
 # ── Play Store (TWA) trust file ──────────────────────────────────
 # Android checks https://<site>/.well-known/assetlinks.json to open the
-# wrapped app full-screen without browser chrome. Put the SHA-256 of the
-# Play signing key in data/assetlinks_fingerprint.txt (one line) or the
-# OCTA_TWA_FINGERPRINT env var; until then this serves an empty list,
-# which is harmless.
+# wrapped app full-screen without browser chrome.
+#
+# Three sources, most specific first:
+#   1. OCTA_TWA_FINGERPRINT in the site's env file
+#   2. assetlinks_fingerprint.txt in the site's data dir
+#   3. frontend/.well-known/assetlinks.json, shipped with the build
+#
+# (3) is the one that matters for onboarding. The fingerprint identifies
+# the APP, not the site — it is the same for every client — so without a
+# packaged copy every new site served an empty list, and the failure is
+# silent: the app still opens, just in a browser with a URL bar, and only
+# on a real phone. An earlier comment here called that "harmless". It is
+# not: it is the difference between an app and a bookmark, and the only
+# copy of the fingerprint once lived in a single client's data folder
+# that was nearly deleted with them.
 
 @resident_app_bp.route("/.well-known/assetlinks.json")
 def assetlinks():
@@ -2234,6 +2245,20 @@ def assetlinks():
                 fp = f.read().strip()
         except OSError:
             fp = ""
+    if not fp:
+        # Serve the packaged statement list as-is: it is already a
+        # complete, valid document, and reusing it avoids rebuilding the
+        # same JSON from parts and getting a field name wrong.
+        try:
+            here = os.path.dirname(os.path.abspath(__file__))
+            with open(os.path.join(here, "frontend",
+                                   ".well-known", "assetlinks.json")) as f:
+                packaged = json.load(f)
+            if packaged:
+                return Response(json.dumps(packaged),
+                                mimetype="application/json")
+        except (OSError, ValueError):
+            pass          # fall through to the empty list below
     body = []
     if fp:
         body = [{
