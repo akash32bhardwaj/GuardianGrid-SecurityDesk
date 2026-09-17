@@ -777,14 +777,83 @@ def vehicle_image(filename):
 
 @app.route("/video_feed")
 def video_feed():
+    """MJPEG camera stream.
+
+    OCT-68. This endpoint held a worker thread forever and was the single
+    largest cause of the site going unresponsive. Two things were wrong,
+    and only the second is obvious in hindsight.
+
+    1. On a site with no camera, `latest_frame` is empty, so the loop below
+       yielded NOTHING and slept, forever. A request that never finishes
+       holds one of waitress's worker threads for as long as the socket
+       stays open. No server-side timeout can reclaim it: waitress reaps
+       channels that are idle BETWEEN requests and never interrupts a
+       request still being serviced. Measured on 17 Sep with
+       channel_timeout=90: an idle feed was still open at 200 seconds.
+
+    2. A stream that never writes cannot discover that its client has gone
+       away. A dropped connection surfaces as a broken pipe ON A WRITE, and
+       there were no writes. So every abandoned tab leaked a thread until
+       the process restarted. Twelve of those and the site stopped
+       answering anything at all.
+
+    The fix is therefore in the generator, not in the server config:
+    refuse outright when there is no camera, and otherwise keep writing —
+    re-sending the last frame when there is nothing new — so that a
+    departed client is detected within a couple of seconds.
+    """
+    with lock:
+        running = camera_running
+
+    # No camera on this site: say so immediately instead of opening a
+    # stream that can never produce a frame. This is the whole of the
+    # demo-site case, and it is the one that actually bit us.
+    if not running:
+        return Response(
+            json.dumps({"success": False,
+                        "message": "No camera is configured on this site."}),
+            status=503, mimetype="application/json")
+
+    BOUNDARY = b"--frame\r\nContent-Type: image/jpeg\r\n\r\n"
+    KEEPALIVE_AFTER = 2.0      # seconds without a new frame before we re-send
+    STARTUP_GRACE  = 15.0      # camera is flagged running but hasn't produced
+
     def generate():
+        started    = time.monotonic()
+        last_sent  = b""
+        last_write = started
+
         while True:
             with lock:
-                frame = latest_frame
-            if frame:
-                yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n"
-                       + frame + b"\r\n")
+                frame   = latest_frame
+                running = camera_running
+
+            # Camera stopped under us — end the response rather than hold
+            # the thread waiting for frames that are not coming.
+            if not running:
+                return
+
+            now = time.monotonic()
+
+            if frame and frame is not last_sent:
+                yield BOUNDARY + frame + b"\r\n"
+                last_sent  = frame
+                last_write = now
+
+            elif now - last_write >= KEEPALIVE_AFTER:
+                if last_sent:
+                    # Nothing new to show. Re-send the last frame anyway:
+                    # the write is the point, not the picture. If the
+                    # client has gone, this raises and the generator ends.
+                    yield BOUNDARY + last_sent + b"\r\n"
+                    last_write = now
+                elif now - started >= STARTUP_GRACE:
+                    # Flagged running but never produced a frame in fifteen
+                    # seconds. Give the thread back; the client can retry.
+                    return
+
             time.sleep(0.03)
+
     return Response(generate(),
                     mimetype="multipart/x-mixed-replace; boundary=frame")
 
