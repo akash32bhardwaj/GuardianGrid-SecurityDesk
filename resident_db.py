@@ -16,6 +16,8 @@ Excel format expected:
 import json
 import csv
 import logging
+import os
+import shutil
 from pathlib import Path
 from datetime import datetime
 from dataclasses import dataclass, field, asdict
@@ -31,8 +33,49 @@ except ImportError:
     EXCEL_AVAILABLE = False
 
 # ── Data paths ───────────────────────────────────────────────────
-DB_FILE      = Path("data/residents.json")
+# OCT-76. This was `Path("data/residents.json")` — a RELATIVE path, and
+# that was a data-loss bug waiting for the first paying client.
+#
+# The app runs with its working directory at /app, so the registry was
+# written to /app/data/residents.json: inside the container image, not on
+# the /data volume. Images are replaced on every deploy. A society would
+# import its entire vehicle list, and the next time you shipped anything
+# the file would be gone — every plate silently back to UNKNOWN, with no
+# error and nothing to restore from.
+#
+# The same relative path also resolved somewhere else whenever a script
+# ran from another directory: the nightly reseed uses `-w /data`, which is
+# why an empty /data/data/ appeared on 17 Sep. Two candidate registries,
+# neither authoritative.
+#
+# It now resolves once, absolutely, onto the mounted volume, and can be
+# pointed elsewhere for a site that stores data somewhere unusual.
+DB_FILE = Path(os.environ.get("GG_RESIDENT_DB") or "/data/residents.json")
 DB_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+# Anything written under the old relative path still belongs to a client.
+# Move it across once, before a deploy takes the image layer with it.
+_LEGACY_PATHS = (
+    Path("data/residents.json"),          # relative to whatever cwd was
+    Path("/app/data/residents.json"),     # where the app actually wrote it
+    Path("/data/data/residents.json"),    # where a script with -w /data would
+)
+
+def _migrate_legacy_registry():
+    if DB_FILE.exists():
+        return
+    for old_path in _LEGACY_PATHS:
+        try:
+            if old_path.resolve() == DB_FILE.resolve():
+                continue
+            if old_path.exists() and old_path.stat().st_size > 2:
+                shutil.copy2(old_path, DB_FILE)
+                print(f"[RESIDENT-DB] migrated registry {old_path} -> {DB_FILE}")
+                return
+        except OSError as exc:
+            print(f"[RESIDENT-DB] could not migrate {old_path}: {exc}")
+
+_migrate_legacy_registry()
 
 
 # ── Resident dataclass ───────────────────────────────────────────
@@ -91,17 +134,51 @@ class ResidentDatabase:
             )
 
     # ── Core operations ───────────────────────────────────────
+    @staticmethod
+    def _normalise(plate: str) -> str:
+        return "".join(ch for ch in (plate or "").upper() if ch.isalnum())
+
     def lookup(self, plate: str) -> Optional[Resident]:
-        """Look up a plate number. Returns Resident or None."""
-        clean = plate.upper().replace(" ", "")
-        # Exact match
-        if clean in self._db:
-            return self._db[clean]
-        # Partial match
-        for stored_plate, resident in self._db.items():
+        """Look up a plate number. Returns Resident or None.
+
+        OCT-78. This used to fall back to a two-way substring test:
+
             if clean in stored_plate or stored_plate in clean:
                 return resident
-        return None
+
+        which identifies the wrong person in both directions. A stored
+        plate contained anywhere in the queried one matched, so a stranger
+        at the gate could come back carrying a resident's name and flat
+        number — and a guard reading a name does not see a guess. It also
+        handed one resident's details to whoever happened to be standing
+        at the barrier, which is a DPDP problem as much as a security one.
+
+        Identification is exact. For as-you-type behaviour, or for an OCR
+        misread, use suggest() or fuzzy_lookup() and present the result as
+        something the guard must confirm, never as a match.
+        """
+        clean = self._normalise(plate)
+        return self._db.get(clean)
+
+    def suggest(self, fragment: str, limit: int = 5) -> list:
+        """Plates containing `fragment`, for search and type-ahead.
+
+        Deliberately separate from lookup(): these are candidates for a
+        human to choose between, not an identification. Returns dicts so a
+        caller cannot mistake one for a confirmed Resident.
+        """
+        clean = self._normalise(fragment)
+        if len(clean) < 3:
+            return []
+        out = []
+        for stored_plate, resident in self._db.items():
+            if clean in stored_plate:
+                d = resident.to_dict()
+                d["match"] = "suggestion"
+                out.append(d)
+                if len(out) >= limit:
+                    break
+        return out
 
     def fuzzy_lookup(self, plate: str, max_distance: int = 1) -> Optional[Resident]:
         """
@@ -261,7 +338,10 @@ class ResidentDatabase:
         }
 
     # ── Excel export ──────────────────────────────────────────
-    def export_to_excel(self, filepath: str = "data/residents_export.xlsx"):
+    def export_to_excel(self, filepath: str = None):
+        # Defaulted to a relative "data/..." path, which lands wherever the
+        # caller happened to be started from — the same fault as OCT-76.
+        filepath = filepath or str(DB_FILE.parent / "residents_export.xlsx")
         if not EXCEL_AVAILABLE:
             return {"error": "openpyxl not installed"}
 
@@ -336,8 +416,20 @@ db = ResidentDatabase()
 
 
 # ── Standalone test ───────────────────────────────────────────────
+#
+# This used to call db.add() on the module-level singleton, which writes
+# straight through to the real registry. Running `python resident_db.py`
+# on a server — to check the module imports, say — silently inserted
+# three fabricated residents into a client's vehicle list, one of them
+# BLACKLISTED with "Unpaid dues" against their name. A self-test must not
+# be able to touch live data, so it gets its own file.
 if __name__ == "__main__":
+    import tempfile
+
     print("Testing Resident Database...")
+    DB_FILE = Path(tempfile.mkdtemp(prefix="resident_db_test_")) / "residents.json"
+    print(f"(self-test writes to {DB_FILE}, never the live registry)")
+    db = ResidentDatabase()
 
     # Add sample residents
     db.add(Resident(

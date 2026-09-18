@@ -4,6 +4,7 @@
 # Runs every seed family in the right order inside the demo container:
 #   purge everything seeded  ->  28 days of gate traffic (anomaly baseline)
 #   ->  14 days of incidents ->  14 days of briefs  ->  "last night" hits
+#   ->  the guard-side tables the Security Gate screen reads
 #
 # Usage on the droplet — run the GIT-MANAGED copy, so deploy.sh keeps it
 # current. A second, hand-edited copy under /opt/octa-ops drifted from this
@@ -44,6 +45,20 @@ run seed_demo.py --days "$VEHICLE_DAYS"
 run seed_incidents.py --days "$INCIDENT_DAYS"
 run seed_briefs.py --days "$BRIEF_DAYS"
 run seed_test_events.py
+
+# Guard-side tables: arrivals, passes, household requests, members, notices.
+# Until this existed, every one of them held zero rows while the dashboard
+# carried ~1,800 events, so the Security Gate screen — the guard decision
+# loop, the part that is not just another camera feed — was blank on the
+# site every prospect is sent to.
+#
+# seed_gate.py clears its own rows before seeding, so it needs no entry in
+# the purge block above. It is deliberately NOT fatal: `set -e` would abort
+# the script here, after the reseed and BEFORE the restart below, leaving
+# the app holding SQLite handles onto rewritten pages — the "database disk
+# image is malformed" failure the restart exists to prevent. A missing gate
+# seed costs a dull demo; skipping the restart costs the database.
+run seed_gate.py || echo "[WARN] gate seed failed — gate screen will be empty"
 
 # The app holds open SQLite connections. Seeding from outside the process
 # leaves those handles pointing at pages that have been rewritten underneath

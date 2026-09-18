@@ -207,15 +207,42 @@ def _subject_context(inc: dict):
     except sqlite3.Error:
         pass
     if not ctx["resident_name"]:
+        # OCT-77. This block used to read:
+        #
+        #     from resident_db import lookup_plate
+        #     lr = lookup_plate(plate)
+        #     if isinstance(lr, dict) and lr.get("found"):
+        #
+        # and it was wrong twice over. There is no `lookup_plate` in
+        # resident_db at all — the module exposes a ResidentDatabase class
+        # and a singleton `db` — so the import raised ImportError on every
+        # single call. And `db.lookup()` returns a Resident dataclass or
+        # None, never a dict with a "found" key; that shape belongs to the
+        # /api/lookup_plate HTTP response, which is presumably what this was
+        # written against.
+        #
+        # The bare `except Exception: pass` then swallowed the ImportError,
+        # so the Command Canvas — the full-screen takeover a guard gets for
+        # HIGH and CRITICAL incidents — has never once shown whose vehicle
+        # it was. No error, no log line, just a quietly emptier screen.
+        #
+        # The except now guards the LOOKUP, not the import, and a skipped
+        # enrichment says so, because the next one of these should be
+        # visible rather than silent.
         try:
-            from resident_db import lookup_plate
-            lr = lookup_plate(plate)
-            if isinstance(lr, dict) and lr.get("found"):
-                ctx["resident_name"] = lr.get("resident_name")
-                ctx["flat_number"] = lr.get("flat_number")
-                ctx["status"] = lr.get("status")
-        except Exception:
-            pass
+            from resident_db import db as _resident_db
+        except ImportError as exc:
+            print(f"[CANVAS] resident registry unavailable: {exc}")
+        else:
+            try:
+                match = _resident_db.lookup(plate)
+            except Exception as exc:
+                print(f"[CANVAS] resident lookup failed for {plate}: {exc}")
+                match = None
+            if match is not None:
+                ctx["resident_name"] = match.resident_name
+                ctx["flat_number"] = match.flat_number
+                ctx["status"] = match.status
     return ctx
 
 

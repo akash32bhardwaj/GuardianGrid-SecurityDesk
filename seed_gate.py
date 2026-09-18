@@ -122,6 +122,10 @@ def clear(con):
         ("household_members",  f"DELETE FROM household_members WHERE flat_no IN ({marks})", flats),
         ("flats",              f"DELETE FROM flats WHERE flat_no IN ({marks})", flats),
     ]
+    plates = [r[0] for r in REGISTERED]
+    pmarks = ",".join("?" * len(plates))
+    plans += [("vehicle_events",
+               f"DELETE FROM vehicle_events WHERE plate IN ({pmarks})", plates)]
     for name, sql, args in plans:
         if not table_exists(con, name):
             continue
@@ -270,6 +274,97 @@ def seed_notices(con):
     print(f"  resident_notices: {len(rows)} added")
 
 
+# ── Registered vehicles ──────────────────────────────────────────────
+# The gate's KNOWN / UNKNOWN / BLACKLISTED word does not come from SQLite
+# at all — resident_db.py keeps it in a JSON registry (OCT-76). Without
+# that file every plate a guard checks answers UNKNOWN, including a
+# resident's own car, so the screen cannot demonstrate the one decision it
+# exists to support.
+#
+# Plates here are deliberately realistic Punjab registrations rather than
+# DEMO####, because these are meant to read as residents' own cars. They
+# also get their own events in vehicle_events, so a guard can look one up,
+# see KNOWN with a name and flat, and find the same car in the log.
+
+REGISTERED = [
+    # plate,        owner,              flat,    block, model,               colour,   status
+    ("PB10AB2025", "Rajinder Singh",   "A-101", "A", "Maruti Swift",       "Silver", "KNOWN"),
+    ("PB65QK3344", "Simran Kaur",      "A-204", "A", "Hyundai i20",        "White",  "KNOWN"),
+    ("PB08MN5566", "Harpreet Gill",    "B-302", "B", "Honda City",         "Grey",   "KNOWN"),
+    ("PB10DR4417", "Manjit Sandhu",    "B-405", "B", "Mahindra XUV700",    "Black",  "KNOWN"),
+    ("PB11XY7788", "Neha Sharma",      "C-108", "C", "Tata Nexon",         "Blue",   "KNOWN"),
+    ("PB65AK2210", "Gurpreet Bajwa",   "C-210", "C", "Maruti Baleno",      "Red",    "KNOWN"),
+    ("PB08QQ1122", "Amandeep Dhillon", "D-112", "D", "Hyundai Creta",      "White",  "KNOWN"),
+    ("PB13LK9090", "Kiran Malhotra",   "D-306", "D", "Honda Activa",       "Grey",   "KNOWN"),
+    ("HR26TT0099", "Vikram Chadha",    "B-302", "B", "Toyota Innova",      "Silver", "VISITOR"),
+    ("PB07ZZ6611", "Former tenant",    "C-108", "C", "Maruti Alto",        "White",  "BLACKLISTED"),
+]
+
+
+def seed_registry():
+    """Write the registry through resident_db when it can be imported, so
+    the schema and the file location come from the module that owns them
+    rather than from assumptions made here. Fall back to writing the JSON
+    directly only if that import fails."""
+    records = {}
+    for plate, owner, flat, block, model, colour, status in REGISTERED:
+        records[plate] = dict(
+            plate_number=plate, resident_name=owner, flat_number=flat,
+            block=block, phone="", vehicle_type=(
+                "Motorcycle" if "Activa" in model else "Car"),
+            vehicle_model=model, vehicle_color=colour, status=status,
+            notes=("Vehicle barred by the committee"
+                   if status == "BLACKLISTED" else ""),
+            added_on=NOW.strftime("%Y-%m-%d"))
+
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import resident_db as rdb
+    except Exception as exc:
+        target = os.environ.get("GG_RESIDENT_DB") or "/data/residents.json"
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        import json
+        with open(target, "w", encoding="utf-8") as fh:
+            json.dump(records, fh, indent=2, ensure_ascii=False)
+        print(f"  registry: {len(records)} vehicles written directly to "
+              f"{target} (resident_db import failed: {exc})")
+        return
+
+    for rec in records.values():
+        rdb.db.add(rdb.Resident(**rec))
+    print(f"  registry: {len(records)} vehicles via resident_db -> {rdb.DB_FILE}")
+
+
+def seed_registry_events(con):
+    """A few sightings per registered car, so a plate the guard looks up
+    also appears in the vehicle log. Timestamps use the ISO 'T' separator
+    that seed_demo.py writes, to match the bulk of the table rather than
+    add a third format (OCT-64)."""
+    rows = []
+    for plate, _o, _f, _b, model, _c, status in REGISTERED:
+        vtype = "Motorcycle" if "Activa" in model else "Car"
+        access = "BLACKLISTED" if status == "BLACKLISTED" else (
+            "VISITOR" if status == "VISITOR" else "KNOWN")
+        for day in range(3):
+            for hour in random.sample(range(7, 22), random.randint(1, 2)):
+                when = (NOW - timedelta(days=day)).replace(
+                    hour=hour, minute=random.randint(0, 59),
+                    second=random.randint(0, 59), microsecond=0)
+                if when > NOW:
+                    continue
+                rows.append((plate, vtype, "", "ENTRY",
+                             round(random.uniform(91.0, 99.0), 1), "",
+                             when.isoformat(), access, "Main Gate"))
+                out = when + timedelta(minutes=random.randint(25, 300))
+                if out < NOW:
+                    rows.append((plate, vtype, "", "EXIT", 100.0, "",
+                                 out.isoformat(), access, "Main Gate"))
+    con.executemany(
+        "INSERT INTO vehicle_events (plate, vtype, state, event, confidence, "
+        "image, timestamp, access, camera) VALUES (?,?,?,?,?,?,?,?,?)", rows)
+    print(f"  vehicle_events: {len(rows)} sightings for registered cars")
+
+
 def main():
     ap = argparse.ArgumentParser(description="Seed the guard-side demo tables")
     ap.add_argument("--db", default=None, help="path to guardiangrid.db")
@@ -295,6 +390,8 @@ def main():
     seed_passes(con)
     seed_arrivals(con)
     seed_notices(con)
+    seed_registry()
+    seed_registry_events(con)
     con.commit()
     con.close()
 
