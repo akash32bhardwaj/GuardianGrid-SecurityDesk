@@ -698,31 +698,86 @@ def notifications_route():
 
 @app.route("/vehicle_log")
 def vehicle_log_route():
+    """The vehicle event log.
 
+    OCT-57, OCT-58 and OCT-64 were all in this one function.
+
+    It used to be `ORDER BY timestamp DESC LIMIT 200` with no parameters
+    at all, and that broke three things at once:
+
+      OCT-57  200 rows, full stop. A site with 1,800 events could reach
+              200 of them; the rest were unreachable from the interface.
+              The panel header also reads "Vehicle log - N events" from
+              the length of the response, so it said "200 events" on
+              every site forever regardless of the real history.
+
+      OCT-58  `?plate=` was ignored, so the plate box in the interface
+              filtered client-side over whichever 200 rows happened to
+              be loaded. A guard searching a plate seen last week was
+              told nothing was found, rather than "not in the last 200".
+
+      OCT-64  `timestamp` holds two formats - 2026-09-14T00:09:09 and
+              2026-09-14 12:10:00 - and ORDER BY compared them as TEXT.
+              "T" is 0x54 and a space is 0x20, so 00:09 sorted above
+              12:10 on the same day. The "most recent 200" were not the
+              most recent 200, and the rows that fell off the end were
+              not the oldest ones.
+
+    Now: limit and offset, a plate filter in SQL, and an ordering that
+    parses both formats. `datetime()` returns NULL for anything it
+    cannot read, and SQLite sorts NULL below everything, so a malformed
+    row sinks to the bottom instead of floating to the top. `id DESC`
+    breaks ties so paging cannot show the same row twice.
+
+    THE RESPONSE IS STILL A BARE ARRAY. api.js does
+    `const log = await get("/vehicle_log"); return log.map(...)`, so
+    wrapping it in an object would white-screen the vehicles page. The
+    total goes in X-Total-Count instead, and the frontend can start
+    reading it whenever it likes without a breaking change.
+    """
     import sqlite3
 
     DB_PATH = "/data/guardiangrid.db"
+    DEFAULT_LIMIT = 200
+    MAX_LIMIT = 1000          # a client asking for everything still cannot
+
+    def _int_arg(name, default, lo, hi):
+        raw = request.args.get(name)
+        if raw is None or str(raw).strip() == "":
+            return default
+        try:
+            value = int(str(raw).strip())
+        except (TypeError, ValueError):
+            return default
+        return max(lo, min(hi, value))
+
+    limit = _int_arg("limit", DEFAULT_LIMIT, 1, MAX_LIMIT)
+    offset = _int_arg("offset", 0, 0, 10_000_000)
+
+    # Normalise the query the same way the stored plates vary: strip
+    # everything that is not a letter or a digit, both sides.
+    plate_q = re.sub(r"[^A-Z0-9]", "", (request.args.get("plate") or "").upper())
+
+    where, args = "", []
+    if plate_q:
+        where = (" WHERE REPLACE(REPLACE(REPLACE(UPPER(plate),' ',''),'-',''),'.','')"
+                 " LIKE ?")
+        args.append(f"%{plate_q}%")
+
+    order = " ORDER BY datetime(REPLACE(timestamp,'T',' ')) DESC, id DESC"
 
     try:
         con = sqlite3.connect(DB_PATH)
         con.row_factory = sqlite3.Row
 
-        rows = con.execute("""
-            SELECT
-                id,
-                plate,
-                vtype,
-                state,
-                event,
-                confidence,
-                image,
-                access,
-                camera,
-                timestamp
-            FROM vehicle_events
-            ORDER BY timestamp DESC
-            LIMIT 200
-        """).fetchall()
+        total = con.execute(
+            "SELECT COUNT(*) FROM vehicle_events" + where, args).fetchone()[0]
+
+        rows = con.execute(
+            "SELECT id, plate, vtype, state, event, confidence, image,"
+            " access, camera, timestamp FROM vehicle_events"
+            + where + order + " LIMIT ? OFFSET ?",
+            args + [limit, offset]).fetchall()
 
         con.close()
 
@@ -746,7 +801,13 @@ def vehicle_log_route():
                 "time": ts
             })
 
-        return jsonify(out)
+        resp = jsonify(out)
+        resp.headers["X-Total-Count"] = str(total)
+        resp.headers["X-Limit"] = str(limit)
+        resp.headers["X-Offset"] = str(offset)
+        resp.headers["Access-Control-Expose-Headers"] = \
+            "X-Total-Count, X-Limit, X-Offset"
+        return resp
 
     except Exception as e:
 
