@@ -106,8 +106,12 @@ def _resolve_incident(iid: str, note: str) -> bool:
         return False
     try:
         add_note(iid, operator="Guardian/canvas", message=note)
-    except Exception:
-        pass
+    except Exception as exc:
+        # OCT-83. The resolve itself succeeded, so returning True is right
+        # — but the audit note is the evidence trail, and losing it in
+        # silence is how a case file ends up with a disposition and no
+        # record of who set it or why.
+        logger.error(f"[CANVAS] resolve note not recorded for {iid}: {exc}")
     return True
 
 
@@ -123,7 +127,13 @@ def _ack_state(iid: str):
             "seconds_left": max(0, int(t["ack_deadline"] - time.time())),
             "escalated": bool(t.get("escalated")),
         }
-    except Exception:
+    except ImportError:
+        return None          # watchdog not deployed on this site: expected
+    except Exception as exc:
+        # OCT-83: an unexpected failure here hid the acknowledge countdown
+        # — the thing that tells a guard how long they have left — behind
+        # the same blank the "not tracked" case produces.
+        logger.error(f"[CANVAS] ack state unavailable for {iid}: {exc}")
         return None
 
 

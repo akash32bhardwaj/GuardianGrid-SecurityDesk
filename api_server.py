@@ -20,6 +20,7 @@ import subprocess
 import time
 import re
 import threading
+import traceback
 import argparse
 from pathlib import Path
 from site_config import CONFIG
@@ -91,9 +92,51 @@ VOTE_MIN_SAMPLES    = CONFIG.vote_min_samples
 # copy the "dist" folder into indian_anpr and rename it "frontend"
 FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
 
-# Absolute folder this file lives in — used by DB-reading routes so they
-# work regardless of the current working directory.
+# Absolute folder this file lives in. NOTE: this is the CODE directory
+# (/app in the container), not the data directory. It is passed to the
+# init_*() helpers, which build their own paths from it.
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _resolve_db_path() -> str:
+    """The one place that answers "where is guardiangrid.db".
+
+    OCT-81. Three routes in this file each opened the database their own
+    way, and they did not agree:
+
+        /vehicle_log     sqlite3.connect("/data/guardiangrid.db")
+        /api/day/<date>  sqlite3.connect("guardiangrid.db")
+        /api/forecast    sqlite3.connect(BASE_DIR + "/guardiangrid.db")
+
+    Only the first is right. The second works by accident: the process is
+    launched with its working directory at /data, so the relative name
+    resolves there — run the same code from anywhere else and it points
+    somewhere else. The third is simply wrong: BASE_DIR is /app, the code
+    directory, and no database has ever lived there.
+
+    Nothing errored, because sqlite3.connect CREATES a missing file. So
+    /api/forecast opened an empty database it had just made, found zero
+    events, and returned a seven-day threat forecast built from nothing.
+    An empty forecast looks like a quiet week, which is the most dangerous
+    thing a security product can say when it actually means "not reading
+    the data".
+
+    Order below: the explicit override, then the container mount, then
+    beside the code for a laptop checkout.
+    """
+    override = os.environ.get("GG_DB_PATH")
+    if override:
+        return override
+    docker_db = "/data/guardiangrid.db"
+    if os.path.exists(docker_db):
+        return docker_db
+    return os.path.join(BASE_DIR, "guardiangrid.db")
+
+
+DB_PATH = _resolve_db_path()
+print(f"[DB] guardiangrid.db -> {DB_PATH} "
+      f"({'exists' if os.path.exists(DB_PATH) else 'MISSING — will be created empty'})",
+      flush=True)
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -195,10 +238,16 @@ from canvas_routes import canvas_bp, init_canvas
 init_canvas(base_dir=BASE_DIR)
 app.register_blueprint(canvas_bp)
 
-print("\nREGISTERED ROUTES:")
-for rule in app.url_map.iter_rules():
-    print(rule)
-print()
+# OCT-71. This printout used to happen HERE, a third of the way through
+# startup. Registration continues well past this point — register_panic,
+# the recon watch, the escalation blueprint and the catch-all all come
+# later — so the list was confidently incomplete: 94 routes printed
+# against 142 in the source. An audit built on it concluded /api/panic
+# was unregistered. It answers 401, so it had been there the whole time.
+#
+# A diagnostic that is wrong in a direction you cannot detect is worse
+# than no diagnostic. It now runs from bootstrap(), after everything is
+# registered. See _print_routes() further down.
 
 # ── Authentication API ─────────────────────────────────────
 # The real login is /api/auth/login (backend/auth/auth_routes.py): bcrypt
@@ -355,6 +404,70 @@ latest_frame: bytes = b""
 camera_running = False
 
 
+# ── Vocabulary ───────────────────────────────────────────────────
+# OCT-61. Two concepts in this file were each spelled several ways, and
+# the sets that decide what those spellings MEAN were typed out by hand
+# in more than one place. They did not agree.
+#
+#   /api/report  counted KNOWN, VISITOR and RESIDENT as verified traffic
+#   the gate      auto-admitted KNOWN and VISITOR only
+#
+# So a resident whose registry row says RESIDENT rather than KNOWN was
+# counted as verified in the PDF a client reads, and held at the gate for
+# a manual guard decision at the same time. Same car, same database, two
+# answers, and neither line of code was wrong on its own.
+#
+# One vocabulary now, defined here and imported by everything that has an
+# opinion about it.
+
+# RESIDENT is the older spelling of KNOWN and has always meant the same
+# thing. Folding it in is a correction, not a policy change.
+ACCESS_ALIASES = {
+    "RESIDENT": "KNOWN",
+    "OWNER":    "KNOWN",
+    "GUEST":    "VISITOR",
+    "":         "UNKNOWN",
+}
+
+def canon_access(value) -> str:
+    """Canonical access status. Unknown input becomes UNKNOWN, never KNOWN."""
+    key = str(value or "").strip().upper()
+    key = ACCESS_ALIASES.get(key, key)
+    return key or "UNKNOWN"
+
+# Counted as "verified traffic" in reports and on the dashboard donut.
+# APPROVED belongs here: somebody authorised that vehicle.
+VERIFIED_ACCESS = frozenset({"KNOWN", "VISITOR", "APPROVED"})
+
+# Allowed through WITHOUT a guard tap. Deliberately narrower than
+# VERIFIED_ACCESS, and deliberately not widened here.
+#
+# APPROVED is left OUT. It is a real authorisation, so it counts as
+# verified in a report — but whether a pre-approved visitor should lift
+# the barrier with no human in the loop is a policy call for the society,
+# not something to change quietly inside a refactor. If a site wants it,
+# add "APPROVED" to this set and nothing else needs to move.
+AUTO_ADMIT_ACCESS = frozenset({"KNOWN", "VISITOR"})
+
+# vtype arrives as Car/car, Truck/truck, Motorcycle/bike, so any grouping
+# counted the same vehicle type twice.
+VTYPE_ALIASES = {
+    "BIKE": "Motorcycle", "MOTORBIKE": "Motorcycle", "SCOOTER": "Motorcycle",
+    "MOTORCYCLE": "Motorcycle",
+    "CAR": "Car", "SEDAN": "Car", "SUV": "Car",
+    "TRUCK": "Truck", "LORRY": "Truck", "COMMERCIAL": "Truck",
+    "BUS": "Bus",
+    "AUTO": "Auto", "RICKSHAW": "Auto", "AUTORICKSHAW": "Auto",
+}
+
+def canon_vtype(value) -> str:
+    """Canonical vehicle type, Title-Case, one term per concept."""
+    key = str(value or "").strip().upper()
+    if not key:
+        return "Vehicle"
+    return VTYPE_ALIASES.get(key, key.title())
+
+
 # ── Helpers ──────────────────────────────────────────────────────
 def classify_vehicle_type(plate_label: str) -> str:
     label = plate_label.lower()
@@ -381,7 +494,11 @@ def commit_vehicle_event(plate, event_type, *, vtype="Manual", state="",
     plate = re.sub(r"[^A-Z0-9]", "", (plate or "").upper())
     now = datetime.now()
     resident_info = resident_db.lookup(plate)
-    access = resident_info.status if resident_info else "UNKNOWN"
+    # OCT-61: normalise on the way in, so the column stops accumulating
+    # new spellings. Existing rows are untouched; canon_access() on read
+    # is what covers those.
+    access = canon_access(resident_info.status if resident_info else "UNKNOWN")
+    vtype = canon_vtype(vtype)
 
     with lock:
         if event_type == "ENTRY":
@@ -495,7 +612,10 @@ def process_entry_exit(result: PlateResult, snapshot_path: str = ""):
         except Exception as e:
             print(f"[WARN] Guardian blacklist hook failed: {e}")
 
-    trusted = resident_info and resident_info.status in ("KNOWN", "VISITOR")
+    # OCT-61: was the literal tuple ("KNOWN", "VISITOR"), which held a
+    # resident stored as RESIDENT at the gate for a manual decision.
+    trusted = bool(resident_info) and \
+        canon_access(resident_info.status) in AUTO_ADMIT_ACCESS
 
     if REQUIRE_GUARD_DECISION and not trusted:
         # Park it as pending — guard will correct (if needed) and decide.
@@ -652,15 +772,133 @@ def alerts():
     data["threat_level"] = "HIGH" if conf>=90 else "MODERATE" if conf>=70 else "LOW"
     return jsonify(data)
 
+# ── OCT-63: the dashboard's two live panels ──────────────────────
+# Both of these used to answer straight out of process memory. What that
+# actually cost was different for each, and the finding originally
+# conflated them.
+#
+# vehicle_stats IS restored at startup — bootstrap() calls
+# rebuild_today_state() and updates it from the database. So it is not
+# "never loaded". The real defect is narrower: it is restored ONCE, and
+# nothing ever notices the date changing. After midnight the counters keep
+# yesterday's totals and carry on incrementing, so "entries today" silently
+# becomes "entries since the process started". Demo hides this because the
+# nightly reseed restarts the container at 03:00, leaving only a three-hour
+# window. A client site that runs for a month never resets at all.
+#
+# (An earlier version of the finding said the tiles disagreed with the
+# database, citing total:4 against 1,807 rows. That comparison was unfair:
+# 1,807 is 28 days of seeded history and vehicle_stats describes one day.
+# The midnight rollover is the real bug; the mismatch was mine.)
+#
+# activity_feed is the genuine case. It is a deque(maxlen=100) that only
+# ever grows by live events, and NOTHING rebuilds it — not bootstrap, not
+# _seed_demo_alerts(), which fills notifications only. Confirmed live: the
+# endpoint returns [] on demo. Every restart empties the Activity timeline,
+# and to a guard an empty timeline reads as "nothing happened" rather than
+# "this panel lost its memory" — OCT-15 again.
+#
+# Both now answer from the database, which is the only copy that survives a
+# restart, with the in-memory structures kept as a fallback for when the
+# database cannot be read.
+
+_STATS_CACHE_SECONDS = 10
+_stats_cache = {"at": 0.0, "day": None, "payload": None}
+
+
 @app.route("/vehicle_stats")
 def vehicle_stats_route():
-    with lock:
-        return jsonify(dict(vehicle_stats))
+    """Today's counters, recomputed from the database rather than trusted.
+
+    Cached for a few seconds so dashboard polling does not re-scan the
+    day's rows on every request.
+    """
+    today = datetime.now().strftime("%Y-%m-%d")
+    now = time.time()
+    if (_stats_cache["payload"] is not None
+            and _stats_cache["day"] == today
+            and now - _stats_cache["at"] < _STATS_CACHE_SECONDS):
+        return jsonify(_stats_cache["payload"])
+
+    try:
+        fresh, inside = rebuild_today_state()
+        with lock:
+            # Replace, not update: on a new day the old counters must go,
+            # which is the whole point of this route changing.
+            vehicle_stats.clear()
+            vehicle_stats.update(fresh)
+        payload = dict(fresh)
+        _stats_cache.update({"at": now, "day": today, "payload": payload})
+        return jsonify(payload)
+    except Exception as e:
+        print(f"[STATS] falling back to in-process counters: {e}",
+              file=sys.stderr, flush=True)
+        with lock:
+            return jsonify(dict(vehicle_stats))
+
 
 @app.route("/activity_feed")
 def activity_feed_route():
-    with lock:
-        return jsonify(list(activity_feed))
+    """The Activity timeline, served from stored events.
+
+    Shape is unchanged — [{time, event, type}] — because api.js falls back
+    to this endpoint when /notifications fails and maps those three fields.
+    """
+    import sqlite3
+
+    limit = 60
+    try:
+        con = sqlite3.connect(DB_PATH)
+        con.row_factory = sqlite3.Row
+        rows = con.execute(
+            "SELECT plate, event, access, camera, timestamp"
+            " FROM vehicle_events"
+            " ORDER BY datetime(REPLACE(timestamp,'T',' ')) DESC, id DESC"
+            " LIMIT ?", (limit,)).fetchall()
+        out = [{
+            "time": r["timestamp"],
+            "event": f"{r['event'] or 'SEEN'}: {r['plate']}"
+                     + (f" ({r['access']})" if r["access"] else ""),
+            "type": "vehicle",
+            "camera": r["camera"] or "Main Gate",
+        } for r in rows]
+
+        try:
+            inc = con.execute(
+                "SELECT COALESCE(incident_id,'GG-'||id) AS ref, title,"
+                " severity, created_at FROM incidents"
+                " ORDER BY datetime(REPLACE(created_at,'T',' ')) DESC"
+                " LIMIT 20").fetchall()
+            out += [{
+                "time": r["created_at"],
+                "event": f"{r['ref']}: {r['title']}",
+                "type": "incident",
+                "severity": r["severity"] or "",
+            } for r in inc]
+        except sqlite3.Error as e:
+            # An incidents table that is missing or renamed should cost the
+            # incident rows, not the whole timeline.
+            print(f"[FEED] incidents unavailable: {e}",
+                  file=sys.stderr, flush=True)
+
+        con.close()
+
+        # Anything this process has seen but not yet persisted (manual gate
+        # actions, panic, face alerts) still belongs at the top.
+        with lock:
+            live = list(activity_feed)
+        seen = {(i.get("time"), i.get("event")) for i in out}
+        out += [i for i in live if (i.get("time"), i.get("event")) not in seen]
+
+        out.sort(key=lambda i: str(i.get("time") or "").replace("T", " "),
+                 reverse=True)
+        return jsonify(out[:limit])
+
+    except Exception as e:
+        print(f"[FEED] falling back to in-process feed: {e}",
+              file=sys.stderr, flush=True)
+        with lock:
+            return jsonify(list(activity_feed))
 
 @app.route("/api/stream")
 def alert_stream():
@@ -737,7 +975,6 @@ def vehicle_log_route():
     """
     import sqlite3
 
-    DB_PATH = "/data/guardiangrid.db"
     DEFAULT_LIMIT = 200
     MAX_LIMIT = 1000          # a client asking for everything still cannot
 
@@ -819,14 +1056,134 @@ def vehicle_log_route():
 
 @app.route("/search_vehicle/<plate_query>")
 def search_vehicle(plate_query):
-    query = re.sub(r"[^A-Z0-9]", "", plate_query.upper())
-    with lock:
-        if query in vehicle_db:
-            return jsonify(vehicle_db[query])
-        for plate, record in vehicle_db.items():
-            if query in plate.replace(" ", ""):
-                return jsonify(record)
-    return jsonify({"error": f"No vehicle found: '{plate_query}'"}), 404
+    """Look one plate up and answer with what is actually known about it.
+
+    OCT-58, second half. This used to read `vehicle_db`, a module-level
+    dict that is written only by commit_vehicle_event() in this process.
+    Two consequences, both invisible until someone relied on them:
+
+      * Every deploy and every restart emptied it. A site with eighteen
+        months of history answered "No vehicle found" for all of it until
+        the next car drove through the gate.
+
+      * It held ONE record per plate — the most recent — so there was no
+        history to show even for a plate it did know.
+
+    It now reads vehicle_events, the same table /vehicle_log reads, with
+    the same normalisation on both sides so "pb 65 qk 3344" and
+    "PB65QK3344" find the same car. Ordering uses
+    datetime(REPLACE(timestamp,'T',' ')) for the reason set out in
+    OCT-64: the column holds two formats and a text sort puts 00:09 above
+    12:10 on the same day.
+
+    The shape of the response is backwards compatible. The old endpoint
+    returned a single flat record; every field it returned is still here
+    at the top level, so an existing caller reading `.plate` or `.access`
+    keeps working. What is new is additive: `visits`, `first_seen`,
+    `last_seen`, `resident`/`flat` from the registry, and `history` — the
+    last 50 sightings, so the guard sees a pattern rather than a dot.
+    """
+    import sqlite3
+
+    query = re.sub(r"[^A-Z0-9]", "", (plate_query or "").upper())
+    if not query:
+        return jsonify({"error": "empty plate"}), 400
+
+    NORM = "REPLACE(REPLACE(REPLACE(UPPER(plate),' ',''),'-',''),'.','')"
+    ORDER = "datetime(REPLACE(timestamp,'T',' '))"
+
+    try:
+        con = sqlite3.connect(DB_PATH)
+        con.row_factory = sqlite3.Row
+
+        # Exact match first. A guard typing a full plate should not be
+        # handed a different car because it happens to contain the same
+        # digits.
+        rows = con.execute(
+            "SELECT id, plate, vtype, state, event, confidence, image,"
+            " access, camera, timestamp FROM vehicle_events"
+            f" WHERE {NORM} = ? ORDER BY {ORDER} DESC, id DESC LIMIT 50",
+            (query,)).fetchall()
+
+        matched_exact = bool(rows)
+        if not rows:
+            rows = con.execute(
+                "SELECT id, plate, vtype, state, event, confidence, image,"
+                " access, camera, timestamp FROM vehicle_events"
+                f" WHERE {NORM} LIKE ? ORDER BY {ORDER} DESC, id DESC LIMIT 50",
+                (f"%{query}%",)).fetchall()
+
+        if not rows:
+            con.close()
+            # Registered but never seen is a real and useful answer: the
+            # car exists on the society's books, it simply has not driven
+            # past a camera yet. Saying "not found" would be wrong.
+            reg = resident_db.lookup(query)
+            if reg:
+                return jsonify({
+                    "plate": query, "visits": 0,
+                    "resident": reg.resident_name, "flat": reg.flat_number,
+                    "access": reg.status, "event": "—", "type": "—",
+                    "state": reg.status, "confidence": 0, "image": "",
+                    "camera": "—", "timestamp": "", "time": "",
+                    "first_seen": "", "last_seen": "",
+                    "note": "registered, no sightings recorded yet",
+                    "history": [],
+                })
+            return jsonify({"error": f"No vehicle found: '{plate_query}'"}), 404
+
+        plate = rows[0]["plate"]
+        match_norm = re.sub(r"[^A-Z0-9]", "", (plate or "").upper())
+
+        agg = con.execute(
+            "SELECT COUNT(*) AS n,"
+            f" MIN({ORDER}) AS first_seen, MAX({ORDER}) AS last_seen"
+            f" FROM vehicle_events WHERE {NORM} = ?",
+            (match_norm,)).fetchone()
+        con.close()
+
+        def _row(r):
+            ts = r["timestamp"] or ""
+            return {
+                "vehicle_id": r["id"],
+                "plate": r["plate"],
+                "type": r["vtype"] or "Vehicle",
+                "state": r["state"] or r["access"] or "—",
+                "event": r["event"] or "—",
+                "confidence": r["confidence"] or 0,
+                "image": r["image"] or "",
+                "camera": r["camera"] or "—",
+                "access": r["access"] or "—",
+                "timestamp": ts,
+                "time": ts,
+            }
+
+        newest = _row(rows[0])
+        reg = resident_db.lookup(match_norm)
+
+        newest.update({
+            "visits": agg["n"] if agg else len(rows),
+            "first_seen": (agg["first_seen"] if agg else "") or "",
+            "last_seen": (agg["last_seen"] if agg else "") or "",
+            "resident": reg.resident_name if reg else "Unknown",
+            "flat": reg.flat_number if reg else "—",
+            "match": "exact" if matched_exact else "partial",
+            "history": [_row(r) for r in rows],
+        })
+        return jsonify(newest)
+
+    except Exception as e:
+        print(f"[SEARCH VEHICLE] DB error: {e}")
+        # Same fallback shape as /vehicle_log: if the database cannot be
+        # read, answer from whatever this process has seen since it
+        # started rather than 500 at the guard.
+        with lock:
+            if query in vehicle_db:
+                return jsonify(vehicle_db[query])
+            for plate, record in vehicle_db.items():
+                if query in plate.replace(" ", ""):
+                    return jsonify(record)
+        return jsonify({"error": f"No vehicle found: '{plate_query}'"}), 404
 
 @app.route("/vehicle_image/<filename>")
 def vehicle_image(filename):
@@ -973,7 +1330,9 @@ def generate_report():
         ("FONTSIZE", (0, 0), (-1, -1), 9),
     ]))
     story.append(t)
-    verified = sum(m["count"] for m in mix if m["status"] in ("KNOWN", "VISITOR", "RESIDENT"))
+    # OCT-61: was a second hand-typed tuple that disagreed with the gate.
+    verified = sum(m["count"] for m in mix
+                   if canon_access(m["status"]) in VERIFIED_ACCESS)
     story.append(Paragraph(f"Verified traffic: <b>{round(verified/mix_total*100)}%</b>", body))
     story.append(Spacer(1, 8))
 
@@ -1273,7 +1632,7 @@ def audit_pdf(date):
 def day_detail(date):
     safe = re.sub(r"[^0-9-]", "", date)
     start, end = f"{safe} 00:00:00", f"{safe} 23:59:59"
-    con = sqlite3.connect("guardiangrid.db")
+    con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
     cur = con.cursor()
     incidents = [dict(r) for r in cur.execute(
@@ -1624,6 +1983,33 @@ def _internal_caller_ok() -> bool:
             from config import JWT_SECRET as secret
         except Exception:
             secret = ""
+
+    # OCT-84. config.py resolves JWT_SECRET as
+    #     os.getenv("JWT_SECRET", "GuardianGrid-Change-This-Later")
+    # so a site whose environment does not set JWT_SECRET gets a HARDCODED
+    # string as its shared secret — and this check only asked whether the
+    # secret was truthy. A known default is truthy.
+    #
+    # That is the difference between "no secret configured, refuse" and
+    # "the secret is a value written in the source, accept". The endpoint
+    # behind it is /internal/face_alert, which OCT-04 hardened precisely
+    # because Cloudflare tunnels the whole app: anyone who can read this
+    # default could inject fabricated face alerts into a client's event
+    # stream from outside.
+    #
+    # Placeholders are now treated as no secret at all, so the check fails
+    # closed. Loopback callers are unaffected — they returned True above.
+    PLACEHOLDERS = {
+        "guardiangrid-change-this-later",
+        "change-this-later", "changeme", "change-me", "secret", "",
+    }
+    if str(secret).strip().lower() in PLACEHOLDERS:
+        print("[INTERNAL] refusing: JWT_SECRET is unset or still the "
+              "placeholder from config.py. Set JWT_SECRET (or "
+              "OCTA_INTERNAL_SECRET) for this site.",
+              file=sys.stderr, flush=True)
+        return False
+
     sent = request.headers.get("X-Octa-Internal", "")
     return bool(secret) and hmac.compare_digest(str(sent), str(secret))
 
@@ -1769,6 +2155,53 @@ def _looks_like_api(path: str) -> bool:
     return any(p == x.rstrip("/") or p.startswith(x) for x in _API_LIKE)
 
 
+# OCT-72. A POST-only endpoint reported itself as nonexistent to a GET.
+#
+# The catch-all below answers any unmatched /api/... path with 404 "No
+# such endpoint". But an endpoint that exists and only accepts POST also
+# fails to match a GET, so it fell through to the same handler and was
+# told it does not exist. /api/auth/login — which had just issued a
+# working token — reported itself as missing. An API sweep flagged 28
+# endpoints as gone; all 28 were POST-only and working.
+#
+# The distinction the handler could not make is "no rule for this path"
+# versus "rule exists, wrong verb". Werkzeug already knows the difference;
+# it just never got asked, because the catch-all rule matches everything
+# and so nothing ever raises MethodNotAllowed.
+#
+# _allowed_methods() asks a copy of the URL map with the catch-all removed.
+# Built once, lazily, on first use — NOT at import, because routes are
+# still being registered then (which is OCT-71, and the same mistake).
+
+_method_map = None
+_method_map_lock = threading.Lock()
+
+
+def _allowed_methods(path: str):
+    """Methods this path WOULD accept, or None if the path is unknown."""
+    global _method_map
+    if _method_map is None:
+        with _method_map_lock:
+            if _method_map is None:
+                from werkzeug.routing import Map
+                _method_map = Map([
+                    r.empty() for r in app.url_map.iter_rules()
+                    if r.endpoint != "serve_frontend"
+                ])
+    from werkzeug.exceptions import MethodNotAllowed, NotFound
+    adapter = _method_map.bind("localhost")
+    try:
+        adapter.match("/" + (path or "").lstrip("/"), method=request.method)
+        return None          # it matches after all; nothing to explain
+    except MethodNotAllowed as exc:
+        return sorted(exc.valid_methods or [])
+    except NotFound:
+        return None
+    except Exception:
+        # Never let a diagnostic nicety break the 404 path itself.
+        return None
+
+
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
 def serve_frontend(path):
@@ -1797,6 +2230,19 @@ def serve_frontend(path):
     # — a parse error that says nothing about the actual problem. Say 404
     # in the format the caller is already expecting.
     if _looks_like_api(path):
+        # OCT-72: before calling it missing, check whether it exists under
+        # a different verb. "Method not allowed" and "no such endpoint"
+        # send the next person debugging this to entirely different places.
+        allowed = _allowed_methods(path)
+        if allowed:
+            allow_header = ", ".join(allowed)
+            return (jsonify({
+                "success": False,
+                "error": "method_not_allowed",
+                "message": (f"/{path} exists but does not accept "
+                            f"{request.method}. Allowed: {allow_header}."),
+                "allowed": allowed,
+            }), 405, {"Allow": allow_header})
         return jsonify({"success": False,
                         "message": f"No such endpoint: /{path}"}), 404
 
@@ -1849,11 +2295,12 @@ def threat_forecast():
     """Next-7-days risk forecast from historical weekday x hour patterns."""
     lookback_days = 60
     since = (datetime.now() - timedelta(days=lookback_days)).strftime("%Y-%m-%d %H:%M:%S")
-    con = sqlite3.connect(os.path.join(BASE_DIR, "guardiangrid.db"))
+    con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
     cur = con.cursor()
     buckets = {}   # (weekday, hour) -> weight
     days_seen = set()
+    forecast_error = None      # OCT-83: set when the query failed
 
     def add(ts, w):
         t = str(ts or "").replace("T", " ")
@@ -1879,8 +2326,27 @@ def threat_forecast():
             "WHERE REPLACE(created_at,'T',' ') >= ?", (since,)):
             sev = (r["severity"] or "").upper()
             add(r["created_at"], 6 if sev in ("CRITICAL", "HIGH") else 3)
-    except sqlite3.Error:
-        pass
+    except sqlite3.Error as exc:
+        # OCT-83. This was `except sqlite3.Error: pass`, and it is what
+        # turned OCT-81 from a loud failure into a quiet one. The wrong
+        # database path raised "no such table: vehicle_events" here, the
+        # bare except swallowed it, and the function carried on to return a
+        # complete, well-formed seven-day forecast built from zero rows.
+        #
+        # Without it, the first call against the wrong path would have
+        # thrown a 500 and the wrong path would have been found that day.
+        # The tell for this whole family — OCT-16, OCT-77, canvas_routes.py
+        # — is always the same: the feature never errors, it just never has
+        # any data.
+        #
+        # The forecast still renders rather than 500ing, because a broken
+        # panel should not take the Intelligence page down. But the failure
+        # is now named in the log WITH the path it was reading, and carried
+        # in the payload so the interface can say the forecast is
+        # unavailable instead of drawing seven Low-risk days.
+        forecast_error = f"{type(exc).__name__}: {exc}"
+        print(f"[FORECAST] reading {DB_PATH}: {forecast_error}",
+              file=sys.stderr, flush=True)
     con.close()
 
     n_days = len(days_seen)
@@ -1904,13 +2370,23 @@ def threat_forecast():
             "peak_window": f"{fmt(peak_hour)}\u2013{fmt((peak_hour + 2) % 24)}" if peak_hour is not None else None,
         })
     confidence = ("high" if n_days >= 30 else "medium" if n_days >= 14 else "low")
-    return jsonify({
+    payload = {
         "days": out_days,
         "days_of_data": n_days,
         "confidence": confidence,
         "note": f"Prediction based on {n_days} day(s) of site history. "
                 f"Accuracy improves as monitoring data accumulates.",
-    })
+    }
+    if forecast_error:
+        # OCT-83: say it plainly. "No history yet" and "could not read the
+        # history" look identical on screen and mean opposite things.
+        payload["error"] = "history_unavailable"
+        payload["detail"] = forecast_error
+        payload["confidence"] = "none"
+        payload["note"] = ("Forecast unavailable: the site history could not "
+                           "be read. This is NOT a quiet week — see the site "
+                           "log.")
+    return jsonify(payload)
 
 
 # ── AI Intelligence: live security score ─────────────────────────
@@ -2067,16 +2543,35 @@ def _watchdog_alarm(kind, message, score, force=False):
     push_alert({"time": alert["at"], "title": "AI WATCHDOG ALARM",
                 "message": message, "severity": "CRITICAL"})
     print(f"[WATCHDOG ALARM] {message}")
+
+    # OCT-83, and the same shape as OCT-70. This is a CRITICAL alarm, and
+    # both of its outbound channels used to fail in silence: an expired
+    # Twilio token (OCT-42) or a missing audio device would swallow itself
+    # and the log would still read "[WATCHDOG ALARM]" as though the alarm
+    # had gone out. One dead channel must not stop the other — that part
+    # was right — but it must not be invisible either.
+    _fired, _failed = [], []
     try:
         from booth_voice import speak
         speak(f"Attention. {message}")
-    except Exception:
-        pass
+        _fired.append("voice")
+    except Exception as exc:
+        _failed.append(f"voice ({exc})")
     try:
         from morning_report import send_whatsapp
         send_whatsapp(f"🚨 GuardianGrid watchdog: {message}")
-    except Exception:
-        pass
+        _fired.append("whatsapp")
+    except Exception as exc:
+        _failed.append(f"whatsapp ({exc})")
+
+    if _failed:
+        print(f"[WATCHDOG ALARM] channels OUT: {', '.join(_fired) or 'NONE'}"
+              f" | FAILED: {'; '.join(_failed)}",
+              file=sys.stderr, flush=True)
+    if not _fired:
+        print("[WATCHDOG ALARM] NOBODY WAS NOTIFIED — every outbound channel "
+              "failed. The alert exists only in this log.",
+              file=sys.stderr, flush=True)
 
 def _watchdog_loop():
     from morning_report import collect, compute_score
@@ -2173,8 +2668,12 @@ def list_replays():
                         j = json.load(jf)
                     meta["clips"] = j.get("clips")
                     meta["duration_s"] = j.get("duration_s", 0)
-                except (json.JSONDecodeError, OSError):
-                    pass
+                except (json.JSONDecodeError, OSError) as exc:
+                    # OCT-83: benign — this only enriches the row — but a
+                    # replay whose sidecar is corrupt should say so once
+                    # rather than silently lose its clip list.
+                    print(f"[REPLAY] {jpath}: {exc}",
+                          file=sys.stderr, flush=True)
             out.append(meta)
     out.sort(key=lambda r: r["date"], reverse=True)
     return jsonify(out)
@@ -2191,7 +2690,62 @@ def replay_reel_video(date):
                                conditional=True)
 
 
+# ── Errors on API paths ───────────────────────────────────────────
+# OCT-73 / OCT-20. OCT-20 made an unmatched /api/... path answer 404 in
+# JSON instead of serving the React shell. It did not cover the case where
+# a route EXISTS and raises: Flask then renders its own HTML error page, so
+# an API caller expecting JSON got a debug shell and failed later with
+# "Unexpected token '<'" — a parse error that says nothing about the real
+# problem. /residents/export did exactly this for months.
+#
+# Only API paths are converted. A browser hitting a broken page should
+# still get Flask's page; it is the caller parsing JSON that needs help.
+
+@app.errorhandler(500)
+@app.errorhandler(Exception)
+def _json_errors(err):
+    from werkzeug.exceptions import HTTPException
+
+    status = err.code if isinstance(err, HTTPException) else 500
+
+    if not _looks_like_api((request.path or "").lstrip("/")):
+        return err          # let Flask handle pages exactly as before
+
+    if status >= 500:
+        # The traceback goes to the log, where it is useful, and never to
+        # the caller, where it is a leak and a red herring.
+        traceback.print_exc()
+        print(f"[ERROR] {request.method} {request.path}: "
+              f"{type(err).__name__}: {err}", file=sys.stderr, flush=True)
+        return jsonify({
+            "success": False,
+            "error": "server_error",
+            "message": (f"{request.path} failed. The error is in the site "
+                        f"log; nothing was changed by this request."),
+        }), 500
+
+    return jsonify({
+        "success": False,
+        "error": getattr(err, "name", "error"),
+        "message": getattr(err, "description", str(err)),
+    }), status
+
+
 # ── Startup ───────────────────────────────────────────────────────
+
+def _print_routes():
+    """The real route table — OCT-71. Called from bootstrap(), once every
+    blueprint and late registration has happened, so the count is the
+    count. Methods are included because OCT-72 was a whole class of bug
+    caused by not knowing which verb a path accepts."""
+    rules = sorted(app.url_map.iter_rules(), key=lambda r: str(r.rule))
+    print(f"\nREGISTERED ROUTES ({len(rules)}):")
+    for rule in rules:
+        methods = ",".join(sorted(rule.methods - {"HEAD", "OPTIONS"})) or "-"
+        print(f"  {methods:<18} {rule.rule}")
+    print(flush=True)
+
+
 def bootstrap():
     """Run every startup step the app needs before serving requests.
 
@@ -2242,6 +2796,20 @@ def bootstrap():
                   + (f" — only: {_rec_cfg['only']}" if _rec_cfg.get("only") else " — all cameras"))
     except Exception as _e:
         print(f"[WARN] recorder auto-start skipped: {_e}")
+
+    _print_routes()
+
+    # OCT-42: say at startup whether the Twilio credentials came from the
+    # site env file or from the literals still sitting in the source.
+    try:
+        from whatsapp_config import report_credentials
+        report_credentials()
+    except ImportError:
+        print("[WHATSAPP] whatsapp_config.py not present on this site.",
+              flush=True)
+    except Exception as exc:
+        print(f"[WHATSAPP] could not report credential sources: {exc}",
+              file=sys.stderr, flush=True)
 
     _stats, _inside = rebuild_today_state()
     vehicle_stats.update(_stats)

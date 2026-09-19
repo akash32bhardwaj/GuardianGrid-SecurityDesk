@@ -66,13 +66,40 @@ def init_search(base_dir: str):
     it exists so one file works in both environments.
     """
     global _DB_PATH
+    override = os.environ.get("GG_DB_PATH")
     docker_db = "/data/guardiangrid.db"
-    if os.path.exists(docker_db):
+    if override:
+        _DB_PATH = override
+    elif os.path.exists(docker_db):
         _DB_PATH = docker_db
     else:
-        _DB_PATH = ("/data/guardiangrid.db"
-                    if os.path.exists("/data/guardiangrid.db")
-                    else os.path.join(base_dir, "guardiangrid.db"))
+        _DB_PATH = os.path.join(base_dir, "guardiangrid.db")
+
+    # OCT-34. The LLM tier is optional by design — the rules run first and
+    # the model is only the exception handler for queries the rules admit
+    # they did not understand. That design is right and is unchanged.
+    #
+    # What was missing is any statement that the tier is unavailable.
+    # `_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")` resolves to an
+    # empty string when unset, `_llm_parse()` returns None on the first
+    # line, and nothing anywhere says so. The launch checklist had "set the
+    # key" on it; nobody could tell from the running system that it had not
+    # happened. Same shape as OCT-69: a capability quietly absent rather
+    # than loudly missing.
+    if _API_KEY and _REQUESTS_OK:
+        print(f"[OCTA-SEARCH] LLM parser ARMED (model {_MODEL}); "
+              f"rules run first, model handles what they cannot.",
+              flush=True)
+    else:
+        why = ("ANTHROPIC_API_KEY is not set" if not _API_KEY
+               else "the requests library is not installed")
+        print(f"\n{'*' * 68}\n"
+              f"*  OCTA-SEARCH: LLM parser NOT available - {why}.\n"
+              f"*  Natural-language search still works, but only the regex\n"
+              f"*  rules. Anything the rules cannot parse returns a closest\n"
+              f"*  match with understood=false instead of a real answer.\n"
+              f"*  This is the headline feature running at part capability.\n"
+              f"{'*' * 68}\n", flush=True)
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -687,6 +714,10 @@ def octa_search():
         "success": True,
         "query": q,
         "parser": parser,
+        # OCT-34: "understood=false with parser=rules" means two different
+        # things depending on whether the model tier exists at all. Saying
+        # which lets the interface explain itself instead of looking dim.
+        "llm_available": bool(_API_KEY and _REQUESTS_OK),
         "understood": confident,
         "hint": hint,
         "interpretation": _interpretation(filters),
