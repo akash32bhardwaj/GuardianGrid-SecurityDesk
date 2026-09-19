@@ -132,10 +132,30 @@ def register_panic(app, push_alert=None):
             record("voice", False, f"unavailable: {e}")
 
         # 4) Ops WhatsApp
+        #
+        # OCT-70 ADDENDUM, 19 Sep. My own fix had the bug it was fixing.
+        # `send_whatsapp()` RETURNS False when the Twilio env vars are
+        # missing — it prints "[WARN] Twilio env vars missing" and returns,
+        # it does not raise. So `except Exception` never fired and the
+        # channel was recorded as "sent" on the strength of the call not
+        # throwing. Exactly the assumption this whole finding was about,
+        # one level further down.
+        #
+        # This is also why the register said all four channels fired on
+        # 17 Sep. Measured on the droplet on 19 Sep, neither demo.env nor
+        # primera.env contains ANY TWILIO_* variable, so that send could
+        # not have gone anywhere. The test observed a function returning
+        # quietly, not a message arriving.
+        #
+        # The return value is now the evidence.
         try:
             from morning_report import send_whatsapp
-            send_whatsapp(f"🔴 PANIC: {message}")
-            record("whatsapp", True, "sent")
+            delivered = send_whatsapp(f"🔴 PANIC: {message}")
+            if delivered:
+                record("whatsapp", True, "sent")
+            else:
+                record("whatsapp", False,
+                       "not sent (Twilio not configured for this site)")
         except Exception as e:
             record("whatsapp", False, f"unavailable: {e}")
 

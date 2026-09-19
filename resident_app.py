@@ -1449,12 +1449,27 @@ def sos():
     # WhatsApp: security head + committee (never blocks the response)
     def _notify():
         sent = []
+        # OCT-85. This used to read the numbers off whatsapp_config, a
+        # module that is gitignored and therefore has never existed in the
+        # container image. The import failed, targets became [], the send
+        # loop never ran, and the resident was told a guard had been
+        # alerted. Confirmed dead on BOTH live sites on 19 Sep.
+        #
+        # whatsapp_alerts now resolves recipients env-first, so this reads
+        # from there. A site with its numbers in /opt/octa-ops/<site>.env
+        # works with no config file at all.
+        targets = []
         try:
-            import whatsapp_config as cfg
-            targets = [("security", getattr(cfg, "SECURITY_WHATSAPP", "")),
-                       ("committee", getattr(cfg, "COMMITTEE_WHATSAPP", ""))]
-        except Exception:
-            targets = []
+            from whatsapp_alerts import (SECURITY_WHATSAPP,
+                                         COMMITTEE_WHATSAPP)
+            targets = [("security", SECURITY_WHATSAPP),
+                       ("committee", COMMITTEE_WHATSAPP)]
+        except Exception as exc:
+            logger.error(f"[SOS] no recipients resolved for flat {flat}: {exc}")
+        if not any(num for _, num in targets):
+            logger.error(f"[SOS] flat {flat} raised SOS and NO WhatsApp "
+                         f"recipient is configured - nobody was messaged. "
+                         f"Set SECURITY_WHATSAPP in this site's env file.")
         msg = (f"🆘 *DEFENDER OCTA — RESIDENT SOS*\n\n"
                f"🏠 Flat {flat} · {res['name']}\n"
                f"📞 {res['phone']}\n"
@@ -1493,8 +1508,14 @@ def sos():
     except Exception:
         pass
 
+    # OCT-85: the old message asserted "guard alerted" before the notify
+    # thread had done anything, and kept saying it on sites where nothing
+    # could be sent at all. The SOS IS recorded and escalation IS started
+    # — that much is true at this point — so say exactly that and no more.
     return jsonify({"success": True, "incident_id": incident_id,
-                    "message": "SOS raised — guard alerted, 3-minute clock started"})
+                    "message": "SOS recorded and alerting started. "
+                               "If nobody acknowledges within 3 minutes it "
+                               "escalates automatically."})
 
 
 # ════════════════════════════════════════════════════════════════════

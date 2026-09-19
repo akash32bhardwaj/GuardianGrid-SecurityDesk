@@ -20,18 +20,92 @@ Usage:
 """
 
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 # ── Load config ──────────────────────────────────────────────────
+# OCT-85. This module used to be the single point of failure for every
+# WhatsApp alert in the product, and it failed on every deployment.
+#
+# `whatsapp_config.py` is gitignored. The droplet deploys from a git clone,
+# so the file has never been in the image. Confirmed live on 19 Sep 2026:
+# BOTH octa-demo and octa-primera log "whatsapp_config.py not present on
+# this site". With CONFIG_LOADED false, _send_whatsapp() returned
+# {"success": False, "error": "whatsapp_config.py not found"} for every
+# call, which means:
+#
+#   * resident SOS notified nobody, while telling the resident
+#     "SOS raised — guard alerted, 3-minute clock started"
+#   * the 3-minute ack escalation notified nobody either, because
+#     ack_routes.py routes through this same function
+#
+# The whole outbound chain for a resident emergency was dead on both live
+# sites, and the only visible trace was one logger.warning at import.
+#
+# The fix is not new: morning_report.py has had the right pattern all
+# along — read the environment first, fall back to the file. That is
+# exactly why the panic button's WhatsApp DID deliver on 17 Sep while
+# everything routed through here did not: the panic route calls
+# morning_report.send_whatsapp, which reads os.environ. Same credentials,
+# same Twilio account, two different resolution strategies, one of which
+# worked.
+#
+# This now mirrors morning_report.py. The env file IS mounted per site
+# (/opt/octa-ops/<site>.env), so a container with no whatsapp_config.py
+# can send. The file remains an optional local override for a laptop.
+
+def _cfg_value(name, default=""):
+    """Environment first, whatsapp_config.py second. Blank env is ignored
+    so an empty line in the env file cannot silently disable alerts."""
+    value = os.environ.get(name) or ""
+    if value:
+        return value
+    if cfg is not None:
+        return getattr(cfg, name, default) or default
+    return default
+
+
 try:
     import whatsapp_config as cfg
-    CONFIG_LOADED = True
 except ImportError:
-    CONFIG_LOADED = False
-    logger.warning("whatsapp_config.py not found — WhatsApp alerts disabled")
+    cfg = None
+
+TWILIO_ACCOUNT_SID   = _cfg_value("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN    = _cfg_value("TWILIO_AUTH_TOKEN")
+TWILIO_WHATSAPP_FROM = _cfg_value("TWILIO_WHATSAPP_FROM")
+
+# Recipients. These were the other half of OCT-85: even with working
+# credentials, callers read the numbers off the missing module.
+SECURITY_WHATSAPP      = _cfg_value("SECURITY_WHATSAPP")
+DEFAULT_OWNER_WHATSAPP = _cfg_value("DEFAULT_OWNER_WHATSAPP")
+COMMITTEE_WHATSAPP     = _cfg_value("COMMITTEE_WHATSAPP")
+
+# "Configured" now means credentials resolved, from wherever — NOT
+# "the file imported". That distinction is the whole finding.
+CONFIG_LOADED = bool(TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN
+                     and TWILIO_WHATSAPP_FROM)
+
+_ENABLE = os.environ.get("ENABLE_WHATSAPP_ALERTS")
+if _ENABLE is not None:
+    ENABLE_WHATSAPP_ALERTS = _ENABLE.strip().lower() not in ("0", "false", "no", "off", "")
+elif cfg is not None:
+    ENABLE_WHATSAPP_ALERTS = bool(getattr(cfg, "ENABLE_WHATSAPP_ALERTS", True))
+else:
+    ENABLE_WHATSAPP_ALERTS = True
+
+if CONFIG_LOADED:
+    _src = "environment" if os.environ.get("TWILIO_ACCOUNT_SID") else "whatsapp_config.py"
+    logger.info(f"WhatsApp alerts armed (credentials from {_src}); "
+                f"security={'set' if SECURITY_WHATSAPP else 'MISSING'}")
+else:
+    logger.error(
+        "WhatsApp alerts DISABLED - no Twilio credentials in the environment "
+        "or in whatsapp_config.py. Resident SOS and guard escalation will "
+        "reach nobody. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and "
+        "TWILIO_WHATSAPP_FROM in this site's env file.")
 
 # ── Load smart alert routing settings ───────────────────────────
 from alert_settings import settings
@@ -156,24 +230,29 @@ def _media_url_for(snapshot_path: str):
 # ── Core send function ────────────────────────────────────────────
 def _send_whatsapp(to: str, message: str, media_url: str = None) -> dict:
     """Send a WhatsApp message via Twilio. Returns result dict."""
+    # OCT-85: every check below reads the RESOLVED value, not cfg.*, so a
+    # site with credentials in its env file and no whatsapp_config.py sends
+    # normally. The old first line made the missing file fatal on its own.
     if not CONFIG_LOADED:
-        return {"success": False, "error": "whatsapp_config.py not found"}
+        return {"success": False,
+                "error": "no Twilio credentials in the environment or "
+                         "whatsapp_config.py"}
 
     if not TWILIO_AVAILABLE:
         return {"success": False, "error": "twilio package not installed"}
 
-    if not cfg.ENABLE_WHATSAPP_ALERTS:
+    if not ENABLE_WHATSAPP_ALERTS:
         return {"success": False, "error": "Alerts disabled in config"}
 
-    if "PASTE_YOUR" in cfg.TWILIO_ACCOUNT_SID:
+    if "PASTE_YOUR" in TWILIO_ACCOUNT_SID:
         return {"success": False, "error": "Twilio credentials not configured yet"}
 
     if not to or "XXXXXXXXXX" in to:
         return {"success": False, "error": "Recipient number not configured"}
 
     try:
-        client = Client(cfg.TWILIO_ACCOUNT_SID, cfg.TWILIO_AUTH_TOKEN)
-        kwargs = dict(from_=cfg.TWILIO_WHATSAPP_FROM, to=to, body=message)
+        client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+        kwargs = dict(from_=TWILIO_WHATSAPP_FROM, to=to, body=message)
         if media_url:
             kwargs["media_url"] = [media_url]
         msg = client.messages.create(**kwargs)

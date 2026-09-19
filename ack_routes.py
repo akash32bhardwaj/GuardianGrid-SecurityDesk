@@ -222,9 +222,17 @@ def _mark_escalated(incident: dict):
 def _send_escalation_whatsapp(incident: dict, reason: str):
     iid = incident.get("incident_id", "?")
     try:
-        import whatsapp_config as cfg
-        from whatsapp_alerts import _send_whatsapp
-        to = getattr(cfg, "SECURITY_WHATSAPP", "")
+        # OCT-85: was `import whatsapp_config as cfg` for the number, and
+        # that module is gitignored so it has never been in the image. The
+        # ImportError landed in the except below, logged once, and the
+        # 3-minute escalation reached nobody — on both live sites. The
+        # recipient now comes from whatsapp_alerts, which resolves it
+        # env-first.
+        from whatsapp_alerts import _send_whatsapp, SECURITY_WHATSAPP as to
+        if not to:
+            logger.error(f"[ACK] escalation for {iid} has NO recipient "
+                         f"configured - nobody will be told. Set "
+                         f"SECURITY_WHATSAPP in this site's env file.")
         msg = (f"\u26a0\ufe0f *DEFENDER OCTA \u2014 ESCALATION*\n\n"
                f"\U0001F6A8 {incident.get('title', 'Incident')}\n"
                f"\U0001F4CD {incident.get('camera_name') or incident.get('camera') or 'site'}"
