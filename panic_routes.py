@@ -57,6 +57,8 @@ The route expects the guard to be logged in (it rides your existing
 before_request auth like every other /api route).
 """
 import sys
+import threading
+import time
 from datetime import datetime
 
 
@@ -64,6 +66,53 @@ from datetime import datetime
 # deliberately not here: it is the evidence trail, and a case file nobody
 # has been told about is not a response.
 NOTIFY_CHANNELS = ("alert", "voice", "whatsapp")
+
+
+# ── Rate limiting (OCT-88) ────────────────────────────────────────
+# /api/panic is now exempt from the VIEWER read-only rule, so a demo or
+# QR visitor can raise an alarm. That is deliberate: a blocked alarm
+# costs more than a false one. But it means the button is reachable by
+# anyone who can open the dashboard, so it needs a bound.
+#
+# Two different limits, because they answer two different problems.
+#
+# COOLDOWN is for the honest case. A guard who is frightened presses the
+# button twice. The second press must NOT be refused — being told "no"
+# during an emergency is exactly the failure this whole finding is about.
+# It is acknowledged instead: the alarm is already out, and the response
+# says so.
+#
+# HOURLY_CAP is for the dishonest case: a prospect holding the button
+# down, or a script. That one does refuse, because past a certain volume
+# the presses are no longer information.
+
+COOLDOWN_SECONDS = 60
+HOURLY_CAP = 10
+
+_recent = {}            # identity -> [epoch, ...]
+_recent_lock = threading.Lock()
+
+
+def _identity(request):
+    """Who is pressing. Falls back to IP for an unauthenticated caller."""
+    user = getattr(request, "auth_user", None) or {}
+    return (user.get("username") or user.get("sub")
+            or request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+            or request.remote_addr or "unknown")
+
+
+def _check_rate(who):
+    """(allowed, seconds_since_last, presses_this_hour)."""
+    now = time.time()
+    with _recent_lock:
+        hits = [t for t in _recent.get(who, []) if now - t < 3600]
+        since = (now - hits[-1]) if hits else None
+        if len(hits) >= HOURLY_CAP:
+            _recent[who] = hits
+            return False, since, len(hits)
+        hits.append(now)
+        _recent[who] = hits
+        return True, since, len(hits)
 
 
 def register_panic(app, push_alert=None):
@@ -76,6 +125,38 @@ def register_panic(app, push_alert=None):
         camera = (data.get("camera") or "Main Gate").strip()
         operator = (data.get("operator") or "guard").strip()
         stamp = datetime.now().strftime("%I:%M %p")
+
+        who = _identity(request)
+        allowed, since_last, this_hour = _check_rate(who)
+
+        if not allowed:
+            # Refusing here is safe: HOURLY_CAP presses have already gone
+            # out in the last hour, so an alarm HAS been raised.
+            print(f"[PANIC] rate limit hit by {who} ({this_hour}/h)",
+                  file=sys.stderr, flush=True)
+            return jsonify({
+                "success": False, "status": "rate_limited",
+                "message": (f"The alarm has already been raised {this_hour} "
+                            f"times in the last hour. If this is a real "
+                            f"emergency, call your supervisor and the police "
+                            f"directly now."),
+                "notified": [], "failed": [], "results": {},
+                "time": datetime.now().isoformat(),
+            }), 429
+
+        if since_last is not None and since_last < COOLDOWN_SECONDS:
+            # NOT an error. The alarm is out; say so and stop doing the
+            # work again. A guard pressing twice must never be told "no".
+            print(f"[PANIC] duplicate within {int(since_last)}s from {who}",
+                  file=sys.stderr, flush=True)
+            return jsonify({
+                "success": True, "status": "already_raised",
+                "message": (f"Alarm already raised {int(since_last)} seconds "
+                            f"ago — help is on the way. Stay on the line "
+                            f"with your supervisor."),
+                "notified": [], "failed": [], "results": {},
+                "time": datetime.now().isoformat(),
+            })
 
         title = "GUARD PANIC"
         message = (f"Panic button pressed at {camera} ({stamp})"

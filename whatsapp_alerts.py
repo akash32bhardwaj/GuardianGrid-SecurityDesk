@@ -256,11 +256,82 @@ def _send_whatsapp(to: str, message: str, media_url: str = None) -> dict:
         if media_url:
             kwargs["media_url"] = [media_url]
         msg = client.messages.create(**kwargs)
-        logger.info(f"WhatsApp sent to {to} — SID: {msg.sid}")
+        logger.info(f"WhatsApp accepted by Twilio for {to} — SID: {msg.sid}")
+        _verify_delivery_later(msg.sid, to)
         return {"success": True, "sid": msg.sid}
     except Exception as e:
         logger.error(f"WhatsApp send failed: {e}")
         return {"success": False, "error": str(e)}
+
+
+# ── Did it actually arrive? (OCT-86) ──────────────────────────────
+# messages.create() succeeding means TWILIO ACCEPTED the message. It does
+# not mean a phone received it. Those are different claims, and treating
+# the first as the second is the root of three separate findings in this
+# round — including a fix I wrote myself and had to correct.
+#
+# It matters most right now because TWILIO_WHATSAPP_FROM is the SHARED
+# SANDBOX number. Delivery to a given handset works only while that
+# handset has messaged the sandbox join code within the last 24 hours.
+# So a guard's phone stops receiving SOS and escalation about a day after
+# they last messaged Twilio, Twilio still returns success on create, and
+# nothing anywhere says otherwise. The delivery test on 19 Sep passed only
+# because the tester's own phone had joined recently: it works perfectly
+# for the person checking and fails silently for everyone else.
+#
+# Until a real WhatsApp Business sender is approved, this is the guard
+# rail: fetch the status a short time after sending and say so, loudly,
+# when an alert did not arrive. It cannot make delivery happen. It makes
+# failure VISIBLE, which is the difference between a quiet night and an
+# outage that looks like one.
+#
+# Fire-and-forget on a daemon thread: an alert must never be delayed or
+# failed by its own bookkeeping.
+
+VERIFY_DELAY_SECONDS = int(os.environ.get("WA_VERIFY_DELAY", "30") or 30)
+VERIFY_DELIVERY = (os.environ.get("WA_VERIFY_DELIVERY", "1").strip().lower()
+                   not in ("0", "false", "no", "off"))
+
+# Twilio's code for "the 24-hour sandbox/session window has closed".
+_SANDBOX_EXPIRED = 63016
+
+
+def _verify_delivery_later(sid: str, to: str, delay: int = None):
+    if not (VERIFY_DELIVERY and sid):
+        return
+
+    def _check():
+        import time
+        time.sleep(VERIFY_DELAY_SECONDS if delay is None else delay)
+        try:
+            client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+            m = client.messages(sid).fetch()
+        except Exception as exc:
+            logger.error(f"[WA-VERIFY] could not check {sid}: {exc}")
+            return
+
+        if m.status in ("delivered", "read"):
+            logger.info(f"[WA-VERIFY] {sid} -> {m.status} ({to})")
+            return
+
+        if m.status in ("queued", "sending", "sent", "accepted"):
+            # Still in flight. Worth a line, not an alarm.
+            logger.warning(f"[WA-VERIFY] {sid} still {m.status} after "
+                           f"{VERIFY_DELAY_SECONDS}s ({to})")
+            return
+
+        hint = ""
+        if str(m.error_code) == str(_SANDBOX_EXPIRED):
+            hint = (" — the 24-hour WhatsApp sandbox window for this number "
+                    "has closed. That phone must message the sandbox join "
+                    "code again, or the site needs a real WhatsApp Business "
+                    "sender (OCT-86).")
+        logger.error(
+            f"[WA-VERIFY] ALERT NOT DELIVERED to {to}: status={m.status} "
+            f"error={m.error_code} {m.error_message or ''}{hint}")
+
+    threading.Thread(target=_check, daemon=True,
+                     name=f"wa-verify-{str(sid)[:10]}").start()
 
 
 def _security_number() -> str:

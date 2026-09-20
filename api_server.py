@@ -2062,6 +2062,52 @@ def require_auth():
 
     request.auth_user = user                  # available to routes if needed
 
+    # ── GUARD role: operate the gate, nothing administrative ───────
+    # OCT-87. A guard needs to work the decision loop and nothing else.
+    #
+    # DENY-LIST, not allow-list, and that is a deliberate trade. An
+    # allow-list is the safer shape in principle — default deny — but this
+    # app has 149 routes and I do not know every path the gate console
+    # touches. An allow-list I got wrong would break the gate loop at a
+    # client site, silently, at the worst moment. A deny-list I got wrong
+    # leaves a guard with slightly more access than intended, which is
+    # visible and correctable.
+    #
+    # THIS LIST NEEDS A PASS AGAINST THE FULL ROUTE TABLE before it is
+    # trusted. The table now prints at startup with methods (OCT-71), so
+    # that review is possible for the first time. Treat what follows as a
+    # defensible starting point, not a finished policy.
+    #
+    # The one nuance worth keeping: a guard MUST be able to look up a
+    # plate and see who it belongs to — that is the job — but must not be
+    # able to list or export the directory. Lookup is allowed; the bulk
+    # surfaces are not.
+    _GUARD_DENY_EXACT = (
+        "/residents",                    # the whole directory
+        "/residents/export",
+        "/residents/import",
+        "/residents/add",
+        "/api/site-config/reload",
+    )
+    _GUARD_DENY_PREFIX = (
+        "/api/admin/",                   # every admin surface
+        "/residents/remove",
+        "/residents/blacklist",          # a lasting decision, not a gate one
+        "/api/auth/users",               # account management
+        "/api/settings",
+    )
+    if (request.auth_user or {}).get("role") == "GUARD":
+        if request.method != "GET" or p in _GUARD_DENY_EXACT:
+            if (p in _GUARD_DENY_EXACT
+                    or any(p.startswith(x) for x in _GUARD_DENY_PREFIX)):
+                return jsonify({
+                    "success": False,
+                    "error": "not_permitted_for_guard",
+                    "message": ("This is an administrator action. A guard "
+                                "account cannot change it — ask the society "
+                                "admin."),
+                }), 403
+
     # ── VIEWER role: read-only enforcement ─────────────────────────
     # Viewers (demo/QR visitors) may look but never touch:
     #   * every non-GET request is refused
@@ -2073,8 +2119,23 @@ def require_auth():
         # /api/search runs parameterised SELECTs and nothing else, and
         # /api/stream/ticket only mints the credential that lets their
         # own <img> tags load — without it a viewer sees broken cameras.
+        # OCT-88: /api/panic joins this list deliberately.
+        #
+        # A viewer is a demo or QR visitor, and letting one fire a Tier-3
+        # alarm is a real abuse vector — which is why it was refused. But
+        # the interface shows them the button anyway (no role awareness in
+        # the frontend at all), so the first they learn of the refusal is
+        # the moment they needed it.
+        #
+        # Of the two ways to resolve that, hiding the control is the wrong
+        # one. A false alarm costs somebody checking. A blocked alarm costs
+        # the thing this product exists to prevent. So panic is allowed for
+        # every authenticated role and rate-limited in panic_routes.py
+        # instead, which bounds the abuse without putting a permission
+        # check in front of an emergency.
         if (request.method != "GET"
-                and p not in ("/api/search", "/api/stream/ticket")):
+                and p not in ("/api/search", "/api/stream/ticket",
+                              "/api/panic")):
             return jsonify({"success": False,
                             "message": "Viewer access is read-only"}), 403
         if p.startswith("/residents"):
@@ -2805,8 +2866,32 @@ def bootstrap():
         from whatsapp_config import report_credentials
         report_credentials()
     except ImportError:
-        print("[WHATSAPP] whatsapp_config.py not present on this site.",
-              flush=True)
+        # OCT-85 follow-up. This used to print "whatsapp_config.py not
+        # present on this site" and stop, which was true and useless: on a
+        # site whose credentials come from the environment, the file being
+        # absent is the NORMAL state, and the line read as a fault while
+        # whatsapp_alerts was reporting "armed" three lines earlier. Two
+        # diagnostics on the same subject disagreeing in the same log is
+        # the exact failure this round keeps finding.
+        #
+        # Ask the module that actually resolved the credentials.
+        try:
+            import whatsapp_alerts as wa
+            if wa.CONFIG_LOADED:
+                print(f"[WHATSAPP] credentials from environment "
+                      f"(no whatsapp_config.py needed); "
+                      f"security={'set' if wa.SECURITY_WHATSAPP else 'MISSING'}"
+                      f" report_to="
+                      f"{'set' if os.environ.get('GG_REPORT_WHATSAPP_TO') else 'MISSING'}",
+                      flush=True)
+            else:
+                print("[WHATSAPP] NOT CONFIGURED - no credentials in the "
+                      "environment and no whatsapp_config.py. Resident SOS "
+                      "and guard escalation will reach nobody.",
+                      file=sys.stderr, flush=True)
+        except Exception as exc:
+            print(f"[WHATSAPP] state unknown: {exc}",
+                  file=sys.stderr, flush=True)
     except Exception as exc:
         print(f"[WHATSAPP] could not report credential sources: {exc}",
               file=sys.stderr, flush=True)
