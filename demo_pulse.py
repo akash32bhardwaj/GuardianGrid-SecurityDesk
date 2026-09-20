@@ -175,6 +175,27 @@ def _on_site(con, today: str) -> dict:
     return {r[0]: r[1] for r in rows}
 
 
+def _entry_identity(con, plate: str, today: str):
+    """How this plate was recorded when it came IN today: (access, vtype).
+
+    Found in testing, 20 Sep: without this, an EXIT re-rolled the access
+    value, so a car could enter as UNKNOWN and leave as VISITOR half an
+    hour later. The same vehicle with two identities in one day is exactly
+    the incoherence this register is full of, and seeding it hourly into
+    the demo would have been a self-inflicted version of OCT-61.
+    """
+    row = con.execute(
+        "SELECT access, vtype FROM vehicle_events "
+        "WHERE plate = ? AND event = 'ENTRY' "
+        "  AND date(REPLACE(timestamp,'T',' ')) = ? "
+        "ORDER BY datetime(REPLACE(timestamp,'T',' ')) DESC LIMIT 1",
+        (plate, today),
+    ).fetchone()
+    if not row:
+        return None, None
+    return row[0], row[1]
+
+
 def _newest_age_minutes(con) -> float | None:
     row = con.execute(
         "SELECT MAX(datetime(REPLACE(timestamp,'T',' '))) FROM vehicle_events"
@@ -199,10 +220,11 @@ def build_events(count: int) -> list[dict]:
               if (r.get("status") or "").upper() == "BLACKLISTED"]
 
     con = sqlite3.connect(gg_db.DB_PATH, timeout=10)
-    try:
-        inside = _on_site(con, today)
-    finally:
-        con.close()
+    inside = _on_site(con, today)
+
+    # Identities chosen during THIS run, so a plate that enters and leaves
+    # inside the same hour is consistent with itself too.
+    chosen: dict[str, tuple] = {}
 
     events: list[dict] = []
     for _ in range(count):
@@ -237,9 +259,22 @@ def build_events(count: int) -> list[dict]:
             vtype = match.get("vehicle_type") or _weighted(VTYPES)
             state = STATE_REGISTERED
         else:
-            access = "VISITOR" if random.random() < VISITOR_CHANCE else "UNKNOWN"
-            vtype = _weighted(VTYPES)
+            # An unregistered plate leaving must leave as whatever it
+            # arrived as. Only a genuinely new arrival gets a fresh roll.
+            prior = chosen.get(plate)
+            if prior is None and event == "EXIT":
+                prior = _entry_identity(con, plate, today)
+                if prior == (None, None):
+                    prior = None
+            if prior:
+                access, vtype = prior
+            else:
+                access = ("VISITOR" if random.random() < VISITOR_CHANCE
+                          else "UNKNOWN")
+                vtype = _weighted(VTYPES)
             state = STATE_UNKNOWN
+
+        chosen[plate] = (access, vtype)
 
         # Never ahead of now (OCT-65). Two seconds of margin so a slow run
         # cannot drift past the clock between building and writing.
@@ -258,6 +293,7 @@ def build_events(count: int) -> list[dict]:
             "camera": _weighted(CAMERAS),
         })
 
+    con.close()
     events.sort(key=lambda e: e["timestamp"])
     return events
 
