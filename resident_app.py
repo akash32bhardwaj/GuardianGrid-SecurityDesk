@@ -1823,6 +1823,29 @@ def household_pending():
     rows = [dict(r) for r in con.execute(
         "SELECT * FROM household_requests WHERE status='PENDING' ORDER BY id")]
     con.close()
+
+    # A barred plate must be visible in the queue BEFORE anyone taps
+    # approve. Until now the guard saw an ordinary vehicle request with
+    # nothing to distinguish it from any other.
+    try:
+        from resident_db import db as rdb
+        for row in rows:
+            plate = (row.get("plate") or "").strip()
+            row["blacklisted"] = False
+            if row.get("kind") == "vehicle" and plate:
+                existing = rdb.lookup(plate)
+                if existing and (getattr(existing, "status", "") or "").strip().upper() == "BLACKLISTED":
+                    row["blacklisted"] = True
+                    row["blacklist_note"] = (
+                        "This vehicle is blacklisted. Approving is refused - "
+                        "only the committee can lift a bar, from Residents DB.")
+    except Exception as exc:
+        # The queue still renders. But "could not check" is not "not
+        # barred", so report unknown rather than quietly saying False.
+        logger.error(f"[HOUSEHOLD] blacklist annotation unavailable: {exc}")
+        for row in rows:
+            row["blacklisted"] = None
+
     return jsonify({"success": True, "requests": rows})
 
 
@@ -1836,17 +1859,66 @@ def household_decide(rid, action):
                     (rid,)).fetchone()
     if not r:
         con.close(); return jsonify({"success": False, "message": "not pending"}), 404
+
     if action == "approve":
         if r["kind"] == "vehicle":
             try:
                 from resident_db import db as rdb, Resident
+            except Exception as e:
+                con.close()
+                return jsonify({"success": False, "message": f"resident_db error: {e}"}), 500
+
+            # -- Blacklist guard -------------------------------------
+            # rdb.add() overwrites the row for a plate, and nothing read
+            # the existing record first. So approving a request for a
+            # barred vehicle replaced the BLACKLISTED row with a KNOWN
+            # one - status, owner name and all - and a resident could lift
+            # a committee bar by asking for it and having any guard tap
+            # approve. Nobody in that chain was told what had happened.
+            #
+            # Observed on demo, 20 Sep 2026: PB07ZZ6611 went from
+            # BLACKLISTED / "Former tenant" to KNOWN / "Test Resident",
+            # silently, and the original owner name was unrecoverable.
+            #
+            # Lifting a bar stays a deliberate act, taken from Residents DB
+            # by someone with the authority to take it. It is not something
+            # the barred party can request.
+            try:
+                existing = rdb.lookup(r["plate"])
+            except Exception as exc:
+                # We cannot tell whether it is barred. Refuse: a wrongly
+                # refused request costs a phone call, a wrongly approved
+                # one re-admits a vehicle the committee barred.
+                con.close()
+                logger.error(f"[HOUSEHOLD] blacklist check failed for "
+                             f"{r['plate']}: {exc}")
+                return jsonify({
+                    "success": False, "status": "check_failed",
+                    "message": ("Could not check this plate against the "
+                                "blacklist, so it was not approved. Try "
+                                "again, or check Residents DB.")}), 503
+
+            if existing and (getattr(existing, "status", "") or "").strip().upper() == "BLACKLISTED":
+                con.close()
+                logger.error(f"[HOUSEHOLD] REFUSED: {who} tried to approve "
+                             f"blacklisted plate {r['plate']} for flat "
+                             f"{r['flat_no']} (request {rid})")
+                return jsonify({
+                    "success": False, "status": "blacklisted",
+                    "message": ("This vehicle is blacklisted and cannot be "
+                                "added from a resident request. Only the "
+                                "society committee can lift a bar, from "
+                                "Residents DB.")}), 409
+            # --------------------------------------------------------
+
+            try:
                 fl, bl = r["flat_no"], ""
                 if "-" in fl:
                     bl, fl = fl.split("-", 1)
                 rdb.add(Resident(plate_number=r["plate"], resident_name=r["resident_name"],
                                  flat_number=fl, block=bl, phone=r["resident_phone"],
                                  vehicle_model=r["note"] or "", status="KNOWN",
-                                 notes="added via resident app"))
+                                 notes=f"added via resident app, approved by {who}"))
             except Exception as e:
                 con.close()
                 return jsonify({"success": False, "message": f"resident_db error: {e}"}), 500
@@ -1854,16 +1926,19 @@ def household_decide(rid, action):
             con.execute("INSERT INTO household_members (flat_no, kind, name, phone, note, added_at, added_by) "
                         "VALUES (?,?,?,?,?,?,?)", (r["flat_no"], r["kind"], r["name"], r["phone"],
                                                    r["note"], _now_str(), who))
+
     con.execute("UPDATE household_requests SET status=?, decided_by=?, decided_at=? WHERE id=?",
                 ("APPROVED" if action == "approve" else "REJECTED", who, _now_str(), rid))
     con.commit(); con.close()
+
     def _tell():
         what = r["plate"] if r["kind"] == "vehicle" else f"{r['name']} ({r['kind']})"
         msg = (f"{'✅' if action == 'approve' else '❌'} *Defender Octa* — {_site_name()}\n\n"
                f"Your request to add {what} to flat {r['flat_no']} was "
-               f"{'approved' if action == 'approve' else 'not approved'} by the committee.")
+               f"{'approved' if action == 'approve' else 'not approved'}.")
         _send_wa(r["resident_phone"], msg)
     threading.Thread(target=_tell, daemon=True).start()
+
     return jsonify({"success": True, "status": "APPROVED" if action == "approve" else "REJECTED"})
 
 
