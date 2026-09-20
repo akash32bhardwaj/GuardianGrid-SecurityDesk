@@ -94,6 +94,7 @@ import os
 import re
 import secrets
 import sqlite3
+import sys
 import threading
 import time
 from datetime import datetime, timedelta
@@ -121,6 +122,8 @@ DAILY_BRIEF_TIME      = "07:35"     # resident brief, local time
 _BASE_DIR = "."
 _DB_PATH  = "guardiangrid.db"
 _SECRET   = b""
+_SECRET_SOURCE = "unset"      # "env" | "file" | "ephemeral"
+_SECRET_EPHEMERAL = False     # True = key file unreadable, nothing can log in
 _pulse_cache = {"at": 0, "payload": None}
 _sos_last = {}          # flat_no -> epoch of last SOS
 _lock = threading.Lock()
@@ -138,6 +141,7 @@ def init_resident_app(base_dir: str, start_threads: bool = True):
         else os.path.join(base_dir, "guardiangrid.db")
     _SECRET = _load_or_create_secret()
     _ensure_tables()
+    _check_pin_key()
     os.makedirs(os.path.join(_data_dir(), "arrivals"), exist_ok=True)
     if start_threads:
         threading.Thread(target=_background_loop, daemon=True,
@@ -154,9 +158,30 @@ def _data_dir():
     return d
 
 
+def _shout(title: str, *lines: str) -> None:
+    """A boxed block on stderr. One line in a log that already carries
+    hundreds is how OCT-69 went unnoticed for three days."""
+    width = 74
+    print("\n" + "=" * width, file=sys.stderr)
+    print(f"  {title}", file=sys.stderr)
+    print("=" * width, file=sys.stderr)
+    for line in lines:
+        print(f"  {line}", file=sys.stderr)
+    print("=" * width + "\n", file=sys.stderr, flush=True)
+
+
 def _load_or_create_secret() -> bytes:
+    """The key every resident PIN, OTP and session token is derived from.
+
+    Three sources, in order, and WHICH ONE was used matters enough to
+    record: RESIDENT_JWT_SECRET from the environment wins over the key
+    file, so setting that variable on a site that already has PINs issued
+    silently invalidates every one of them. See _check_pin_key().
+    """
+    global _SECRET_SOURCE, _SECRET_EPHEMERAL
     env = os.environ.get("RESIDENT_JWT_SECRET", "").strip()
     if env:
+        _SECRET_SOURCE = "env"
         return env.encode()
     path = os.path.join(_data_dir(), "resident_secret.key")
     try:
@@ -164,14 +189,114 @@ def _load_or_create_secret() -> bytes:
             with open(path, "rb") as f:
                 s = f.read().strip()
                 if len(s) >= 32:
+                    _SECRET_SOURCE = "file"
                     return s
         s = secrets.token_urlsafe(48).encode()
         with open(path, "wb") as f:
             f.write(s)
+        _SECRET_SOURCE = "file"
         return s
     except OSError as e:
-        logger.error(f"[RESIDENT] secret file error: {e} — using process secret")
+        # This used to hand back a per-process secret and carry on. Every
+        # PIN then failed, every resident session died on the next restart,
+        # and the resident was told "That PIN isn't right" — which is a lie
+        # about them rather than a report about us. The key is gone; the
+        # honest thing is to say so and refuse resident logins until it is
+        # back, rather than to improvise one nobody can reproduce.
+        _SECRET_SOURCE = "ephemeral"
+        _SECRET_EPHEMERAL = True
+        _shout("RESIDENT KEY UNREADABLE - resident logins are DISABLED",
+               f"file    : {path}",
+               f"error   : {e}",
+               "effect  : PIN and OTP login will refuse with a clear message.",
+               "          Existing resident sessions stop working on restart.",
+               "remedy  : fix permissions or the mount, then restart. If the",
+               "          file is genuinely lost, every flat needs a new PIN.",
+               "This is NOT a resident problem and must not be reported as one.")
         return secrets.token_urlsafe(48).encode()
+
+
+def _secret_fp() -> str:
+    """A fingerprint of the key, safe to store and print. Never the key."""
+    return hashlib.sha256(_SECRET).hexdigest()[:16]
+
+
+def _check_pin_key() -> None:
+    """Notice when the key that PINs were hashed with has changed.
+
+    OCT-94, corrected. The original finding claimed rotating JWT_SECRET
+    invalidated every resident PIN. It does not - the resident key is
+    separate, from RESIDENT_JWT_SECRET or /data/resident_secret.key. But
+    the foot-gun is real, just aimed differently: SETTING
+    RESIDENT_JWT_SECRET on a site that already has PINs issued overrides
+    the file and invalidates all of them, as does losing the key file.
+
+    The failure is silent. Every hash simply stops matching, residents get
+    "That PIN isn't right" on a PIN that was correct yesterday, and five
+    tries locks them out for ten minutes. On a 200-flat society that is a
+    building-wide lockout whose only remedy is reprinting 200 slips - and
+    nothing anywhere says what happened.
+
+    So: fingerprint the key, store it beside the PINs, and shout when it
+    changes while PINs exist. Set OCTA_PIN_KEY_ACK=1 to accept the new key
+    once the slips have been reissued.
+    """
+    try:
+        con = _con()
+        pins = con.execute("SELECT COUNT(*) FROM flat_pins").fetchone()[0]
+        con.close()
+    except sqlite3.Error:
+        return
+
+    current = _secret_fp()
+    stored = _state_get("pin_key_fp")
+
+    if _SECRET_EPHEMERAL:
+        return                      # already shouted, and nothing to compare
+
+    if stored is None:
+        _state_set("pin_key_fp", current)
+        logger.info(f"[RESIDENT] pin key fingerprint recorded ({current}, "
+                    f"source={_SECRET_SOURCE}, {pins} PIN(s) on file)")
+        return
+
+    if stored == current:
+        logger.info(f"[RESIDENT] pin key unchanged ({current}, "
+                    f"source={_SECRET_SOURCE}, {pins} PIN(s) on file)")
+        return
+
+    if pins == 0:
+        _state_set("pin_key_fp", current)
+        logger.info(f"[RESIDENT] pin key changed {stored} -> {current} "
+                    f"(no PINs issued, nothing invalidated)")
+        return
+
+    if os.environ.get("OCTA_PIN_KEY_ACK", "").strip() == "1":
+        _state_set("pin_key_fp", current)
+        _shout("RESIDENT PIN KEY CHANGE ACKNOWLEDGED",
+               f"was {stored}  ->  now {current}",
+               f"{pins} PIN(s) on file are hashed with the OLD key and will",
+               "NOT work. Reissue them from Residents DB.",
+               "Unset OCTA_PIN_KEY_ACK once this is done.")
+        return
+
+    _shout("RESIDENT PIN KEY HAS CHANGED - EVERY PIN ON THIS SITE IS DEAD",
+           f"was     : {stored}",
+           f"now     : {current}   (source: {_SECRET_SOURCE})",
+           f"affected: {pins} flat(s) with a PIN issued",
+           "",
+           "Every resident will be told \"That PIN isn't right\" on a PIN",
+           "that was correct yesterday, and locked out after five tries.",
+           "Nothing else in this system will mention it.",
+           "",
+           "If this was NOT deliberate, restore the previous key before",
+           "anyone tries to log in:",
+           "  - RESIDENT_JWT_SECRET set in the site env file overrides the",
+           "    key file. Unsetting it restores the file-based key.",
+           f"  - the key file is {os.path.join(_data_dir(), 'resident_secret.key')}",
+           "",
+           "If it WAS deliberate, reissue every PIN, then restart once with",
+           "OCTA_PIN_KEY_ACK=1 to stop this message.")
 
 
 def _con():
@@ -640,6 +765,12 @@ def _otp_hash(phone: str, otp: str) -> str:
 
 @resident_app_bp.route("/api/resident/otp/verify", methods=["POST"])
 def otp_verify():
+    if _SECRET_EPHEMERAL:
+        return jsonify({"success": False, "status": "key_unavailable",
+                        "message": ("Resident login is unavailable on this "
+                                    "site right now. This is not a problem "
+                                    "with your code - please tell the "
+                                    "committee or your security team.")}), 503
     data = request.get_json(silent=True) or {}
     phone = _norm_phone(data.get("phone", ""))
     otp = _digits(data.get("otp", ""))
@@ -2402,6 +2533,14 @@ def _pin_hash(flat_no: str, pin: str) -> str:
 
 @resident_app_bp.route("/api/resident/pin/login", methods=["POST"])
 def pin_login():
+    if _SECRET_EPHEMERAL:
+        # Do not tell a resident their PIN is wrong when we are the ones
+        # who lost the key.
+        return jsonify({"success": False, "status": "key_unavailable",
+                        "message": ("Resident login is unavailable on this "
+                                    "site right now. This is not a problem "
+                                    "with your PIN - please tell the "
+                                    "committee or your security team.")}), 503
     data = request.get_json(silent=True) or {}
     flat = _canonical_flat(data.get("flat", ""))
     pin = _digits(data.get("pin", ""))
