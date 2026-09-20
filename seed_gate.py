@@ -79,9 +79,14 @@ def resolve_db(explicit=None):
     sys.exit("ERROR: no guardiangrid.db found. Pass --db /path/to/guardiangrid.db")
 
 
+# One definition of the canonical timestamp, used by everything this file
+# writes — including seed_registry_events, which used to disagree with the
+# docstring above. See OCT-106.
+TS_FMT = "%Y-%m-%d %H:%M:%S"
+
 NOW = datetime.now()
 def ts(delta_minutes=0):
-    return (NOW + timedelta(minutes=delta_minutes)).strftime("%Y-%m-%d %H:%M:%S")
+    return (NOW + timedelta(minutes=delta_minutes)).strftime(TS_FMT)
 
 
 MARK_GUARD  = "demo-seed"
@@ -337,9 +342,15 @@ def seed_registry():
 
 def seed_registry_events(con):
     """A few sightings per registered car, so a plate the guard looks up
-    also appears in the vehicle log. Timestamps use the ISO 'T' separator
-    that seed_demo.py writes, to match the bulk of the table rather than
-    add a third format (OCT-64)."""
+    also appears in the vehicle log.
+
+    OCT-106: this used to write the ISO 'T' separator, reasoning that it
+    should match the bulk of the table. The bulk was wrong — matching it
+    propagated the error, and between this file and seed_demo.py the two
+    seeders put 1,782 of 1,789 rows back into T format on the night after
+    OCT-64's migration ran. The canonical form is the space separator that
+    `record_event()` writes, and it is what this file's own docstring said
+    all along."""
     rows = []
     for plate, _o, _f, _b, model, _c, status in REGISTERED:
         vtype = "Motorcycle" if "Activa" in model else "Car"
@@ -354,11 +365,11 @@ def seed_registry_events(con):
                     continue
                 rows.append((plate, vtype, "", "ENTRY",
                              round(random.uniform(91.0, 99.0), 1), "",
-                             when.isoformat(), access, "Main Gate"))
+                             when.strftime(TS_FMT), access, "Main Gate"))
                 out = when + timedelta(minutes=random.randint(25, 300))
                 if out < NOW:
                     rows.append((plate, vtype, "", "EXIT", 100.0, "",
-                                 out.isoformat(), access, "Main Gate"))
+                                 out.strftime(TS_FMT), access, "Main Gate"))
     con.executemany(
         "INSERT INTO vehicle_events (plate, vtype, state, event, confidence, "
         "image, timestamp, access, camera) VALUES (?,?,?,?,?,?,?,?,?)", rows)

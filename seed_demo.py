@@ -25,7 +25,31 @@ import sqlite3
 import sys
 from datetime import datetime, timedelta
 
-DB = "guardiangrid.db"
+# OCT-64 / OCT-106: the canonical form. Every timestamp this file writes
+# uses it. The column previously gained a second format from here on every
+# reseed — 1,782 of 1,789 rows on demo, measured 20 Sep — which undid the
+# migration the night after it ran.
+TS_FMT = "%Y-%m-%d %H:%M:%S"
+
+
+def _resolve_db(explicit=None):
+    """OCT-66. `DB = "guardiangrid.db"` resolved against the working
+    directory, so this script had to be run from exactly one place and
+    failed confusingly anywhere else — sqlite3 CREATES a missing file
+    rather than erroring, so the symptom was always "my data is gone"
+    and never "wrong path". seed_gate.py already resolves properly; this
+    matches it deliberately, because two resolvers that disagree is the
+    bug one level up.
+    """
+    for candidate in (explicit, os.environ.get("GG_DB_PATH"),
+                      os.environ.get("GG_DB"), "/data/guardiangrid.db",
+                      "guardiangrid.db"):
+        if candidate and os.path.exists(candidate):
+            return os.path.abspath(candidate)
+    return None
+
+
+DB = _resolve_db() or "guardiangrid.db"
 
 # Gate name -> (first hour, last hour, max events per hour)
 GATES = {
@@ -54,9 +78,10 @@ def _weighted(pairs):
 def _require_db():
     if not os.path.exists(DB):
         sys.exit(
-            f"ERROR: {DB} not found in this folder.\n"
-            "       cd to the backend folder (next to api_server.py) first."
+            f"ERROR: no guardiangrid.db found (looked for {DB}).\n"
+            "       Set GG_DB_PATH, or run from the backend folder."
         )
+    print(f"database: {DB}")
 
 
 def clear_demo():
@@ -95,15 +120,23 @@ def seed(days: int = 1):
                     if ts > datetime.now():
                         continue
                     plate = f"DEMO{random.randint(1000, 9999)}"
+                    # The vehicle's identity is chosen ONCE and reused on
+                    # the way out. The exit previously hardcoded "Car" and
+                    # "KNOWN", so a motorcycle seeded as a VISITOR left as
+                    # a KNOWN car — the same plate with two identities an
+                    # hour apart, which is the incoherence OCT-61 is about
+                    # and was being written into the demo nightly.
+                    vtype = _weighted(VTYPES)
+                    access = _weighted(ACCESS_WEIGHTS)
                     rows.append((
                         plate,
-                        _weighted(VTYPES),
+                        vtype,
                         "",
                         "ENTRY",
                         round(random.uniform(88.0, 99.0), 1),
                         "",
-                        ts.isoformat(),
-                        _weighted(ACCESS_WEIGHTS),
+                        ts.strftime(TS_FMT),
+                        access,
                         gate,
                     ))
                     # ~70% of entries also exit later the same day
@@ -111,8 +144,8 @@ def seed(days: int = 1):
                         out = ts + timedelta(minutes=random.randint(20, 240))
                         if out < datetime.now():
                             rows.append((
-                                plate, "Car", "", "EXIT", 100.0, "",
-                                out.isoformat(), "KNOWN", gate,
+                                plate, vtype, "", "EXIT", 100.0, "",
+                                out.strftime(TS_FMT), access, gate,
                             ))
 
     c.executemany(

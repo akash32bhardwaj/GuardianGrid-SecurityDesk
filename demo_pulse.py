@@ -115,6 +115,13 @@ VISITOR_CHANCE = 0.12
 # Events land inside the window that has just passed, never ahead of now.
 WINDOW_MINUTES = 58
 
+# At least one event per run lands inside this much tighter window. Without
+# it the scatter is uniform across the hour and a run can leave the newest
+# event twenty minutes old — observed on the first live run, 20 Sep. That
+# reads as "this worked earlier" rather than "this is happening now", which
+# is the whole difference the demo is being judged on.
+RECENT_MINUTES = 12
+
 # If the table already has something this recent, assume a pulse has just
 # run and do nothing. Protects against a double cron or a manual re-run.
 SKIP_IF_NEWER_THAN_MINUTES = 20
@@ -227,7 +234,7 @@ def build_events(count: int) -> list[dict]:
     chosen: dict[str, tuple] = {}
 
     events: list[dict] = []
-    for _ in range(count):
+    for idx in range(count):
         # Prefer taking a car OUT that is currently in, so the on-site
         # count stays believable instead of climbing all day.
         exiting = [p for p in inside if inside[p] > 0]
@@ -278,7 +285,10 @@ def build_events(count: int) -> list[dict]:
 
         # Never ahead of now (OCT-65). Two seconds of margin so a slow run
         # cannot drift past the clock between building and writing.
-        offset = random.randint(2, WINDOW_MINUTES * 60)
+        # The first event of each run is pulled into the recent window so
+        # the dashboard always has something that just happened.
+        span = (RECENT_MINUTES if idx == 0 else WINDOW_MINUTES) * 60
+        offset = random.randint(2, span)
         stamp = now - timedelta(seconds=offset)
 
         events.append({
