@@ -1974,7 +1974,7 @@ def household_request():
                           "AND LOWER(name)=LOWER(?) AND status='PENDING'",
                           (res["flat_no"], kind, name)).fetchone()
     if dup:
-        con.close(); return jsonify({"success": False, "message": "Already requested — waiting for committee"}), 400
+        con.close(); return jsonify({"success": False, "message": "Already requested — waiting for approval at the gate desk"}), 400
     cur = con.execute(
         "INSERT INTO household_requests (flat_no, resident_phone, resident_name, kind, name, "
         "plate, phone, note, status, created_at) VALUES (?,?,?,?,?,?,?,?,'PENDING',?)",
@@ -1988,7 +1988,7 @@ def household_request():
     except Exception:
         pass
     return jsonify({"success": True, "id": rid,
-                    "message": "Sent to the committee for approval"})
+                    "message": "Sent to your society's gate desk for approval"})
 
 
 @resident_app_bp.route("/api/resident/household/<int:rid>", methods=["DELETE"])
