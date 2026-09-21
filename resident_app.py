@@ -557,7 +557,12 @@ def _resolve_resident_by_phone(phone: str):
         "plates": [{"plate": _norm_plate(p.get("plate_number")),
                     "model": p.get("vehicle_model") or "",
                     "color": p.get("vehicle_color") or "",
-                    "type": p.get("vehicle_type") or "Car"} for p in plates],
+                    "type": p.get("vehicle_type") or "Car",
+                    # OCT-101: without this the resident app listed a
+                    # committee-barred car as "Recognised at the gate
+                    # automatically" — the opposite of what the gate does.
+                    "status": (p.get("status") or "KNOWN").strip().upper()}
+                   for p in plates],
     }
 
 
@@ -580,7 +585,8 @@ def _resolve_resident_by_flat(flat_no: str):
             plates.append({"plate": _norm_plate(v.get("plate_number")),
                            "model": v.get("vehicle_model") or "",
                            "color": v.get("vehicle_color") or "",
-                           "type": v.get("vehicle_type") or "Car"})
+                           "type": v.get("vehicle_type") or "Car",
+                           "status": (v.get("status") or "KNOWN").strip().upper()})
     return {"flat_no": flat_no, "name": name or "Resident",
             "phone": f"flat:{flat_no}", "pin_login": True, "plates": plates}
 
@@ -1629,6 +1635,13 @@ def sos():
             if num:
                 r = _send_wa(num, msg)
                 sent.append(f"{who}:{'ok' if r.get('success') else 'fail'}")
+            else:
+                # OCT-102. This used to contribute nothing, so an SOS read
+                # "security:ok" with no hint that a second intended
+                # recipient exists and was never told. An absence that
+                # reads as "not applicable" when it means "nobody was
+                # told" is the thing this whole register is about.
+                sent.append(f"{who}:not-configured")
         try:
             con = _con()
             con.execute("UPDATE resident_sos SET notified=? WHERE id=?",
@@ -1901,11 +1914,20 @@ def household_list():
         "WHERE flat_no=? ORDER BY kind, name", (res["flat_no"],))]
     pending = [dict(r) for r in con.execute(
         "SELECT id, kind, name, plate, phone, note, status, created_at, decided_at "
-        "FROM household_requests WHERE flat_no=? AND status IN ('PENDING','REJECTED') "
+        "FROM household_requests WHERE flat_no=? AND status IN ('PENDING','REJECTED','BLOCKED') "
         "AND created_at >= ? ORDER BY id DESC",
         (res["flat_no"], (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")))]
     con.close()
-    return jsonify({"success": True, "vehicles": res["plates"], "members": members,
+    # OCT-101. Every screen that renders "vehicles" says they are recognised
+    # at the gate automatically. A barred vehicle is refused at the gate, so
+    # it must not be in that list — it is reported separately, where a
+    # future screen can show it for what it is. Removing it from "vehicles"
+    # is enough to stop the existing screen stating something false.
+    plates = res.get("plates") or []
+    barred = [v for v in plates if v.get("status") == "BLACKLISTED"]
+    usable = [v for v in plates if v.get("status") != "BLACKLISTED"]
+    return jsonify({"success": True, "vehicles": usable,
+                    "barred_vehicles": barred, "members": members,
                     "requests": pending, "kinds": HOUSEHOLD_KINDS})
 
 
@@ -1925,6 +1947,22 @@ def household_request():
         return jsonify({"success": False, "message": "Vehicle number is required"}), 400
     if kind != "vehicle" and not name:
         return jsonify({"success": False, "message": "Name is required"}), 400
+    if kind == "vehicle":
+        # OCT-91. A barred plate used to enter the approval queue like any
+        # other, be refused at approval (OCT-90), and stay PENDING — so it
+        # came back to the next guard, and a resident could fill the queue
+        # with requests that could never be approved, burying real ones.
+        # Refuse it here instead, with the reason, so it never enters.
+        try:
+            from resident_db import db as _rdb
+            _existing = _rdb.lookup(plate)
+        except Exception:
+            _existing = None
+        if _existing and (getattr(_existing, "status", "") or "").strip().upper() == "BLACKLISTED":
+            return jsonify({"success": False, "status": "blacklisted",
+                            "message": (f"{plate} is barred by the society committee "
+                                        f"and cannot be added from the app. Please "
+                                        f"speak to the committee.")}), 409
     if kind == "vehicle" and plate in [p["plate"] for p in res["plates"]]:
         return jsonify({"success": False, "message": f"{plate} is already on your flat"}), 400
     con = _con()
@@ -2045,10 +2083,18 @@ def household_decide(rid, action):
                                 "again, or check Residents DB.")}), 503
 
             if existing and (getattr(existing, "status", "") or "").strip().upper() == "BLACKLISTED":
+                # OCT-91: take it OUT of the queue. Left PENDING, a refused
+                # request came straight back to the next guard, forever.
+                # BLOCKED is visibly dealt with, and the committee can
+                # still see it was attempted and by whom.
+                con.execute("UPDATE household_requests SET status='BLOCKED', "
+                            "decided_by=?, decided_at=? WHERE id=?",
+                            (who, _now_str(), rid))
+                con.commit()
                 con.close()
                 logger.error(f"[HOUSEHOLD] REFUSED: {who} tried to approve "
                              f"blacklisted plate {r['plate']} for flat "
-                             f"{r['flat_no']} (request {rid})")
+                             f"{r['flat_no']} (request {rid}) - marked BLOCKED")
                 return jsonify({
                     "success": False, "status": "blacklisted",
                     "message": ("This vehicle is blacklisted and cannot be "
