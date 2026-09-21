@@ -50,10 +50,44 @@ from flask import Blueprint, jsonify, request
 from site_profile import feature_required, is_enabled
 
 # ---------------------------------------------------------------------------
+# OCT-96. This defaulted to the folder holding this file. In the container
+# that is /app — part of the image, replaced wholesale by every deploy. So
+# every contractor pass and every check-in was written to storage the next
+# release would delete. Measured 20 Sep: /app/contractors.db, modified at
+# the moment of the last container recreate, 0 rows — a trap that had not
+# yet sprung, because no site had issued a pass. It springs the first time
+# a factory uses the feature in a week that a release goes out.
+#
+# Persistent storage in the container is /data. OCTA_DATA_DIR still wins
+# when set; the laptop, with no /data, keeps the old behaviour.
+_CODE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.environ.get(
-    "OCTA_DATA_DIR", os.path.dirname(os.path.abspath(__file__))
+    "OCTA_DATA_DIR",
+    "/data" if os.path.isdir("/data") else _CODE_DIR,
 )
 DB_PATH = os.path.join(DATA_DIR, "contractors.db")
+
+
+def _adopt_legacy_db():
+    """If the old in-image file has data and the persistent one does not
+    exist yet, carry it across once instead of silently starting empty."""
+    legacy = os.path.join(_CODE_DIR, "contractors.db")
+    if legacy == DB_PATH or os.path.exists(DB_PATH) or not os.path.exists(legacy):
+        return
+    try:
+        con = sqlite3.connect(legacy)
+        n = con.execute("SELECT COUNT(*) FROM contractor_passes").fetchone()[0]
+        con.close()
+    except sqlite3.Error:
+        return
+    if n:
+        import shutil
+        shutil.copy2(legacy, DB_PATH)
+        print(f"[contractors] carried {n} pass(es) from {legacy} to {DB_PATH}")
+
+
+_adopt_legacy_db()
+print(f"[contractors] storage -> {DB_PATH}")
 
 PASS_PREFIX = "CP"  # printed on the pass: CP-4F7K
 _CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # no 0/O, 1/I/L confusion

@@ -29,8 +29,100 @@ echo "    now at: $(git log --oneline -1)"
 
 SHA="$(git log --format=%h -1)"
 
+# ── [1b] Prune stale frontend bundles — OCT-17 ──────────────────────────────
+# The frontend is copied into this repo by `npm run deploy` (vite build, then
+# xcopy /E /Y). xcopy copies but never deletes, and each build emits a new
+# content-hashed bundle, so every build's bundle stays behind. They are
+# COMMITTED, then baked into the image by `COPY . /app`. Measured 20 Sep: 21
+# index-*.js bundles, 37 MB, of which one was live. Wiped by hand twice,
+# regressed twice. A fix that depends on somebody remembering is not a fix.
+#
+# This runs on the checkout before the build, so the IMAGE is clean however
+# many bundles git holds. It keeps everything reachable from index.html
+# TRANSITIVELY — a code-split chunk is loaded by another bundle, not by
+# index.html, and deleting what index.html alone mentions would break the app.
+# Only .js/.mjs/.css are ever removed; images and fonts are left alone. Any
+# failure skips the prune and the deploy carries on.
+#
+# The source of the stale files is still the xcopy on Windows; this stops
+# them reaching a container, it does not stop them being committed.
+echo "── [1b] Pruning stale frontend bundles (OCT-17) ──"
+python3 - /opt/octa/frontend <<'PRUNE_PY' || echo "  ⚠️  prune skipped (error above) — deploy continues"
+import os, re, sys
+root = sys.argv[1] if len(sys.argv) > 1 else "/opt/octa/frontend"
+assets = os.path.join(root, "assets")
+index = os.path.join(root, "index.html")
+if not (os.path.isdir(assets) and os.path.isfile(index)):
+    print("  ·  no frontend/assets or index.html — nothing to prune"); sys.exit(0)
+files = set(os.listdir(assets))
+ref = re.compile(r"[A-Za-z0-9_.\-]+\.(?:js|mjs|css)")
+keep, todo = set(), []
+def visit(text):
+    for name in ref.findall(text):
+        if name in files and name not in keep:
+            keep.add(name); todo.append(name)
+with open(index, encoding="utf-8", errors="ignore") as f:
+    visit(f.read())
+if not keep:
+    print("  ⚠️  index.html references no bundle — refusing to prune"); sys.exit(0)
+while todo:
+    name = todo.pop()
+    try:
+        with open(os.path.join(assets, name), encoding="utf-8", errors="ignore") as f:
+            visit(f.read())
+    except OSError:
+        pass
+stale = sorted(f for f in files - keep if f.endswith((".js", ".mjs", ".css")))
+freed = 0
+for f in stale:
+    p = os.path.join(assets, f); freed += os.path.getsize(p); os.remove(p)
+print(f"  kept {len(keep)} reachable bundle(s), removed {len(stale)} stale ({freed/1e6:.1f} MB)")
+for f in sorted(keep): print(f"     keep  {f}")
+for f in stale:        print(f"     drop  {f}")
+PRUNE_PY
+
 echo "── [2/5] Building image (shared by all sites) ──"
 docker build --build-arg GIT_SHA="$SHA" -t "$IMAGE" .
+
+# ── [2b] Lint — OCT-103 ─────────────────────────────────────────────────────
+# On 19 Sep an undefined name (threading, never imported) reached both live
+# sites and stayed a day, making every WhatsApp alert report failure while it
+# was being delivered. pyflakes finds that class in under a second. Nothing in
+# this pipeline ran it. On 21 Sep it caught the same mistake again — an
+# unimported `sys` — before it shipped, because by then it was being run by hand.
+#
+# Only undefined names and syntax errors are reported: those fail at runtime.
+# Unused imports and similar are left out deliberately — a lint step that
+# prints forty warnings every deploy is a lint step that stops being read.
+#
+# NON-BLOCKING by default: it reports and the deploy proceeds, so a
+# pre-existing problem cannot wedge a release. OCTA_LINT_STRICT=1 makes it
+# stop the deploy BEFORE any container is touched.
+echo "── [2b] Lint: undefined names and syntax errors (OCT-103) ──"
+LRC=0
+LINT=$(docker run --rm --entrypoint sh "$IMAGE" -c \
+  'pip install -q pyflakes >/dev/null 2>&1 || exit 3; cd /app && python3 -m pyflakes *.py backend 2>&1') || LRC=$?
+if [ "$LRC" = "3" ]; then
+  echo "  ⚠️  could not install pyflakes in the image — lint skipped"
+else
+  # test_whatsapp.py is a shell command saved with a .py extension; it is not
+  # imported by anything and should be deleted from the repo.
+  PROBLEMS=$(printf '%s\n' "$LINT" \
+    | grep -E "undefined name|invalid syntax|SyntaxError|unterminated|unexpected indent|expected an indented" \
+    | grep -v "test_whatsapp.py" || true)
+  if [ -n "$PROBLEMS" ]; then
+    N=$(printf '%s\n' "$PROBLEMS" | wc -l)
+    echo "  ⚠️  $N problem(s) that will fail when that code runs:"
+    printf '%s\n' "$PROBLEMS" | sed 's/^/     /'
+    if [ "${OCTA_LINT_STRICT:-0}" = "1" ]; then
+      echo "❌ OCTA_LINT_STRICT=1 — stopping before any container is touched"
+      exit 1
+    fi
+    echo "     (not blocking — set OCTA_LINT_STRICT=1 to make this stop a deploy)"
+  else
+    echo "  ✅ no undefined names or syntax errors"
+  fi
+fi
 
 if [ ! -f "$SITES_CONF" ]; then
   echo "❌ $SITES_CONF missing. Create it, e.g.:"

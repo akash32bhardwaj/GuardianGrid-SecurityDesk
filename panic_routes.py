@@ -117,6 +117,15 @@ def _check_rate(who):
 
 def register_panic(app, push_alert=None):
 
+    # OCT-97: probe the speech engine at startup, so the first real panic
+    # press already knows whether this host can speak instead of waiting to
+    # find out. Failure here is information, not an error.
+    for _mod in ("booth_voice_ml", "booth_voice"):
+        try:
+            __import__(_mod).warmup()
+        except Exception:
+            pass
+
     @app.route("/api/panic", methods=["POST"])
     def guard_panic():
         from flask import request, jsonify
@@ -200,15 +209,39 @@ def register_panic(app, push_alert=None):
             record("incident", False, f"failed: {e}")
 
         # 3) Booth voice (multilingual if available, legacy fallback)
+        #
+        # OCT-97. This used to record voice as "spoken (hi+en)" the moment
+        # announce() returned. announce() only QUEUES — it returns at once
+        # whether or not the host can make a sound — and the worker failed
+        # silently on its own thread when there was no speech engine. So on
+        # every droplet this channel reported success while the log said
+        # "Could not start TTS engine". Same mistake as the WhatsApp branch
+        # in the OCT-70 addendum below: "the call did not throw" recorded
+        # as "a person was reached".
+        #
+        # Now the module is asked whether its engine actually started, and
+        # the channel only counts as reached when it did. Even then it says
+        # "announced", not "heard": the engine being ready does not prove a
+        # speaker is plugged in, and this record should claim no more than
+        # the system knows.
         try:
             try:
-                from booth_voice_ml import announce
-                announce("panic", camera=camera)
-                record("voice", True, "spoken (hi+en)")
+                import booth_voice_ml as _v
+                can, why = _v.available(wait=2.0)
+                if can:
+                    _v.announce("panic", camera=camera)
+                    langs = "+".join(_v.languages())
+                    record("voice", True, f"announced ({langs}), engine ready")
+                else:
+                    record("voice", False, f"not spoken: {why}")
             except ImportError:
-                from booth_voice import speak
-                speak(f"Emergency. Guard assistance required at {camera}.")
-                record("voice", True, "spoken (en)")
+                import booth_voice as _v
+                can, why = _v.available(wait=2.0)
+                if can:
+                    _v.speak(f"Emergency. Guard assistance required at {camera}.")
+                    record("voice", True, "announced (en), engine ready")
+                else:
+                    record("voice", False, f"not spoken: {why}")
         except Exception as e:
             record("voice", False, f"unavailable: {e}")
 

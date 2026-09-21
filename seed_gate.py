@@ -182,9 +182,13 @@ def seed_requests(con):
         return
     rows = [
         # flat,   kind,      name,             plate,        phone,            note,                      status,     mins_ago
-        ("A-204", "vehicle", "PB65AK2210",     "PB65AK2210", "+919876500204", "New car, please register", "PENDING",  -35),
+        # OCT-105: a vehicle request's note is the resident form's "Make &
+        # colour" field, and approval stores it as vehicle_model. Seeding a
+        # sentence here put sentences in the model column, which read as a
+        # product bug. Seed what a resident would actually type.
+        ("A-204", "vehicle", "PB65AK2210",     "PB65AK2210", "+919876500204", "Maruti Baleno, red",       "PENDING",  -35),
         ("C-210", "family",  "Ravneet Bajwa",  "",           "+919876512210", "Daughter, moving in",      "PENDING",  -110),
-        ("B-405", "vehicle", "PB10DR4417",     "PB10DR4417", "+919876500405", "Second car",               "APPROVED", -60 * 30),
+        ("B-405", "vehicle", "PB10DR4417",     "PB10DR4417", "+919876500405", "Mahindra XUV700, black",   "APPROVED", -60 * 30),
         ("D-112", "staff",   "Unverified help", "",          "+919876512112", "No ID provided",           "REJECTED", -60 * 50),
     ]
     for flat, kind, name, plate, phone, note, status, mins in rows:

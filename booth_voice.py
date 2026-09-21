@@ -51,6 +51,21 @@ _speech_q: "queue.Queue[str]" = queue.Queue()
 _worker_started = False
 _worker_lock = threading.Lock()
 
+# OCT-97. speak() only QUEUES text and returns at once, so no caller could
+# ever know whether anything was said. When the engine could not start —
+# "Could not start TTS engine: ... you probably do not have eSpeak", on
+# every droplet — the worker logged that on its own thread and exited, and
+# callers carried on reporting success. The panic route recorded
+# voice: "spoken" for months on hosts that cannot speak.
+#
+# The worker now records what happened, and available() lets a caller ask
+# before claiming anything.
+_ENGINE = {"state": "unknown", "detail": "engine not started yet"}
+_engine_ready = threading.Event()
+if not _TTS_OK:
+    _ENGINE.update(state="failed", detail="pyttsx3 is not installed")
+    _engine_ready.set()
+
 # Tuning
 SPEECH_RATE = 165     # words per minute; lower = clearer, higher = faster
 VOLUME      = 1.0     # 0.0–1.0
@@ -84,7 +99,12 @@ def _worker():
         _pick_voice(engine)
     except Exception as e:
         logger.error("Could not start TTS engine: %s", e)
+        _ENGINE.update(state="failed", detail=f"speech engine failed to start: {e}")
+        _engine_ready.set()
         return
+
+    _ENGINE.update(state="ok", detail="speech engine ready")
+    _engine_ready.set()
 
     logger.info("Booth voice worker ready.")
     while True:
@@ -110,6 +130,22 @@ def _ensure_worker():
         th = threading.Thread(target=_worker, daemon=True, name="booth-voice")
         th.start()
         _worker_started = True
+
+
+def warmup():
+    """Start the engine now, so the first alert does not have to wait to
+    find out whether this host can speak. Safe to call more than once."""
+    if _TTS_OK:
+        _ensure_worker()
+
+
+def available(wait: float = 0.0):
+    """(can_speak, reason). Waits up to `wait` seconds for the engine to
+    report. Unknown is reported as NOT available: the point of OCT-97 is
+    that a voice channel is never claimed on the strength of a hope."""
+    if _ENGINE["state"] == "unknown" and wait > 0:
+        _engine_ready.wait(wait)
+    return _ENGINE["state"] == "ok", _ENGINE["detail"]
 
 
 def speak(text: str):

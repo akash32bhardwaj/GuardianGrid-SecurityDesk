@@ -82,6 +82,15 @@ _q = queue.Queue()
 _started = False
 _hindi_hint_shown = False
 
+# OCT-97. announce() only queues and returns, so a caller could not know
+# whether anything would be spoken — and the worker failed silently on its
+# own thread when there was no engine. The panic route recorded
+# voice: "spoken (hi+en)" on a droplet with no speech engine at all.
+# The worker now probes the engine once and records the result.
+_ENGINE = {"state": "unknown", "detail": "engine not started yet",
+           "hindi": None}
+_engine_ready = threading.Event()
+
 
 def _find_voice(engine, want):
     """Return a SAPI voice id matching the language, or None."""
@@ -100,15 +109,37 @@ def _find_voice(engine, want):
     return None
 
 
+def _probe(pyttsx3):
+    """Start an engine once, record whether it works and whether a Hindi
+    voice exists. This is the only moment the answer is known for sure."""
+    try:
+        engine = pyttsx3.init()
+        _ENGINE["hindi"] = _find_voice(engine, "hi") is not None
+        engine.stop()
+        _ENGINE.update(state="ok", detail="speech engine ready")
+    except Exception as e:
+        _ENGINE.update(state="failed",
+                       detail=f"speech engine failed to start: {e}")
+        print(f"[VOICE-ML] speech engine unavailable on this host: {e}")
+    finally:
+        _engine_ready.set()
+
+
 def _worker():
     global _hindi_hint_shown
     try:
         import pyttsx3
     except ImportError:
+        _ENGINE.update(state="failed", detail="pyttsx3 is not installed")
+        _engine_ready.set()
         print("[VOICE-ML] pyttsx3 not installed — announcements disabled "
               "(pip install pyttsx3)")
         while True:
             _q.get()  # drain silently
+    _probe(pyttsx3)
+    if _ENGINE["state"] != "ok":
+        while True:
+            _q.get()  # nothing can be spoken; drain rather than retry forever
     while True:
         lang, text = _q.get()
         try:
@@ -141,6 +172,31 @@ def _ensure_worker():
 
 
 # ── Public API ───────────────────────────────────────────────────
+def warmup():
+    """Start the worker now so the engine is probed at startup, not during
+    the first emergency. Safe to call more than once."""
+    _ensure_worker()
+
+
+def available(wait: float = 0.0):
+    """(can_speak, reason). Unknown counts as NOT available — a voice
+    channel is never reported as reached on the strength of a hope."""
+    if _ENGINE["state"] == "unknown" and wait > 0:
+        _engine_ready.wait(wait)
+    ok = _ENGINE["state"] == "ok"
+    detail = _ENGINE["detail"]
+    if ok and _ENGINE.get("hindi") is False:
+        detail += " (no Hindi voice installed - English only)"
+    return ok, detail
+
+
+def languages():
+    """What will actually be spoken, for honest reporting."""
+    if _ENGINE.get("hindi") is False:
+        return [l for l in LANGS if l != "hi"]
+    return list(LANGS)
+
+
 def announce(key, **fmt):
     """Queue a catalogued announcement in each configured language.
     Unknown keys fall back to speaking the key text itself in English."""
