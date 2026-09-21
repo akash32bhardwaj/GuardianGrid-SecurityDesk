@@ -22,11 +22,23 @@ import os
 DEFAULTS = {"enabled": True, "start": 23, "end": 5}
 
 
+def _config_path():
+    """OCT-92: the same file every other reader uses, not whatever
+    "site_config.json" resolves to in the working directory — which in the
+    container was /data, a different file from the one being edited."""
+    try:
+        from site_config import resolve_site_config_path
+        return str(resolve_site_config_path())
+    except Exception:
+        return "site_config.json"
+
+
 def _load_window():
     cfg = dict(DEFAULTS)
     try:
-        if os.path.exists("site_config.json"):
-            with open("site_config.json", "r", encoding="utf-8") as f:
+        path = _config_path()
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
                 block = (json.load(f) or {}).get("nightwatch") or {}
             for k in ("enabled", "start", "end"):
                 if k in block:

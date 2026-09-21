@@ -37,8 +37,17 @@ def _site_name():
     env = os.environ.get("GG_SITE_NAME", "")
     if env:
         return env
+    # OCT-92: resolve the same file every other reader uses. A relative
+    # "site_config.json" meant /data in the container — the copy nobody
+    # edits — so the brief could name a society differently from the
+    # dashboard showing it.
     try:
-        with open("site_config.json", encoding="utf-8") as f:
+        from site_config import resolve_site_config_path
+        path = str(resolve_site_config_path())
+    except Exception:
+        path = "site_config.json"
+    try:
+        with open(path, encoding="utf-8") as f:
             cfg = json.load(f)
         soc = cfg.get("society") or {}
         return (soc.get("name") or cfg.get("site_name")

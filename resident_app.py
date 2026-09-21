@@ -120,7 +120,17 @@ DAILY_BRIEF_TIME      = "07:35"     # resident brief, local time
 
 # ── State set by init ────────────────────────────────────────────
 _BASE_DIR = "."
-_DB_PATH  = "guardiangrid.db"
+# OCT-95. This was the bare string "guardiangrid.db", correct only because
+# init_resident_app() overwrote it before any request arrived. Anything
+# that imported the module WITHOUT calling init — a maintenance script, a
+# docker exec, a test — got a relative path, and sqlite3.connect CREATES a
+# missing file rather than failing. Demonstrated on 20 Sep: a docker exec
+# from /app created an empty /app/guardiangrid.db and then failed with "no
+# such table: flat_pins". Resolve it properly at import instead.
+_DB_PATH  = (os.environ.get("GG_DB_PATH", "").strip()
+             or ("/data/guardiangrid.db"
+                 if os.path.exists("/data/guardiangrid.db")
+                 else "guardiangrid.db"))
 _SECRET   = b""
 _SECRET_SOURCE = "unset"      # "env" | "file" | "ephemeral"
 _SECRET_EPHEMERAL = False     # True = key file unreadable, nothing can log in
@@ -683,9 +693,14 @@ def _send_wa(to: str, body: str) -> dict:
 
 
 def _site_name() -> str:
+    # OCT-92: this preferred the /data copy first — the one nobody edits —
+    # so the resident app could name the society differently from the
+    # dashboard. It now reads the same file as everything else.
     try:
-        p = os.path.join(_data_dir(), "site_config.json")
-        if not os.path.exists(p):
+        try:
+            from site_config import resolve_site_config_path
+            p = str(resolve_site_config_path())
+        except Exception:
             p = os.path.join(_BASE_DIR, "site_config.json")
         with open(p, encoding="utf-8") as f:
             cfg = json.load(f)

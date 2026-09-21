@@ -15,11 +15,100 @@ Editing settings for a new society = edit site_config.json only.
 No code changes, ever.
 """
 
+import hashlib
 import json
 import os
+import sys
 from pathlib import Path
 
-CONFIG_PATH = Path("site_config.json")
+
+# ── Where site_config.json is ────────────────────────────────────────
+# OCT-92. This used to be `CONFIG_PATH = Path("site_config.json")` — a bare
+# relative path, resolved against the process working directory. In the
+# container that is /data, so this module read /data/site_config.json,
+# while the file mounted from the site's config folder sits at /app.
+#
+# There were TWO different files with DIFFERENT contents, and the code read
+# them four different ways. Measured on demo, 20 Sep: the mounted copy
+# carried "tier": "command", the /data copy had no tier at all. The morning
+# report and Night Watch read /data; authentication and cameras read /app.
+#
+# The cost became concrete during OCT-93. The admin password was migrated
+# to a hash by editing the mounted file — the obvious one — and the running
+# app did not notice, because the ADMIN account came from this module
+# (/data) while the VIEWER accounts came from auth_models (/app). One auth
+# module, two files, different accounts in each. An earlier password
+# rotation only worked because its script happened to write both.
+#
+# Now there is one answer, and every reader asks this function for it.
+
+def resolve_site_config_path() -> Path:
+    """The site_config.json this deployment should read. One answer.
+
+    1. OCTA_SITE_CONFIG, if set — explicit always wins.
+    2. Beside this code. In the container that is /app/site_config.json,
+       the file mounted from /opt/societies/<site>-config/: the one
+       sites.conf names, the one deploys manage, the one you would edit.
+    3. The working directory — the laptop, where they are the same place.
+    """
+    env = os.environ.get("OCTA_SITE_CONFIG", "").strip()
+    if env:
+        return Path(env)
+    beside = Path(__file__).resolve().parent / "site_config.json"
+    if beside.exists():
+        return beside
+    return Path.cwd() / "site_config.json"
+
+
+def _fingerprint(p: Path) -> str:
+    try:
+        raw = json.loads(p.read_text(encoding="utf-8"))
+        return hashlib.sha256(
+            json.dumps(raw, sort_keys=True).encode()).hexdigest()[:12]
+    except Exception:
+        return "unreadable"
+
+
+def _report_stray_copies(chosen: Path) -> None:
+    """Say so, loudly, when another site_config.json is lying around.
+
+    Nothing reads it any more, so it cannot change behaviour — but it is
+    the file somebody will open and edit, and it is how OCT-92 cost a
+    working change. A copy that DIFFERS from the one in use is a trap;
+    say which, and where, and that it is not being read.
+    """
+    seen = {chosen.resolve()}
+    for cand in (Path.cwd() / "site_config.json",
+                 Path("/data/site_config.json")):
+        try:
+            rc = cand.resolve()
+        except OSError:
+            continue
+        if rc in seen or not cand.exists():
+            continue
+        seen.add(rc)
+        same = _fingerprint(cand) == _fingerprint(chosen)
+        if same:
+            print(f"[CONFIG] note: an identical copy exists at {cand} "
+                  f"(not read; safe to remove)")
+            continue
+        width = 74
+        print("\n" + "=" * width, file=sys.stderr)
+        print("  STRAY site_config.json — DIFFERENT FROM THE ONE IN USE", file=sys.stderr)
+        print("=" * width, file=sys.stderr)
+        for line in (f"in use     : {chosen}",
+                     f"stray copy : {cand}",
+                     "",
+                     "The stray copy is NOT read by anything. Edits to it do",
+                     "nothing. It differs from the file in use, so it is a trap",
+                     "for whoever opens it next (OCT-92).",
+                     "",
+                     "Remove it once you have checked nothing in it is needed."):
+            print(f"  {line}", file=sys.stderr)
+        print("=" * width + "\n", file=sys.stderr, flush=True)
+
+
+CONFIG_PATH = resolve_site_config_path()
 
 # Safe defaults — used if the file is missing or a key is absent.
 _DEFAULTS = {
@@ -53,6 +142,8 @@ def _deep_merge(defaults: dict, loaded: dict) -> dict:
 class _Config:
     def __init__(self):
         raw = {}
+        print(f"[CONFIG] site_config.json -> {CONFIG_PATH}"
+              f"{' (exists)' if CONFIG_PATH.exists() else ' (MISSING)'}")
         if CONFIG_PATH.exists():
             try:
                 raw = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
@@ -132,3 +223,4 @@ class _Config:
 
 
 CONFIG = _Config()
+_report_stray_copies(CONFIG_PATH)

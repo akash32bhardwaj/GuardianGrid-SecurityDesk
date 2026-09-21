@@ -160,21 +160,19 @@ USERS = [
 
 
 def _site_config_path():
-    """site_config.json, wherever this deployment keeps it.
+    """site_config.json — the SAME file the admin account is read from.
 
-    /app in the container (this file is /app/backend/auth/auth_models.py, so
-    parents[2] is /app), and the entrypoint also links it into /data, which
-    is the working directory the app runs from.
+    OCT-92. This used to resolve its own path (beside the code, /app),
+    while the admin account came from site_config.CONFIG, which resolved
+    a bare relative path (/data). So within this one module the ADMIN
+    credential and the VIEWER/GUARD credentials came from two different
+    files. Migrating the admin password to a hash (OCT-93) by editing the
+    mounted file did nothing, because admin was not read from it.
+
+    Now both ask site_config for the path, so there is one answer.
     """
-    from pathlib import Path
-    candidates = [
-        Path(__file__).resolve().parents[2] / "site_config.json",
-        Path.cwd() / "site_config.json",
-    ]
-    for c in candidates:
-        if c.exists():
-            return c
-    return candidates[0]
+    from site_config import resolve_site_config_path
+    return resolve_site_config_path()
 
 
 def _add_viewers_from_config():
