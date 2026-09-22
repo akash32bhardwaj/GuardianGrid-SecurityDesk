@@ -2641,6 +2641,43 @@ def pin_login():
                     "site": _site_name()})
 
 
+# ── Society code: what a resident types in the Play Store app ─────────
+# The one Octa Resident app serves every society. On first launch it asks
+# for a society code and looks it up in societies.json on
+# app.snguardiangrid.com, which maps the code to this site's address.
+# The code is printed on every PIN slip so a resident gets both at once.
+#
+# By convention the code IS the site's subdomain in capitals:
+#   demo.snguardiangrid.com          -> DEMO
+#   esconprimera.snguardiangrid.com  -> ESCONPRIMERA
+# so nothing has to be configured per site. A site that wants a shorter
+# code sets "society_code" in site_config.json, and the same code must be
+# the key in societies.json.
+
+def _society_code() -> str:
+    try:
+        try:
+            from site_config import resolve_site_config_path
+            p = str(resolve_site_config_path())
+        except Exception:
+            p = os.path.join(_BASE_DIR, "site_config.json")
+        with open(p, encoding="utf-8") as f:
+            cfg = json.load(f)
+        explicit = str(cfg.get("society_code") or "").strip()
+        if explicit:
+            return re.sub(r"[^A-Z0-9]", "", explicit.upper())
+    except Exception:
+        pass
+    try:
+        host = (request.host or "").split(":")[0].lower()
+    except Exception:
+        host = ""
+    if not host or host in ("localhost", "app.snguardiangrid.com") \
+            or re.fullmatch(r"[0-9.]+", host):
+        return ""
+    return re.sub(r"[^A-Z0-9]", "", host.split(".")[0].upper())
+
+
 # ── Admin: generate / reset / status (dashboard JWT via global guard) ──
 
 def _gen_pin() -> str:
@@ -2659,7 +2696,7 @@ def pins_status():
     for f, r in have.items():          # PINs for flats not in the directory yet
         if f not in {x["flat_no"] for x in out}:
             out.append({"flat_no": f, "has_pin": True, "last_login": r["last_login"]})
-    return jsonify({"success": True, "flats": out,
+    return jsonify({"success": True, "flats": out, "society_code": _society_code(),
                     "with_pin": sum(1 for x in out if x["has_pin"]),
                     "total": len(out)})
 
@@ -2691,7 +2728,7 @@ def pins_generate():
         made.append({"flat_no": f, "pin": pin})
     con.commit(); con.close()
     return jsonify({"success": True, "generated": len(made), "pins": made,
-                    "site": _site_name(),
+                    "site": _site_name(), "society_code": _society_code(),
                     "note": "PINs are shown only once — print the slips now. "
                             "Generating again replaces a flat's PIN."})
 
@@ -2709,4 +2746,5 @@ def pins_reset():
                 (flat, _pin_hash(flat, pin), _now_str(), who))
     con.commit(); con.close()
     return jsonify({"success": True, "flat_no": flat, "pin": pin,
+                    "site": _site_name(), "society_code": _society_code(),
                     "note": "Shown once — hand it to the resident."})
