@@ -115,6 +115,38 @@ def _check_rate(who):
         return True, since, len(hits)
 
 
+# ── Does this site have a booth speaker at all? ─────────────────────
+# OCT-97 made the voice channel honest: it only counts as reached when the
+# speech engine actually started. On a site hosted in the cloud that is
+# never true - the droplet has no speaker; the speaker (if any) lives on
+# the on-site box - so every panic press reported AMBER "partly sent" even
+# when every channel that exists had fired. Correct, but misleading, and it
+# is what a prospect sees on the demo.
+#
+# site_config.json can now say so:   "booth_voice": false
+# Then the voice channel is "not applicable": it is reported, but it is
+# neither a success nor a failure, and the status reflects the channels the
+# site really has. Missing key = true, so an on-site install with a speaker
+# behaves exactly as before. Read on every press, so editing the file takes
+# effect without a restart.
+
+def _booth_voice_enabled():
+    try:
+        import json
+        try:
+            from site_config import resolve_site_config_path
+            path = resolve_site_config_path()
+        except Exception:
+            path = "site_config.json"
+        with open(path, encoding="utf-8") as f:
+            v = json.load(f).get("booth_voice", True)
+    except Exception:
+        return True               # unknown -> behave as before
+    if isinstance(v, str):
+        return v.strip().lower() not in ("false", "off", "no", "0", "none")
+    return bool(v)
+
+
 def register_panic(app, push_alert=None):
 
     # OCT-97: probe the speech engine at startup, so the first real panic
@@ -173,6 +205,7 @@ def register_panic(app, push_alert=None):
 
         results = {}     # channel -> human string (unchanged shape)
         ok = {}          # channel -> True/False, the thing `success` reads
+        skipped = []     # channels this site does not have (not a failure)
 
         def record(channel, fired, detail):
             ok[channel] = bool(fired)
@@ -224,26 +257,30 @@ def register_panic(app, push_alert=None):
         # "announced", not "heard": the engine being ready does not prove a
         # speaker is plugged in, and this record should claim no more than
         # the system knows.
-        try:
+        if not _booth_voice_enabled():
+            results["voice"] = "not applicable: no booth speaker at this site"
+            skipped.append("voice")
+        else:
             try:
-                import booth_voice_ml as _v
-                can, why = _v.available(wait=2.0)
-                if can:
-                    _v.announce("panic", camera=camera)
-                    langs = "+".join(_v.languages())
-                    record("voice", True, f"announced ({langs}), engine ready")
-                else:
-                    record("voice", False, f"not spoken: {why}")
-            except ImportError:
-                import booth_voice as _v
-                can, why = _v.available(wait=2.0)
-                if can:
-                    _v.speak(f"Emergency. Guard assistance required at {camera}.")
-                    record("voice", True, "announced (en), engine ready")
-                else:
-                    record("voice", False, f"not spoken: {why}")
-        except Exception as e:
-            record("voice", False, f"unavailable: {e}")
+                try:
+                    import booth_voice_ml as _v
+                    can, why = _v.available(wait=2.0)
+                    if can:
+                        _v.announce("panic", camera=camera)
+                        langs = "+".join(_v.languages())
+                        record("voice", True, f"announced ({langs}), engine ready")
+                    else:
+                        record("voice", False, f"not spoken: {why}")
+                except ImportError:
+                    import booth_voice as _v
+                    can, why = _v.available(wait=2.0)
+                    if can:
+                        _v.speak(f"Emergency. Guard assistance required at {camera}.")
+                        record("voice", True, "announced (en), engine ready")
+                    else:
+                        record("voice", False, f"not spoken: {why}")
+            except Exception as e:
+                record("voice", False, f"unavailable: {e}")
 
         # 4) Ops WhatsApp
         #
@@ -300,6 +337,7 @@ def register_panic(app, push_alert=None):
             "message": human,            # show this to the guard verbatim
             "notified": notified,        # channels that reached a person
             "failed": failed,            # everything that did not fire
+            "not_applicable": skipped,   # channels this site does not have
             "results": results,          # unchanged: channel -> detail string
             "incident": results.get("incident") if ok.get("incident") else None,
             "time": datetime.now().isoformat(),

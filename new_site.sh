@@ -69,6 +69,7 @@ cat > "$CFG/site_config.json" <<JSON
   "viewer": { "enabled": true, "username": "$SLUG-demo" },
   "backup": { "enabled": true },
   "face": { "enabled": false },
+  "booth_voice": false,
   "demo": { "enabled": false }
 }
 JSON
