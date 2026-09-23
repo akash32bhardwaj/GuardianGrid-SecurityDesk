@@ -52,6 +52,45 @@ run "mkdir -p '$DATA' '$CFG' '$OPS'"
 ADMIN_PASS=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 14)
 JWT_SECRET=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 48)
 
+# The admin password goes in as a WERKZEUG HASH, never in the clear.
+#
+# OCT-93 / template bug: this script generated ADMIN_PASS, printed it, and
+# then wrote a site_config.json whose "admin" block had only a username.
+# The app falls back to the default "change-me-now" when no password is
+# present, so EVERY site created by this template accepted the default
+# password and rejected the one printed on screen. Demo and Primera were
+# repaired by hand; nothing repaired the template.
+#
+# Hashing runs inside the app image, which already has werkzeug, and the
+# password is passed by environment so it never appears in the process
+# list. If that fails for any reason, the plain password is written and
+# the operator is told loudly — a working site with a known-plain
+# password beats a site nobody can log into.
+hash_pw() {          # $1 = plain password -> stdout: hash, or the plain
+  local _h=""          #                       value if hashing is impossible
+  if [ "$DRY" = 0 ]; then
+    _h=$(docker run --rm -e GG_NEW_PASS="$1" --entrypoint python3 "$IMAGE" -c \
+      'import os; from werkzeug.security import generate_password_hash as g; print(g(os.environ["GG_NEW_PASS"]))' \
+      2>/dev/null | tail -n 1) || _h=""
+  fi
+  case "$_h" in
+    pbkdf2:*|scrypt:*|argon2:*) printf '%s' "$_h" ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
+VIEWER_PASS=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 12)
+ADMIN_STORED=$(hash_pw "$ADMIN_PASS")
+VIEWER_STORED=$(hash_pw "$VIEWER_PASS")
+case "$ADMIN_STORED" in
+  pbkdf2:*|scrypt:*|argon2:*) ;;
+  *) if [ "$DRY" = 0 ]; then
+       echo "⚠️  Could not hash passwords inside the $IMAGE image."
+       echo "    They are written in plain text in $CFG/site_config.json —"
+       echo "    replace them with hashes before this site goes live (OCT-93)."
+     fi ;;
+esac
+
 if [ "$DRY" = 0 ]; then
 cat > "$CFG/site_config.json" <<JSON
 {
@@ -65,8 +104,8 @@ cat > "$CFG/site_config.json" <<JSON
   "rtsp_cameras": [],
   "recording": { "enabled": false },
   "detection": { "enabled": true },
-  "admin": { "username": "admin-$SLUG" },
-  "viewer": { "enabled": true, "username": "$SLUG-demo" },
+  "admin": { "username": "admin-$SLUG", "password": "$ADMIN_STORED" },
+  "viewer": { "enabled": true, "username": "$SLUG-demo", "password": "$VIEWER_STORED" },
   "backup": { "enabled": true },
   "face": { "enabled": false },
   "booth_voice": false,
@@ -141,6 +180,12 @@ echo ""
 echo "Admin login   : admin-$SLUG"
 if [ "$DRY" = 0 ]; then
 echo "Admin password: $ADMIN_PASS      <-- record this now, shown once"
+echo "Viewer login  : $SLUG-demo"
+echo "Viewer password: $VIEWER_PASS     <-- read-only account for prospects"
+case "$ADMIN_STORED" in
+  pbkdf2:*|scrypt:*|argon2:*) echo "                (both stored as hashes, not readable on disk)" ;;
+  *) echo "                (stored IN PLAIN TEXT — see the warning above)" ;;
+esac
 fi
 echo ""
 echo "NEXT STEPS (manual, ~10 min):"

@@ -2465,14 +2465,23 @@ def live_score():
     if entry and now - entry["at"] < 60:
         return jsonify(entry["payload"])
     try:
-        from morning_report import collect, compute_score
+        from morning_report import collect, compute_score, score_parts
         d = collect(hours)
         score, label, color = compute_score(d)
         payload = {
-            "score": score,
+            "score": score,          # OCT-108: may be null = nothing to score
             "label": label,
             "color": color,
             "hours": hours,
+            # What the score is made of, so the dashboard can show the
+            # reasons rather than a bare number.
+            "parts": {k: {"label": v["label"], "value": v["value"],
+                          "detail": v["detail"]}
+                      for k, v in score_parts(d).items()},
+            "escalations_total": d.get("escalations_total", 0),
+            "escalations_answered": d.get("escalations_answered", 0),
+            "incidents_resolved": d.get("incidents_resolved", 0),
+            "ack_median_seconds": d.get("ack_median_seconds"),
             "vehicles_total": d.get("vehicles_total", 0),
             "vehicles_unknown": d.get("vehicles_unknown", 0),
             "vehicles_blacklisted": d.get("vehicles_blacklisted", 0),
@@ -2641,6 +2650,13 @@ def _watchdog_loop():
             d = collect(WATCHDOG_HOURS)
             score, label, _ = compute_score(d)
             now = time.time()
+            if score is None:
+                # OCT-108: nothing happened in the window that can be
+                # scored. That is not a low score and not a high one, so
+                # the watchdog says nothing and records nothing rather
+                # than alarming on an absence.
+                time.sleep(WATCHDOG_INTERVAL)
+                continue
             hist = _watchdog_state["history"]
             hist.append((now, score))
             # relative drop check

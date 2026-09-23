@@ -112,6 +112,12 @@ STRICT = os.environ.get("OCTA_STRICT_CONFIG", "").strip().lower() in (
 # from a working site.
 # ---------------------------------------------------------------------------
 _LEGACY_DEFAULT_ON = [
+    "resident_app",
+    "panic_button",
+    "octa_search",
+    "night_watch",
+    "pattern_watch",
+    "anomaly_score",
     "resident_directory",
     "flat_visitor_notifications",
     "bulk_resident_import",
@@ -155,26 +161,41 @@ TIER_WATCH = "watch"
 TIER_GUARD = "guard"
 TIER_COMMAND = "command"
 
+# OCT-08, settled 23 Sep. The split below is Akash's, and it moves two
+# things from where this file had them:
+#
+#   * the resident app and visitor management move from Watch to GUARD.
+#     The comment above still records the argument for the old placement —
+#     residents are who make a society renew — and it is a real one. This
+#     is a pricing decision, not a technical one, and it lives in one list:
+#     move the names back if selling proves the other way round.
+#   * PDF reports move from Guard to COMMAND, with the rest of the
+#     "prove it afterwards" set.
+#
+# Names added here so the newer surfaces are sellable rather than silently
+# free: resident_app, panic_button, octa_search, night_watch, pattern_watch,
+# anomaly_score.
 _TIER_ADDS = {
-    # detect, plus the resident-facing app
+    # WATCH — detect: the site is read and you are told what happened
     TIER_WATCH: [
         "anpr",
         "whatsapp_alerts",
         "morning_brief",
         "resident_directory",
-        "visitor_management",
-        "flat_visitor_notifications",
         "bulk_resident_import",
     ],
-    # verify: a guard can act on a detection and the action is recorded
+    # GUARD — verify: a guard can close the loop, and residents take part
     TIER_GUARD: [
         "guard_decision_flow",
-        "dvr_recording",
-        "pdf_reports",
+        "visitor_management",
+        "flat_visitor_notifications",
+        "resident_app",
+        "panic_button",
         "contractor_passes",
+        "dvr_recording",
         "security_score",
     ],
-    # prove: the record stands up afterwards, to a committee or an auditor
+    # COMMAND — prove: the closed loop leaves evidence someone else accepts
     TIER_COMMAND: [
         "face_watchlist",
         "smart_replay",
@@ -182,6 +203,11 @@ _TIER_ADDS = {
         "floor_heatmap",
         "voice_assistant",
         "weekly_audit",
+        "pdf_reports",
+        "octa_search",
+        "night_watch",
+        "pattern_watch",
+        "anomaly_score",
     ],
 }
 

@@ -69,6 +69,7 @@ CYAN   = "#00c2ff"
 GREEN  = "#00c48c"
 AMBER  = "#f5a623"
 RED    = "#ff3b55"
+SLATE  = "#8fa3bf"   # "nothing to score yet" — neither good nor bad
 MUTED  = "#7c8db5"
 LIGHT  = "#e5ecff"
 
@@ -178,6 +179,31 @@ def collect(hours):
     d["incidents_open"] = safe_count(cur,
         "SELECT COUNT(*) FROM incidents WHERE REPLACE(created_at,'T',' ') >= ? "
         "AND UPPER(status) = 'OPEN'", (since_iso,))
+
+    # --- response measures (OCT-108) ---------------------------------------
+    # The score used to be built from DETECTION counts, so a site whose
+    # cameras were unplugged scored 100. These are the numbers that go up
+    # when the system works and down when it does not: did a human answer,
+    # how fast, and was the incident closed.
+    d["incidents_resolved"] = safe_count(cur,
+        "SELECT COUNT(*) FROM incidents WHERE REPLACE(created_at,'T',' ') >= ? "
+        "AND UPPER(COALESCE(status,'')) <> 'OPEN'", (since_iso,))
+    d["escalations_total"] = safe_count(cur,
+        "SELECT COUNT(*) FROM escalations WHERE REPLACE(escalated_at,'T',' ') >= ?",
+        (since_iso,))
+    d["escalations_answered"] = safe_count(cur,
+        "SELECT COUNT(*) FROM escalations WHERE REPLACE(escalated_at,'T',' ') >= ? "
+        "AND acknowledged_at IS NOT NULL", (since_iso,))
+    d["escalations_auto_closed"] = safe_count(cur,
+        "SELECT COUNT(*) FROM escalations WHERE REPLACE(escalated_at,'T',' ') >= ? "
+        "AND COALESCE(auto_closed,0) = 1", (since_iso,))
+    _lat = [r[0] for r in safe_rows(cur,
+        "SELECT ack_latency_seconds FROM escalations "
+        "WHERE REPLACE(escalated_at,'T',' ') >= ? AND ack_latency_seconds IS NOT NULL",
+        (since_iso,)) if r[0] is not None]
+    d["ack_latencies"] = sorted(float(x) for x in _lat)
+    d["ack_median_seconds"] = (
+        d["ack_latencies"][len(d["ack_latencies"]) // 2] if d["ack_latencies"] else None)
 
     # --- top incidents for the report body ---------------------------------
     d["incident_rows"] = [
@@ -293,29 +319,85 @@ def collect(hours):
 
 # --------------------------------------------------------- security score ---
 
+# Weights. They must add to 100 when every part has data; when a part has
+# nothing to measure it is dropped and the rest are rescaled, so a quiet
+# site is not scored on numbers that do not exist.
+SCORE_WEIGHTS = {"answered": 40, "speed": 25, "resolved": 35}
+
+# The acknowledgement window the product promises: 3 minutes before an
+# incident escalates. Answering inside a minute is full marks; at or past
+# the escalation point, none.
+ACK_FAST_SECONDS = 60
+ACK_LIMIT_SECONDS = 180
+
+
+def score_parts(d):
+    """The measured parts of the score, each 0..1, with what they came from.
+
+    OCT-108. The old formula started at 100 and subtracted for every
+    incident DETECTED: a resident pressing SOS cost 15 points, a correctly
+    refused blacklisted vehicle cost 10. The most reliable way to score 100
+    was for the product to stop working. These parts measure the RESPONSE
+    instead — the thing that gets better when the system and the guards do
+    their job — and detection counts go back to being facts on the
+    dashboard rather than punishments.
+
+    A part with no denominator is returned with value None and is left out
+    of the score entirely. Absence is never scored as success.
+    """
+    parts = {}
+
+    esc_total = int(d.get("escalations_total") or 0)
+    answered = int(d.get("escalations_answered") or 0)
+    parts["answered"] = {
+        "label": "Alerts answered by a person",
+        "value": (answered / esc_total) if esc_total else None,
+        "detail": (f"{answered} of {esc_total} escalations acknowledged"
+                   if esc_total else "no escalations in this window"),
+    }
+
+    med = d.get("ack_median_seconds")
+    if med is None:
+        speed = None
+        detail = "nothing acknowledged yet"
+    else:
+        span = ACK_LIMIT_SECONDS - ACK_FAST_SECONDS
+        speed = 1.0 if med <= ACK_FAST_SECONDS else max(
+            0.0, (ACK_LIMIT_SECONDS - med) / span)
+        detail = f"median answer {int(med)}s (target under {ACK_FAST_SECONDS}s)"
+    parts["speed"] = {"label": "How fast they were answered",
+                      "value": speed, "detail": detail}
+
+    inc_total = int(d.get("incidents_total") or 0)
+    resolved = int(d.get("incidents_resolved") or 0)
+    parts["resolved"] = {
+        "label": "Incidents closed",
+        "value": (resolved / inc_total) if inc_total else None,
+        "detail": (f"{resolved} of {inc_total} incidents resolved"
+                   if inc_total else "no incidents in this window"),
+    }
+    return parts
+
+
 def compute_score(d):
-    """
-    GuardianGrid Security Score, 0-100.
-      Start at 100, subtract weighted penalties, floor at 0.
-    Tune the weights freely — keep them documented for clients.
-    """
-    score = 100
-    score -= d["incidents_critical"] * 15
-    score -= d["incidents_medium"]   * 5
-    score -= d["vehicles_blacklisted"] * 10
-    score -= min(d["pending_detections"], 5) * 3     # unresolved guard queue
-    score -= min(d["incidents_open"], 5) * 2          # open at report time
-    unknown_overnight = sum(1 for o in d.get("overnight_vehicles", [])
-                            if o["access"] not in ("VISITOR",))
-    score -= min(unknown_overnight, 3) * 3             # unknown vehicles overnight
+    """Security score, 0-100, measured on response. May be None.
 
-    # small penalty if unknown traffic ratio is unusually high (> 30 %)
-    if d["vehicles_total"] > 0:
-        ratio = d["vehicles_unknown"] / d["vehicles_total"]
-        if ratio > 0.30:
-            score -= 5
+    None means "nothing happened in this window that can be scored". That
+    is deliberately NOT 100: a site with nothing to show should not be
+    presented as a site performing perfectly, which is the whole of
+    OCT-108. Callers must handle None — see render_pdf, the WhatsApp
+    summary, /api/score/live and the watchdog.
+    """
+    parts = score_parts(d)
+    used = {k: p for k, p in parts.items() if p["value"] is not None}
+    if not used:
+        return None, "Nothing to score yet", SLATE
 
+    weight = sum(SCORE_WEIGHTS[k] for k in used)
+    total = sum(SCORE_WEIGHTS[k] * p["value"] for k, p in used.items())
+    score = int(round(100 * total / weight))
     score = max(0, min(100, score))
+
     if score >= 90:
         label, color = "Excellent", GREEN
     elif score >= 75:
@@ -324,6 +406,11 @@ def compute_score(d):
         label, color = "Needs attention", AMBER
     else:
         label, color = "At risk", RED
+
+    # Small samples get said out loud rather than presented as a verdict.
+    measured = int(d.get("escalations_total") or 0) + int(d.get("incidents_total") or 0)
+    if measured < 5:
+        label += " (provisional)"
     return score, label, color
 
 
@@ -430,11 +517,15 @@ def render_pdf(d, score, label, color, out_path):
     c.setLineWidth(3)
     c.circle(cx, cy, r, stroke=1, fill=0)
     c.setFillColor(HexColor(LIGHT))
-    c.setFont("Helvetica-Bold", 20)
-    c.drawCentredString(cx, cy - 3, str(score))
+    # OCT-108: the score can be None ("nothing happened worth scoring").
+    # Printing 100, or 0, would both be a claim the data does not support.
+    c.setFont("Helvetica-Bold", 20 if score is not None else 13)
+    c.drawCentredString(cx, cy - 3, str(score) if score is not None else "n/a")
     c.setFont("Helvetica", 7)
     c.setFillColor(HexColor(color))
-    c.drawCentredString(cx, cy - r - 4 * mm, f"Security score · {label}")
+    c.drawCentredString(cx, cy - r - 4 * mm,
+                        f"Response score · {label}" if score is not None
+                        else label)
 
     # KPI row
     y = H - 58 * mm
@@ -632,11 +723,14 @@ def whatsapp_summary_text(d, score, label):
     except Exception:
         pass
 
-    lines += [
-        "",
-        f"*Security score: {score}/100 ({label})*",
-        "Reply *status* anytime for a live summary.",
-    ]
+    if score is None:
+        lines += ["", f"*Response score: {label}*"]
+    else:
+        lines += ["", f"*Response score: {score}/100 ({label})*",
+                  "  " + " · ".join(
+                      f"{p['label']}: {round(p['value'] * 100)}%"
+                      for p in score_parts(d).values() if p["value"] is not None)]
+    lines += ["Reply *status* anytime for a live summary."]
     return "\n".join(lines)
 
 def send_whatsapp(body):
@@ -666,7 +760,12 @@ def main():
     risk_area, risk_window, recommendation = compute_risk(d)
     d["risk_area"], d["risk_window"], d["recommendation"] = risk_area, risk_window, recommendation
 
-    print(f"=== Morning brief · {d['site']} · score {score} ({label}) ===")
+    print(f"=== Morning brief · {d['site']} · score "
+          f"{score if score is not None else 'n/a'} ({label}) ===")
+    for _k, _p in score_parts(d).items():
+        print(f"    {_p['label']}: "
+              f"{'—' if _p['value'] is None else str(round(_p['value'] * 100)) + '%'}"
+              f"  ({_p['detail']})")
     print(f"vehicles={d['vehicles_total']} unknown={d['vehicles_unknown']} "
           f"blacklist={d['vehicles_blacklisted']} incidents={d['incidents_total']}")
 
@@ -684,6 +783,15 @@ def main():
 
     summary = {
         "date": stamp, "score": score, "label": label,
+        # OCT-108: how the score was arrived at, so a committee can see
+        # what it is measuring instead of taking a number on trust.
+        "score_parts": {k: {"label": v["label"], "value": v["value"],
+                            "detail": v["detail"]}
+                        for k, v in score_parts(d).items()},
+        "escalations_total": d.get("escalations_total", 0),
+        "escalations_answered": d.get("escalations_answered", 0),
+        "incidents_resolved": d.get("incidents_resolved", 0),
+        "ack_median_seconds": d.get("ack_median_seconds"),
         "vehicles_total": d["vehicles_total"],
         "vehicles_unknown": d["vehicles_unknown"],
         "vehicles_blacklisted": d["vehicles_blacklisted"],
