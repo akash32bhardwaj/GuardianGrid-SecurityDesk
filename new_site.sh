@@ -109,6 +109,7 @@ cat > "$CFG/site_config.json" <<JSON
   "backup": { "enabled": true },
   "face": { "enabled": false },
   "booth_voice": false,
+  "tier": "command",
   "demo": { "enabled": false }
 }
 JSON
@@ -198,4 +199,10 @@ echo "  3. Heartbeat — add to $OPS/heartbeat_config.json sites[]:"
 echo "       {\"name\": \"$NAME\", \"pi_ip\": \"<tailscale-ip-when-installed>\","
 echo "        \"db\": \"$DATA/guardiangrid.db\", \"max_silent_hours\": 6}"
 echo "  4. Cameras/Pi later: update site_config.json rtsp_cameras + restart."
+echo "  5. Plan: this site starts on \"tier\": \"command\" (everything on)."
+echo "     Set it to watch or guard in $CFG/site_config.json to match what"
+echo "     the client actually bought, then: docker restart $CONTAINER"
+echo "  6. Resident app: add this site to societies.json on the picker site"
+echo "     (code $(echo "$SLUG" | tr "a-z" "A-Z")-style = the subdomain in capitals) so residents"
+echo "     can reach it from the Octa Resident app."
 echo "══════════════════════════════════════════════════════════════"
