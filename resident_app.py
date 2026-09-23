@@ -664,6 +664,62 @@ def _twilio():
         return None, f"visitor_notify unavailable: {e}"
 
 
+# ── Which channels does this society use to reach RESIDENTS? ────────
+#
+# Decision, 23 Sep: residents are app-only. They get a printed PIN slip,
+# log in with flat number + PIN (no phone number is stored at all) and
+# everything reaches them as an app notification. WhatsApp stays for the
+# people who answer an emergency - the security head and the committee -
+# because they are not residents, have no resident app, and an SOS that
+# only lights up a screen in the booth reaches nobody at 2am.
+#
+# Two switches in site_config.json, both defaulting to the app-only shape:
+#
+#   "resident_whatsapp":  false   WhatsApp to residents (vehicle alerts,
+#                                 morning brief, household decisions)
+#   "resident_otp_login": false   login by mobile number + WhatsApp code
+#
+# Set either to true for a society that wants it. Staff alerting (SOS,
+# escalation, ops) is NOT affected by these - see _notify() in the SOS
+# route, which always goes out.
+
+def _resident_channels() -> dict:
+    cfg = {}
+    try:
+        try:
+            from site_config import resolve_site_config_path
+            path = str(resolve_site_config_path())
+        except Exception:
+            path = os.path.join(_BASE_DIR, "site_config.json")
+        with open(path, encoding="utf-8") as f:
+            cfg = json.load(f)
+    except Exception:
+        cfg = {}
+
+    def _flag(key):
+        v = cfg.get(key, False)
+        if isinstance(v, str):
+            return v.strip().lower() in ("1", "true", "yes", "on")
+        return bool(v)
+
+    return {"whatsapp": _flag("resident_whatsapp"),
+            "otp_login": _flag("resident_otp_login")}
+
+
+@resident_app_bp.route("/api/resident/site-info")
+def site_info():
+    """What the login screen needs before anyone has logged in.
+
+    No resident data, no secrets: the society's name and which ways in it
+    offers, so the app can stop showing a mobile-number login on a site
+    that does not have one.
+    """
+    ch = _resident_channels()
+    return jsonify({"success": True, "site": _site_name(),
+                    "login": {"pin": True, "otp": ch["otp_login"]},
+                    "whatsapp": ch["whatsapp"]})
+
+
 def _send_wa(to: str, body: str) -> dict:
     """Send a WhatsApp text. Tries whatsapp_alerts._send_whatsapp first
     (the path every other Octa alert uses), then the Twilio client.
@@ -722,6 +778,11 @@ def _site_name() -> str:
 
 @resident_app_bp.route("/api/resident/otp/request", methods=["POST"])
 def otp_request():
+    if not _resident_channels()["otp_login"]:
+        return jsonify({"success": False,
+                        "message": "This society signs in with flat number "
+                                   "and PIN. Ask your committee for your PIN "
+                                   "slip."}), 403
     data = request.get_json(silent=True) or {}
     phone = _norm_phone(data.get("phone", ""))
     if len(_digits(phone)) < 10:
@@ -786,6 +847,10 @@ def _otp_hash(phone: str, otp: str) -> str:
 
 @resident_app_bp.route("/api/resident/otp/verify", methods=["POST"])
 def otp_verify():
+    if not _resident_channels()["otp_login"]:
+        return jsonify({"success": False,
+                        "message": "This society signs in with flat number "
+                                   "and PIN."}), 403
     if _SECRET_EPHEMERAL:
         return jsonify({"success": False, "status": "key_unavailable",
                         "message": ("Resident login is unavailable on this "
@@ -2125,10 +2190,20 @@ def household_decide(rid, action):
 
     def _tell():
         what = r["plate"] if r["kind"] == "vehicle" else f"{r['name']} ({r['kind']})"
-        msg = (f"{'✅' if action == 'approve' else '❌'} *Defender Octa* — {_site_name()}\n\n"
-               f"Your request to add {what} to flat {r['flat_no']} was "
-               f"{'approved' if action == 'approve' else 'not approved'}.")
-        _send_wa(r["resident_phone"], msg)
+        decided = "approved" if action == "approve" else "not approved"
+        # The app notification is the channel every resident has, including
+        # the PIN-slip residents whose phone number is deliberately not
+        # stored. It goes to the flat as well as the number, so a flat with
+        # several phones all hear the answer.
+        _push_to_phones(_flat_phones(r["flat_no"]) + [f"flat:{r['flat_no']}"], {
+            "title": f"{'✅' if action == 'approve' else '❌'} {what} {decided}",
+            "body": f"Your request for flat {r['flat_no']} was {decided}.",
+            "tag": f"household-{r['id']}", "url": "/resident"})
+        if _resident_channels()["whatsapp"]:
+            msg = (f"{'✅' if action == 'approve' else '❌'} *Defender Octa* — {_site_name()}\n\n"
+                   f"Your request to add {what} to flat {r['flat_no']} was "
+                   f"{decided}.")
+            _send_wa(r["resident_phone"], msg)
     threading.Thread(target=_tell, daemon=True).start()
 
     return jsonify({"success": True, "status": "APPROVED" if action == "approve" else "REJECTED"})
@@ -2241,11 +2316,12 @@ def _vehicle_alert_tick():
         _push_to_phones(phones, {"title": f"🚗 {plate} {verb}",
                                  "body": f"{r['camera'] or 'Gate'} · {_fmt_time(r['timestamp'])}",
                                  "tag": f"veh-{plate}", "url": "/resident"})
-        msg = (f"🚗 *Defender Octa* — {_site_name()}\n\n"
-               f"{plate} {verb} {r['camera'] or 'the gate'} at {_fmt_time(r['timestamp'])}."
-               f"\n_You asked to be told when your vehicle moves — turn this off in the app._")
-        for ph in phones:
-            _send_wa(ph, msg)
+        if _resident_channels()["whatsapp"]:
+            msg = (f"🚗 *Defender Octa* — {_site_name()}\n\n"
+                   f"{plate} {verb} {r['camera'] or 'the gate'} at {_fmt_time(r['timestamp'])}."
+                   f"\n_You asked to be told when your vehicle moves — turn this off in the app._")
+            for ph in phones:
+                _send_wa(ph, msg)
     _state_set("alert_last_event_id", last_id)
 
 
@@ -2269,11 +2345,18 @@ def _daily_brief_tick():
     reps = _reports(1)
     text = _brief_text(reps[0]) if reps else "Quiet night — no incidents reported."
     score = reps[0].get("score") if reps else None
-    msg = (f"☀️ *Defender Octa* — {_site_name()} morning brief\n\n{text}"
-           + (f"\n\nSecurity score: {score}/100" if score is not None else "")
-           + "\n_Daily brief — turn off in the app._")
-    for ph in phones:
-        _send_wa(ph, msg)
+    if _resident_channels()["whatsapp"]:
+        msg = (f"☀️ *Defender Octa* — {_site_name()} morning brief\n\n{text}"
+               + (f"\n\nSecurity score: {score}/100" if score is not None else "")
+               + "\n_Daily brief — turn off in the app._")
+        for ph in phones:
+            _send_wa(ph, msg)
+    else:
+        # App-only society: the brief still reaches the resident, as a
+        # notification they can tap into the app.
+        _push_to_phones(phones, {"title": f"☀️ {_site_name()} — morning brief",
+                                 "body": text[:180],
+                                 "tag": "brief", "url": "/resident"})
 
 
 def _arrival_expiry_tick():
@@ -2641,43 +2724,6 @@ def pin_login():
                     "site": _site_name()})
 
 
-# ── Society code: what a resident types in the Play Store app ─────────
-# The one Octa Resident app serves every society. On first launch it asks
-# for a society code and looks it up in societies.json on
-# app.snguardiangrid.com, which maps the code to this site's address.
-# The code is printed on every PIN slip so a resident gets both at once.
-#
-# By convention the code IS the site's subdomain in capitals:
-#   demo.snguardiangrid.com          -> DEMO
-#   esconprimera.snguardiangrid.com  -> ESCONPRIMERA
-# so nothing has to be configured per site. A site that wants a shorter
-# code sets "society_code" in site_config.json, and the same code must be
-# the key in societies.json.
-
-def _society_code() -> str:
-    try:
-        try:
-            from site_config import resolve_site_config_path
-            p = str(resolve_site_config_path())
-        except Exception:
-            p = os.path.join(_BASE_DIR, "site_config.json")
-        with open(p, encoding="utf-8") as f:
-            cfg = json.load(f)
-        explicit = str(cfg.get("society_code") or "").strip()
-        if explicit:
-            return re.sub(r"[^A-Z0-9]", "", explicit.upper())
-    except Exception:
-        pass
-    try:
-        host = (request.host or "").split(":")[0].lower()
-    except Exception:
-        host = ""
-    if not host or host in ("localhost", "app.snguardiangrid.com") \
-            or re.fullmatch(r"[0-9.]+", host):
-        return ""
-    return re.sub(r"[^A-Z0-9]", "", host.split(".")[0].upper())
-
-
 # ── Admin: generate / reset / status (dashboard JWT via global guard) ──
 
 def _gen_pin() -> str:
@@ -2696,7 +2742,7 @@ def pins_status():
     for f, r in have.items():          # PINs for flats not in the directory yet
         if f not in {x["flat_no"] for x in out}:
             out.append({"flat_no": f, "has_pin": True, "last_login": r["last_login"]})
-    return jsonify({"success": True, "flats": out, "society_code": _society_code(),
+    return jsonify({"success": True, "flats": out,
                     "with_pin": sum(1 for x in out if x["has_pin"]),
                     "total": len(out)})
 
@@ -2728,7 +2774,7 @@ def pins_generate():
         made.append({"flat_no": f, "pin": pin})
     con.commit(); con.close()
     return jsonify({"success": True, "generated": len(made), "pins": made,
-                    "site": _site_name(), "society_code": _society_code(),
+                    "site": _site_name(),
                     "note": "PINs are shown only once — print the slips now. "
                             "Generating again replaces a flat's PIN."})
 
@@ -2746,5 +2792,4 @@ def pins_reset():
                 (flat, _pin_hash(flat, pin), _now_str(), who))
     con.commit(); con.close()
     return jsonify({"success": True, "flat_no": flat, "pin": pin,
-                    "site": _site_name(), "society_code": _society_code(),
                     "note": "Shown once — hand it to the resident."})

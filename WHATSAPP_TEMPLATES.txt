@@ -1,0 +1,101 @@
+WHATSAPP BUSINESS SENDER — WHAT DEFENDER OCTA ACTUALLY NEEDS
+============================================================
+Decided 23 Sep 2026. Residents are app-only: they log in with a flat
+number and the PIN on their printed slip, no phone number is stored, and
+everything reaches them as an app notification. WhatsApp is now only for
+the people who ANSWER an emergency — the security head, the committee
+and you — because they are not residents and have no resident app.
+
+That cuts the templates to submit from seven to three, and removes the
+authentication (login code) template, which is the slowest kind to get
+approved.
+
+Switches, per site, in site_config.json:
+    "resident_whatsapp":  false     (default) nothing to residents
+    "resident_otp_login": false     (default) no WhatsApp login codes
+Set either to true for a society that specifically wants it — the two
+optional templates at the end of this file cover that case.
+
+
+SUBMIT THESE THREE
+------------------
+
+1. sos_alert            Category: UTILITY
+   Sent to: security head + committee, the moment a resident presses SOS.
+
+   🆘 *Defender Octa* — {{1}}
+
+   Flat {{2}} · {{3}}
+   Time {{4}}
+   {{5}}
+
+   Acknowledge on the dashboard within 3 minutes or this escalates.
+
+   {{1}} society name · {{2}} flat · {{3}} resident name
+   {{4}} time · {{5}} incident id or the resident's note
+
+2. incident_escalation  Category: UTILITY
+   Sent to: you (and the security head) when an incident is NOT
+   acknowledged inside the window.
+
+   ⚠️ *Defender Octa* — {{1}}
+
+   {{2}} has not been acknowledged for {{3}} minutes.
+   Incident {{4}}.
+
+   {{1}} society name · {{2}} what happened · {{3}} minutes waited
+   {{4}} incident id
+
+3. morning_brief        Category: UTILITY
+   Sent to: the committee's nominated number, 7:35 am.
+
+   ☀️ *Defender Octa* — {{1}} morning brief
+
+   {{2}}
+
+   Response score: {{3}}
+
+   {{1}} society name · {{2}} the night in one paragraph
+   {{3}} score out of 100, or "nothing to score"
+
+
+ONLY IF A SOCIETY ASKS FOR RESIDENT WHATSAPP
+--------------------------------------------
+
+4. vehicle_movement     Category: UTILITY
+   🚗 *Defender Octa* — {{1}}
+
+   {{2}} {{3}} {{4}} at {{5}}.
+   You asked to be told when your vehicle moves — turn this off in the app.
+
+   {{1}} society · {{2}} plate · {{3}} entered/left · {{4}} gate · {{5}} time
+
+5. household_decision   Category: UTILITY
+   *Defender Octa* — {{1}}
+
+   Your request to add {{2}} to flat {{3}} was {{4}}.
+
+   {{1}} society · {{2}} what was requested · {{3}} flat
+   {{4}} approved / not approved
+
+
+NOT NEEDED ANY MORE
+-------------------
+   login_code          residents sign in with flat + PIN
+   visitor_at_gate     app notification
+   hold_at_gate        app notification
+   pass_used           app notification
+
+
+NOTES FOR THE APPLICATION
+-------------------------
+* Business: S&N GuardianGrid Technologies. Use the Meta Business account
+  you already own; verification is the slow part, so start it first.
+* Opt-in: staff numbers are given to us by the society in writing when it
+  signs. Say so on the form — Meta asks how people consented.
+* Sender display name: "Defender Octa" (or "GuardianGrid Security").
+* Every template above is UTILITY, not MARKETING: each is a response to
+  something that happened at that person's own gate.
+* Until the sender is approved, Twilio's sandbox still works for numbers
+  that have joined it — fine for your own phone and for demos, not for a
+  client's security head.
