@@ -307,6 +307,14 @@ REGISTERED = [
     ("PB13LK9090", "Kiran Malhotra",   "D-306", "D", "Honda Activa",       "Grey",   "KNOWN"),
     ("HR26TT0099", "Vikram Chadha",    "B-302", "B", "Toyota Innova",      "Silver", "VISITOR"),
     ("PB07ZZ6611", "Former tenant",    "C-108", "C", "Maruti Alto",        "White",  "BLACKLISTED"),
+    # D-404 is the flat the Play Store listing gives Google's reviewer, and the
+    # one every resident-app screenshot is taken from. It was added by hand
+    # during testing and was never in this list, so the seeder wrote sightings
+    # for eight other flats and none for the one anybody actually logs into.
+    # The society looked busy and the resident's own screen read "Nothing at
+    # the gate for flat D-404 in the last 24 hours" -- which is the first
+    # thing a reviewer would have seen.
+    ("PB09ZZ1111", "Test Resident",    "D-404", "D", "Maruti Swift",       "White",  "KNOWN"),
 ]
 
 
