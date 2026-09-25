@@ -37,6 +37,7 @@ import time
 from datetime import datetime, timedelta
 
 from flask import Blueprint, jsonify
+from site_profile import feature_required
 
 logger = logging.getLogger(__name__)
 pattern_bp = Blueprint("pattern_watch", __name__)
@@ -287,6 +288,7 @@ def _scan_loop():
 # ════════════════════════════════════════════════════════════════════
 
 @pattern_bp.route("/api/patterns")
+@feature_required("pattern_watch")
 def api_patterns():
     try:
         findings = run_all_detectors()

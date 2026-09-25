@@ -1280,6 +1280,7 @@ def camera_stream(cam_id):
     return rtmp_feed(cam_id)
 
 @app.route("/generate_report")
+@feature_required("pdf_reports")
 def generate_report():
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
@@ -1561,6 +1562,7 @@ def cameras_ai_status():
     return jsonify(get_all_cam_stats())
 
 @app.route("/api/reports")
+@feature_required("pdf_reports")
 def list_reports():
     out = []
     rdir = "reports"
@@ -1579,6 +1581,7 @@ REPORTS_DIR_ABS = os.path.abspath("reports")
 
 
 @app.route("/api/reports/<date>/pdf")
+@feature_required("pdf_reports")
 def report_pdf(date):
     # Same absolute-path reason as AUDITS_DIR above: this route had the
     # identical mismatch, so the daily brief PDF was never downloadable in a
@@ -1605,6 +1608,7 @@ AUDITS_DIR = os.path.abspath(os.path.join("reports", "audits"))
 
 
 @app.route("/api/audits")
+@feature_required("weekly_audit")
 def list_audits():
     out = []
     if os.path.isdir(AUDITS_DIR):
@@ -1620,6 +1624,7 @@ def list_audits():
 
 
 @app.route("/api/audits/<date>/pdf")
+@feature_required("weekly_audit")
 def audit_pdf(date):
     safe = re.sub(r"[^0-9-]", "", date)
     path = os.path.join(AUDITS_DIR, f"audit_{safe}.pdf")
@@ -2062,59 +2067,86 @@ def require_auth():
 
     request.auth_user = user                  # available to routes if needed
 
-    # ── GUARD role: operate the gate, nothing administrative ───────
-    # OCT-87. A guard needs to work the decision loop and nothing else.
+    # ── Role limits, in one place ────────────────────────────
+    # OCT-87 / OCT-88. Three roles exist: SUPER_ADMIN (everything), GUARD
+    # (works the gate) and VIEWER (a demo or QR visitor, read-only).
     #
     # DENY-LIST, not allow-list, and that is a deliberate trade. An
     # allow-list is the safer shape in principle — default deny — but this
-    # app has 149 routes and I do not know every path the gate console
+    # app has 153 routes and I do not know every path the gate console
     # touches. An allow-list I got wrong would break the gate loop at a
     # client site, silently, at the worst moment. A deny-list I got wrong
     # leaves a guard with slightly more access than intended, which is
     # visible and correctable.
     #
-    # THIS LIST NEEDS A PASS AGAINST THE FULL ROUTE TABLE before it is
-    # trusted. The table now prints at startup with methods (OCT-71), so
-    # that review is possible for the first time. Treat what follows as a
-    # defensible starting point, not a finished policy.
+    # THE ROUTE-TABLE PASS THIS COMMENT USED TO ASK FOR IS DONE, 25 Sep,
+    # against all 153 registered routes. It found the bug described below.
     #
     # The one nuance worth keeping: a guard MUST be able to look up a
     # plate and see who it belongs to — that is the job — but must not be
-    # able to list or export the directory. Lookup is allowed; the bulk
-    # surfaces are not.
-    _GUARD_DENY_EXACT = (
+    # able to list or export the directory. /residents/lookup/<plate> stays
+    # open; the bulk surfaces do not.
+    _ADMIN_ONLY_EXACT = (
         "/residents",                    # the whole directory
         "/residents/export",
         "/residents/import",
         "/residents/add",
         "/api/site-config/reload",
     )
-    _GUARD_DENY_PREFIX = (
+    _ADMIN_ONLY_PREFIX = (
         "/api/admin/",                   # every admin surface
         "/residents/remove",
         "/residents/blacklist",          # a lasting decision, not a gate one
         "/api/auth/users",               # account management
         "/api/settings",
     )
-    if (request.auth_user or {}).get("role") == "GUARD":
-        if request.method != "GET" or p in _GUARD_DENY_EXACT:
-            if (p in _GUARD_DENY_EXACT
-                    or any(p.startswith(x) for x in _GUARD_DENY_PREFIX)):
-                return jsonify({
-                    "success": False,
-                    "error": "not_permitted_for_guard",
-                    "message": ("This is an administrator action. A guard "
-                                "account cannot change it — ask the society "
-                                "admin."),
-                }), 403
 
-    # ── VIEWER role: read-only enforcement ─────────────────────────
-    # Viewers (demo/QR visitors) may look but never touch:
+    # Read yes, write no. These two are on the guard's own screen and a
+    # guard should SEE them — what notices are up, which household
+    # requests are waiting — but neither decision is a gate decision.
+    # Approving "add this car to flat B-302" is a lasting registration,
+    # the same class of act as blacklisting; a notice goes to every
+    # resident in the society. Both belong to the committee.
+    _ADMIN_ONLY_WRITE_PREFIX = (
+        "/api/gate/household/",
+        "/api/gate/notices",
+    )
+
+    def _admin_only(path: str) -> bool:
+        return (path in _ADMIN_ONLY_EXACT
+                or any(path.startswith(x) for x in _ADMIN_ONLY_PREFIX))
+
+    role = (request.auth_user or {}).get("role")
+
+    # ── GUARD: operate the gate, nothing administrative ─────────
+    if role == "GUARD":
+        # THE BUG THIS REPLACES. The check used to sit nested inside
+        #     if request.method != "GET" or p in _GUARD_DENY_EXACT:
+        # so the PREFIX list was consulted only for writes. Every
+        # administrative surface was therefore READABLE by a booth account:
+        # GET /api/admin/flats/pins returns every flat number in the
+        # society, whether it has a PIN, and when it last signed in — the
+        # resident directory under another name, which is the single thing
+        # this block exists to keep away from a guard. For a directory,
+        # reading is the half that matters. The deny list now applies to
+        # every method, which is what it always read as.
+        if _admin_only(p) or (request.method != "GET"
+                              and p.startswith(_ADMIN_ONLY_WRITE_PREFIX)):
+            return jsonify({
+                "success": False,
+                "error": "not_permitted_for_guard",
+                "message": ("This is an administrator action. A guard "
+                            "account cannot change it — ask the society "
+                            "admin."),
+            }), 403
+
+    # ── VIEWER: read-only enforcement ─────────────────────
+    # Viewers may look but never touch:
     #   * every non-GET request is refused
     #   * the resident directory is refused even for reading — names,
     #     flats and phone numbers are not demo material
     # Structural rule in ONE place, so no route can forget to check.
-    if (request.auth_user or {}).get("role") == "VIEWER":
+    if role == "VIEWER":
         # Two POSTs are read-only in effect and viewers need both:
         # /api/search runs parameterised SELECTs and nothing else, and
         # /api/stream/ticket only mints the credential that lets their
@@ -2123,9 +2155,8 @@ def require_auth():
         #
         # A viewer is a demo or QR visitor, and letting one fire a Tier-3
         # alarm is a real abuse vector — which is why it was refused. But
-        # the interface shows them the button anyway (no role awareness in
-        # the frontend at all), so the first they learn of the refusal is
-        # the moment they needed it.
+        # the interface showed them the button anyway, so the first they
+        # learned of the refusal was the moment they needed it.
         #
         # Of the two ways to resolve that, hiding the control is the wrong
         # one. A false alarm costs somebody checking. A blocked alarm costs
@@ -2138,10 +2169,15 @@ def require_auth():
                               "/api/panic")):
             return jsonify({"success": False,
                             "message": "Viewer access is read-only"}), 403
-        if p.startswith("/residents"):
+        # The same route-table pass found the directory reachable under a
+        # SECOND name. /api/admin/* is administrative by definition and
+        # includes /api/admin/flats/pins, so a demo visitor could list a
+        # real society's flats. Both names are closed here.
+        if p.startswith("/residents") or _admin_only(p):
             return jsonify({"success": False,
                             "message": "Resident directory is not available "
                                        "to viewer accounts"}), 403
+
 
 # ── Manual gate control ──────────────────────────────────────────
 gate_state = {}   # plate → {"status": "INSIDE"/"HOLD", "since": iso}
@@ -2537,6 +2573,7 @@ def _replay_segments(camera, date):
     return out
 
 @app.route("/api/replay/segments")
+@feature_required("smart_replay")
 def replay_segments():
     """?camera=Parking A&date=YYYY-MM-DD → all segments for that day."""
     camera = request.args.get("camera", "")
@@ -2545,6 +2582,7 @@ def replay_segments():
                     "segments": _replay_segments(camera, date)})
 
 @app.route("/api/replay/for_event")
+@feature_required("smart_replay")
 def replay_for_event():
     """?camera=Parking A&timestamp=2026-07-17T19:02:06 → the segment containing
     that moment, plus offset_seconds to seek to inside the clip."""
@@ -2570,6 +2608,7 @@ def replay_for_event():
     return jsonify({"found": True, "camera": camera, "timestamp": ts_raw, **best})
 
 @app.route("/api/replay/clip/<camera>/<date>/<filename>")
+@feature_required("smart_replay")
 def replay_clip(camera, date, filename):
     """Serve one segment MP4 (streams in <video> tags / browser)."""
     camera, date, filename = _replay_safe(camera), _replay_safe(date), _replay_safe(filename)
@@ -2728,6 +2767,7 @@ def score_alerts():
 REEL_DIR = os.path.join(BASE_DIR, "reports", "replays")
 
 @app.route("/api/replays")
+@feature_required("smart_replay")
 def list_replays():
     """All generated reels, newest first: [{date, clips, duration_s}]."""
     out = []
@@ -2756,6 +2796,7 @@ def list_replays():
     return jsonify(out)
 
 @app.route("/api/replays/<date>/video")
+@feature_required("smart_replay")
 def replay_reel_video(date):
     """Serve one reel MP4 (seekable in <video> tags)."""
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):

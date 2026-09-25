@@ -43,6 +43,7 @@ import sqlite3
 from datetime import datetime, timedelta
 
 from flask import Blueprint, request, jsonify
+from site_profile import feature_required
 
 try:
     import requests as _rq
@@ -655,12 +656,21 @@ def _answer_line(f, n_veh, n_inc, n_vis, last_move):
 # 6) ROUTES
 # ════════════════════════════════════════════════════════════════════
 
+# NOT gated by @feature_required, deliberately. deploy_v2.sh step [4/5]
+# health-checks every container with a curl to this path and accepts 401
+# or 200. It answers 401 today because require_auth runs first, so a gate
+# here would be invisible — right up until somebody exempts this path from
+# auth, at which point a Watch-tier site would 403 and every deploy would
+# report a failed container. A liveness probe should not depend on what
+# the site has paid for. The POST below, which is the actual feature,
+# carries the gate.
 @search_bp.route("/api/search/ping")
 def search_ping():
     return jsonify({"ok": True, "llm": bool(_API_KEY), "model": _MODEL})
 
 
 @search_bp.route("/api/search", methods=["POST"])
+@feature_required("octa_search")
 def octa_search():
     data = request.get_json(silent=True) or {}
     q = (data.get("query") or "").strip()

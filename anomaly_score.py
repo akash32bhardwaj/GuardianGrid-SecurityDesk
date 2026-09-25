@@ -37,6 +37,7 @@ import time
 from datetime import datetime, timedelta
 
 from flask import Blueprint, jsonify
+from site_profile import feature_required
 
 logger = logging.getLogger(__name__)
 anomaly_bp = Blueprint("anomaly_score", __name__)
@@ -283,6 +284,7 @@ def _check_loop():
 
 
 @anomaly_bp.route("/api/anomaly")
+@feature_required("anomaly_score")
 def api_anomaly():
     try:
         return jsonify({"success": True, **current_status()})

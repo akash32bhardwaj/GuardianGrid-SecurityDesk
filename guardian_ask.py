@@ -22,6 +22,7 @@ Wire it in api_server.py:
 import logging
 from datetime import datetime
 from flask import request, jsonify
+from site_profile import feature_required
 
 logger = logging.getLogger("guardian-ask")
 
@@ -224,6 +225,7 @@ def _llm_fallback(question: str) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 def register_guardian_ask(app):
     @app.route("/api/guardian/ask", methods=["POST"])
+    @feature_required("voice_assistant")
     def guardian_ask():
         try:
             data = request.get_json(silent=True) or {}
@@ -243,6 +245,7 @@ def register_guardian_ask(app):
             })
 
     @app.route("/guardian", methods=["GET"])
+    @feature_required("voice_assistant")
     def guardian_assistant_page():
         """Serve the voice assistant from the SAME origin as the API, so the
         browser doesn't block the fetch (fixes 'Couldn't reach Guardian')."""

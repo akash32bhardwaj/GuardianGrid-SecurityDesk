@@ -19,6 +19,8 @@ Wiring (two lines in api_server.py, near the other route registrations):
 import json
 import os
 
+from site_profile import feature_required
+
 DEFAULTS = {"enabled": True, "start": 23, "end": 5}
 
 
@@ -57,6 +59,7 @@ def _load_window():
 
 def register_nightwatch(app):
     @app.route("/api/nightwatch/config")
+    @feature_required("night_watch")
     def nightwatch_config():
         from flask import jsonify
         return jsonify(_load_window())
