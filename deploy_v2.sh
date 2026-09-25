@@ -228,5 +228,13 @@ install_script /opt/octa/deploy_v2.sh   /opt/octa/deploy.sh
 install_script /opt/octa/reset_demo.sh  /opt/octa/reset_demo.sh
 install_script /opt/octa/run_job.sh     /opt/octa/run_job.sh
 install_script /opt/octa/new_site.sh    /opt/octa-ops/new_site.sh
+# OCT-118. Left off this list when it was written, so it arrived through the
+# git pull as -rw-r--r-- and `sudo /opt/octa/set_site_password.sh` answered
+# "command not found" -- for a file plainly sitting there. Git does not
+# reliably carry the executable bit across a Windows commit, which is the
+# entire reason this step exists. Hit for real on 25 Sep while resetting a
+# guard password mid-verification: the script you reach for under pressure
+# was the one that would not run.
+install_script /opt/octa/set_site_password.sh /opt/octa/set_site_password.sh
 
 echo "✅ Deployed $(git log --oneline -1) to all matching sites"

@@ -114,6 +114,10 @@ SOS_COOLDOWN_SECONDS  = 60          # ignore double-taps from the same flat
 PASS_CODE_PREFIX      = "OCTA"
 HOME_LOOKBACK_HOURS   = 24
 PULSE_CACHE_SECONDS   = 60
+# Below this many acknowledged incidents in the window, a median is one
+# night's luck rather than a measurement, so the resident screen says
+# there is not enough history yet instead of printing a number.
+ACK_MIN_SAMPLES = 3
 ARRIVAL_WINDOW_SECONDS = 180        # resident has 3 min to answer a hold
 ALERT_POLL_SECONDS    = 20          # vehicle-alert poller cadence
 DAILY_BRIEF_TIME      = "07:35"     # resident brief, local time
@@ -1066,30 +1070,72 @@ def _live_score():
         from morning_report import collect, compute_score
         d = collect(12)
         score, label, color = compute_score(d)
+        esc_total = int(d.get("escalations_total") or 0)
+        esc_answered = int(d.get("escalations_answered") or 0)
         return {"score": score, "label": label, "color": color,
                 "incidents": d.get("incidents_total", 0),
-                "unknown": d.get("vehicles_unknown", 0)}
+                "unknown": d.get("vehicles_unknown", 0),
+                # What is happening NOW, as opposed to how well the site has
+                # been performing. The banner below needs the first; the
+                # score answers the second. Conflating the two is what this
+                # change exists to undo.
+                "open": int(d.get("incidents_open") or 0),
+                "unanswered_escalations": max(0, esc_total - esc_answered)}
     except Exception as e:
         logger.debug(f"[RESIDENT] live score unavailable: {e}")
         return {"score": None, "label": "Monitoring", "color": "#34d399",
-                "incidents": 0, "unknown": 0}
+                "incidents": 0, "unknown": 0,
+                "open": 0, "unanswered_escalations": 0}
 
 
 def _protection_state(score):
-    """Calm-state line for the resident home."""
+    """The banner at the top of a resident's home screen.
+
+    OCT-108 changed what the score MEASURES without changing what this
+    function did with it, and that turned the banner into a falsehood.
+
+    The old score fell when there were many unverified detections, so a low
+    number really did mean "something is going on at the gate", and the red
+    line "Guards are responding" read correctly. The new score falls when
+    nobody ANSWERS an alert. So under the new formula, the worse the guards
+    performed, the more confidently this told every resident in the society
+    that guards were responding. Exactly backwards, on the one screen a
+    resident actually looks at.
+
+    It was also the wrong SHAPE for an alarm. A response score is a quality
+    measure over a long window: a society with a few slow nights sits below
+    65 for weeks, so the red banner never clears — and a red banner that
+    never clears is one nobody reads. An alarm has to describe now.
+
+    So the banner is driven by what is open at this moment, and the score
+    appears underneath as a quiet quality note, named for what it is.
+    Three states, in the order a resident cares about them:
+
+      ALERT      an alert went out and nobody answered it. The system asked
+                 for help and did not get it — the one case that genuinely
+                 deserves a resident's attention.
+      WATCHING   incidents are open and being worked. Normal operation.
+      PROTECTED  nothing open.
+    """
     s = score.get("score")
+    open_n = int(score.get("open") or 0)
+    unanswered = int(score.get("unanswered_escalations") or 0)
     hour = datetime.now().hour
-    if s is None:
-        return {"state": "PROTECTED", "headline": "SOCIETY PROTECTED",
-                "line": "Octa on duty · monitoring the gates"}
-    if s >= 85:
-        return {"state": "PROTECTED", "headline": "SOCIETY PROTECTED",
-                "line": f"Octa on duty · {'quiet night' if hour < 7 or hour >= 22 else 'all calm'} · score {s}/100"}
-    if s >= 65:
+    # Named so it can never again be read as a threat level.
+    quality = f" · response score {s}/100" if isinstance(s, (int, float)) else ""
+
+    if unanswered:
+        return {"state": "ALERT", "headline": "SECURITY ALERT",
+                "line": (f"{unanswered} alert{'s' if unanswered != 1 else ''} "
+                         f"not yet answered · the committee has been notified")}
+    if open_n:
         return {"state": "WATCHING", "headline": "OCTA IS WATCHING",
-                "line": f"Some activity being verified · score {s}/100"}
-    return {"state": "ALERT", "headline": "SECURITY ALERT",
-            "line": f"Guards are responding · score {s}/100"}
+                "line": (f"{open_n} incident{'s' if open_n != 1 else ''} "
+                         f"being verified{quality}")}
+    return {"state": "PROTECTED", "headline": "SOCIETY PROTECTED",
+            "line": (f"Octa on duty · "
+                     f"{'quiet night' if hour < 7 or hour >= 22 else 'all calm'}"
+                     f"{quality}")}
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -1550,17 +1596,48 @@ def pulse():
                           "score": r.get("score")})
         live = _live_score()
         # ack stats (guard response) — best effort
+        #
+        # This was AVG(response_seconds) over thirty days, printed raw. On
+        # demo it read "Guard responds in ~174202s": forty-eight hours, in
+        # seconds, on a resident's phone. Three separate faults in one line.
+        #
+        # The MEAN is the worst of them. response_seconds is only written
+        # when somebody acknowledges, so one stale incident acknowledged two
+        # days later does not just skew the average — with the handful of
+        # rows a real society produces in a month, it becomes the average.
+        # The median is what a resident is actually asking about: the
+        # ordinary case, not the worst one. It is also what the security
+        # score already uses, so the two numbers now agree about method.
+        #
+        # A median of one or two samples is noise, so below ACK_MIN_SAMPLES
+        # nothing is published and the screen says so, rather than printing
+        # a confident figure drawn from a single night.
+        #
+        # avg_seconds is deliberately NOT kept for compatibility: a browser
+        # still running the old bundle hides the chip when the key is
+        # missing, which is the right way for this to fail.
         ack = {}
         try:
             con = _con()
+            answered = [float(r["response_seconds"]) for r in con.execute(
+                "SELECT response_seconds FROM ack_log "
+                "WHERE response_seconds IS NOT NULL AND response_seconds >= 0 "
+                "AND created_at >= date('now','-30 days') "
+                "ORDER BY response_seconds")]
             row = con.execute(
-                "SELECT AVG(response_seconds) AS avg_s, COUNT(*) AS n, "
-                "SUM(escalated) AS esc FROM ack_log "
+                "SELECT COUNT(*) AS n, SUM(escalated) AS esc FROM ack_log "
                 "WHERE created_at >= date('now','-30 days')").fetchone()
             con.close()
-            if row and row["n"]:
-                ack = {"avg_seconds": round(row["avg_s"] or 0),
-                       "incidents": row["n"], "escalated": row["esc"] or 0}
+            n = len(answered)
+            median = None
+            if n >= ACK_MIN_SAMPLES:
+                mid = n // 2
+                median = (answered[mid] if n % 2
+                          else (answered[mid - 1] + answered[mid]) / 2)
+            ack = {"median_seconds": round(median) if median is not None else None,
+                   "answered": n,
+                   "incidents": (row["n"] if row else 0) or 0,
+                   "escalated": (row["esc"] if row else 0) or 0}
         except sqlite3.Error:
             pass
         payload = {
