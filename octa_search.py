@@ -58,6 +58,35 @@ _MODEL = os.environ.get("OCTA_SEARCH_MODEL", "claude-haiku-4-5-20251001")
 _API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
 
+def _key_looks_real(k: str = None) -> bool:
+    """Does this look like an API key, rather than merely being a non-empty
+    string?
+
+    On 26 Sep the env file contained the ten characters `sk-ant-...` — the
+    placeholder from a set of instructions, pasted as if it were a value.
+    Startup announced `LLM parser ARMED`, the search API reported
+    `llm_available: true`, and every query fell back to regex while the API
+    answered 401. Three layers agreed the feature was on because a truthy
+    string existed.
+
+    That is OCT-84 in a new module: there, `_internal_caller_ok()` asked
+    `bool(secret)` and authenticated against the placeholder written in the
+    source. `bool()` on a credential asks whether somebody typed something,
+    not whether what they typed is a credential.
+
+    Deliberately a shape check and nothing more. It cannot tell a revoked
+    key from a live one — only the API can — so the reachability question is
+    answered by _LLM_STATE below, from what actually happened on a call.
+    """
+    k = _API_KEY if k is None else k
+    return bool(k) and k.startswith("sk-ant-") and len(k) >= 40
+
+
+# What the model tier has actually DONE, as opposed to how it is configured.
+# "untried" until the first call, then "ok" or the reason it failed.
+_LLM_STATE = {"tried": False, "ok": False, "error": None}
+
+
 def init_search(base_dir: str):
     """Point the module at the canonical DB.
 
@@ -87,13 +116,18 @@ def init_search(base_dir: str):
     # key" on it; nobody could tell from the running system that it had not
     # happened. Same shape as OCT-69: a capability quietly absent rather
     # than loudly missing.
-    if _API_KEY and _REQUESTS_OK:
+    if _key_looks_real() and _REQUESTS_OK:
         print(f"[OCTA-SEARCH] LLM parser ARMED (model {_MODEL}); "
-              f"rules run first, model handles what they cannot.",
+              f"rules run first, model handles what they cannot. "
+              f"Whether the key WORKS is known only once a query needs it.",
               flush=True)
     else:
         why = ("ANTHROPIC_API_KEY is not set" if not _API_KEY
-               else "the requests library is not installed")
+               else "the requests library is not installed" if not _REQUESTS_OK
+               else (f"ANTHROPIC_API_KEY does not look like a key "
+                     f"({len(_API_KEY)} characters, expected ~108 starting "
+                     f"'sk-ant-') - a placeholder may have been pasted "
+                     f"instead of the real value"))
         print(f"\n{'*' * 68}\n"
               f"*  OCTA-SEARCH: LLM parser NOT available - {why}.\n"
               f"*  Natural-language search still works, but only the regex\n"
@@ -210,7 +244,7 @@ User question: {q}"""
 
 
 def _llm_parse(q: str):
-    if not (_API_KEY and _REQUESTS_OK):
+    if not (_key_looks_real() and _REQUESTS_OK):
         return None
     now = datetime.now()
     prompt = _PARSER_PROMPT.format(
@@ -241,9 +275,12 @@ def _llm_parse(q: str):
                       for b in r.json().get("content", [])
                       if b.get("type") == "text")
         txt = re.sub(r"```(json)?", "", txt).strip()
-        return _sanitize(json.loads(txt))
-    except Exception as e:  # network, JSON, anything → fall back silently
-        print(f"[OCTA-SEARCH] LLM parse failed, using fallback: {e}")
+        out = _sanitize(json.loads(txt))
+        _LLM_STATE.update(tried=True, ok=True, error=None)
+        return out
+    except Exception as e:  # network, JSON, anything → fall back to rules
+        _LLM_STATE.update(tried=True, ok=False, error=str(e)[:140])
+        print(f"[OCTA-SEARCH] LLM parse failed, using fallback: {e}", flush=True)
         return None
 
 
@@ -727,7 +764,19 @@ def octa_search():
         # OCT-34: "understood=false with parser=rules" means two different
         # things depending on whether the model tier exists at all. Saying
         # which lets the interface explain itself instead of looking dim.
-        "llm_available": bool(_API_KEY and _REQUESTS_OK),
+        #
+        # This used to be bool(_API_KEY and _REQUESTS_OK) — a claim about
+        # CONFIGURATION wearing the clothes of a claim about CAPABILITY. It
+        # reported true for ten characters of placeholder while every call
+        # answered 401. It now reports what the tier has actually done:
+        # false the moment a call fails, with the reason beside it, so a
+        # screen can say "AI search unavailable: API key is invalid" rather
+        # than insisting the feature is on.
+        "llm_available": (_key_looks_real() and _REQUESTS_OK
+                          and (_LLM_STATE["ok"] or not _LLM_STATE["tried"])),
+        "llm_status": ("ok" if _LLM_STATE["ok"]
+                       else "untried" if not _LLM_STATE["tried"]
+                       else f"failing: {_LLM_STATE['error']}"),
         "understood": confident,
         "hint": hint,
         "interpretation": _interpretation(filters),
