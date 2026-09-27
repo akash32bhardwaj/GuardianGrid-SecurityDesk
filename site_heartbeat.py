@@ -3,11 +3,19 @@ r"""
 site_heartbeat.py — DEFENDER OCTA "never blind" monitor
 --------------------------------------------------------
 Runs on the DROPLET (host, not in a container) via cron every 15 min.
-Checks each client site for two failure modes:
+Checks each client site for three failure modes:
 
   1. BRIDGE DOWN : the site's Pi is unreachable over tailnet (ping)
-  2. DATA SILENT : no new rows in vehicle_events for N hours
+  2. SERVICE DOWN: the site's container does not answer /api/health
+  3. DATA SILENT : no new rows in vehicle_events for N hours
                    (cameras may be up but detection is dead)
+
+Every check is OPTIONAL and driven by which keys a site carries. A cloud
+site with no cameras gets "url" and no "db", so it is uptime-monitored
+without a permanent false alarm about silent cameras. A site with all
+three keys gets all three checks. A site with NONE is reported as a
+problem, because a watched site that nothing actually watches is the
+worst of the three states and the hardest to notice.
 
 On state change (healthy -> down, or down -> healthy) it sends a WhatsApp
 alert to the founder via Twilio. It alerts on CHANGES only — no 4 AM spam
@@ -31,13 +39,23 @@ lives only on the droplet):
   "quiet_ok_hours": [1, 2, 3, 4],
   "sites": [
     {
-      "name": "Escon Primera",
+      "name":  "Escon Primera",
+      "url":   "http://127.0.0.1:5009/api/health"
+    },
+    {
+      "name":  "Defender Octa Demo",
+      "url":   "http://127.0.0.1:5008/api/health",
       "pi_ip": "100.x.x.x",
-      "db":    "/opt/societies/primera/guardiangrid.db",
+      "db":    "/opt/societies/demo/guardiangrid.db",
       "max_silent_hours": 6
     }
   ]
 }
+
+"url": optional. Any site that answers it gets an uptime check. 200 and
+401 both count as UP -- /api/health returns 401 unauthenticated, which is
+what deploy.sh step [4/5] already treats as proof the container is alive.
+"url_timeout": optional, seconds, default 10.
 
 "quiet_ok_hours": hours of day (0-23) when zero events is normal and the
 DATA SILENT check is skipped (bridge check still runs).
@@ -96,6 +114,30 @@ def ping(ip: str) -> bool:
         return False
 
 
+def http_ok(url: str, timeout: float = 10.0):
+    """GET `url`. Returns (ok, detail).
+
+    200 AND 401 both count as UP. /api/health answers 401 when called
+    without a token, and deploy.sh step [4/5] already accepts exactly that
+    as proof the container is serving. Anything else -- 502 from nginx,
+    connection refused, a timeout -- means nobody is home.
+
+    This is a liveness check, not a correctness check. It proves a process
+    is accepting connections on that port; it does not prove the product
+    works. Said plainly here so nobody later mistakes a green light for one.
+    """
+    import urllib.error
+    import urllib.request
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as r:
+            code = getattr(r, "status", None) or r.getcode()
+    except urllib.error.HTTPError as e:
+        code = e.code
+    except Exception as e:
+        return False, f"{type(e).__name__}: {e}"
+    return (code in (200, 401)), f"HTTP {code}"
+
+
 def last_event_age_hours(db_path: str):
     """Hours since the newest vehicle_events row, or None if unreadable."""
     try:
@@ -147,13 +189,29 @@ def check_site(site, cfg, state, now):
     st = state.setdefault(name, {"status": "OK", "last_alert": None})
     problems = []
 
+    # 0) a site nothing checks. Not a warning in a log -- an alert, because
+    #    it looks identical to a healthy site from every other angle.
+    if not (site.get("pi_ip") or site.get("url") or site.get("db")):
+        problems.append("no checks configured (needs pi_ip, url or db)")
+
     # 1) bridge reachability
     if site.get("pi_ip"):
         if not ping(site["pi_ip"]):
             problems.append(f"site bridge (Pi {site['pi_ip']}) unreachable")
 
-    # 2) event freshness (skipped during configured quiet hours)
-    if now.hour not in cfg.get("quiet_ok_hours", []):
+    # 2) service uptime. Runs at every hour, including quiet_ok_hours: a
+    #    container being down at 3 AM is not "normal quiet", it is down.
+    if site.get("url"):
+        ok, detail = http_ok(site["url"], site.get("url_timeout", 10))
+        if not ok:
+            problems.append(f"service not answering at {site['url']} "
+                            f"({detail})")
+
+    # 3) event freshness (skipped during configured quiet hours).
+    #    Gated on "db" being present: a cloud site with no cameras has no
+    #    event database, and checking one would mean a standing false alarm
+    #    for the life of the account.
+    if site.get("db") and now.hour not in cfg.get("quiet_ok_hours", []):
         age = last_event_age_hours(site["db"])
         limit = site.get("max_silent_hours", 6)
         if age is None:
@@ -177,7 +235,7 @@ def check_site(site, cfg, state, now):
                           f" ({now:%d %b %H:%M})")
             st["last_alert"] = now.isoformat()
     elif old_status == "DOWN":
-        send_whatsapp(cfg, f"🟢 RESTORED — {name}: bridge and events "
+        send_whatsapp(cfg, f"🟢 RESTORED — {name}: all checks "
                       f"healthy again ({now:%d %b %H:%M})")
         st["last_alert"] = None
 
