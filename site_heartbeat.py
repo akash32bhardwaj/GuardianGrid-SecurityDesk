@@ -31,9 +31,9 @@ lives only on the droplet):
   "quiet_ok_hours": [1, 2, 3, 4],
   "sites": [
     {
-      "name": "AGI Infra",
-      "pi_ip": "100.108.120.36",
-      "db":    "/opt/societies/agi-infra/guardiangrid.db",
+      "name": "Escon Primera",
+      "pi_ip": "100.x.x.x",
+      "db":    "/opt/societies/primera/guardiangrid.db",
       "max_silent_hours": 6
     }
   ]

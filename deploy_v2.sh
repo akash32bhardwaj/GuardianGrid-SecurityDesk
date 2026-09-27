@@ -6,12 +6,12 @@
 # container from /opt/octa-ops/sites.conf -> verify each.
 #
 #   sudo /opt/octa/deploy.sh              # deploy all sites
-#   sudo /opt/octa/deploy.sh agi-infra    # deploy one site only
+#   sudo /opt/octa/deploy.sh demo         # deploy one site only
 #
 # sites.conf format (one line per site):
 #   slug|port|data_dir|config_dir|env_file
 # Legacy AGI line (configs baked in image, no config_dir) uses "-" :
-#   agi-infra|5007|/opt/societies/agi-infra|-|/opt/octa-ops/agi.env
+#   demo|5008|/opt/societies/demo|/opt/societies/demo-config|/opt/octa-ops/demo.env
 # ============================================================================
 set -e
 
@@ -126,7 +126,7 @@ fi
 
 if [ ! -f "$SITES_CONF" ]; then
   echo "❌ $SITES_CONF missing. Create it, e.g.:"
-  echo "   agi-infra|5007|/opt/societies/agi-infra|-|/opt/octa-ops/agi.env"
+  echo "   demo|5008|/opt/societies/demo|/opt/societies/demo-config|/opt/octa-ops/demo.env"
   exit 1
 fi
 

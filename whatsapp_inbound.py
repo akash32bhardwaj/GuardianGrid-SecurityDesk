@@ -22,8 +22,11 @@ whatsapp_alerts.py calls record_alert_context() after each successful
 security send, so "show" knows which event the person means.
 
 Config (whatsapp_config.py — add one line):
-    PUBLIC_BASE_URL = "https://agi.snguardiangrid.com"   # no trailing slash
-Falls back to request host if missing (works behind Cloudflare tunnel).
+    PUBLIC_BASE_URL = ""    # leave empty — see below
+Leave it EMPTY and media links are built from the request's own host, which
+is what a per-site deployment wants: each society's links carry its own
+hostname. Set it only to force one. It used to default to a former client's
+host, so every site's links pointed there (OCT-99).
 """
 
 import base64
