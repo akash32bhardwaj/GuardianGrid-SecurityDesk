@@ -49,6 +49,21 @@ import sqlite3
 import subprocess
 import sys
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+# The droplet runs UTC; every site container runs with TZ=Asia/Kolkata and
+# writes its timestamps in that zone. This script compared one against the
+# other, so `datetime.now() - last_event` came out NEGATIVE by about five
+# and a half hours -- and a negative age can never exceed max_silent_hours.
+#
+# The freshness check therefore could not fire until a real stoppage was old
+# enough for the skew to wash out, which made "max_silent_hours: 6" mean
+# roughly eleven and a half. quiet_ok_hours was read in host time too, so
+# "quiet night hours" [1,2,3,4] were 06:30-10:30 IST -- the morning rush.
+#
+# Everything here now happens in SITE time. OCT-24b, one layer out: that
+# entry fixed the containers and nobody asked what compared against them.
+SITE_TZ = ZoneInfo(os.environ.get("OCTA_TZ", "Asia/Kolkata"))
 
 OPS_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG = os.path.join(OPS_DIR, "heartbeat_config.json")
@@ -91,8 +106,9 @@ def last_event_age_hours(db_path: str):
         con.close()
         if not row or not row[0]:
             return None
-        last = datetime.strptime(row[0][:19], "%Y-%m-%d %H:%M:%S")
-        return (datetime.now() - last).total_seconds() / 3600.0
+        last = datetime.strptime(row[0][:19], "%Y-%m-%d %H:%M:%S").replace(
+            tzinfo=SITE_TZ)
+        return (datetime.now(SITE_TZ) - last).total_seconds() / 3600.0
     except (sqlite3.Error, ValueError, OSError) as e:
         print(f"  [db] {db_path}: {e}")
         return None
@@ -175,7 +191,8 @@ def main():
     if not cfg:
         sys.exit(f"config not found/invalid: {CONFIG}")
     state = load(STATE, {})
-    now = datetime.now()
+    now = datetime.now(SITE_TZ)      # site time, so quiet_ok_hours means
+                                     # what an Indian committee would read
     print(f"[heartbeat] {now:%Y-%m-%d %H:%M:%S}")
     for site in cfg.get("sites", []):
         check_site(site, cfg, state, now)

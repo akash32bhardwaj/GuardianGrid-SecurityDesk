@@ -236,5 +236,10 @@ install_script /opt/octa/new_site.sh    /opt/octa-ops/new_site.sh
 # guard password mid-verification: the script you reach for under pressure
 # was the one that would not run.
 install_script /opt/octa/set_site_password.sh /opt/octa/set_site_password.sh
+# OCT-99 / OCT-48. The heartbeat is the only thing watching the sites between
+# deploys, and its runtime copy under /opt/octa-ops was never installed from
+# the repo -- so a fix to the tracked file changed nothing about what runs.
+# That is how it spent two months comparing host UTC against container IST.
+install_script /opt/octa/site_heartbeat.py /opt/octa-ops/site_heartbeat.py
 
 echo "✅ Deployed $(git log --oneline -1) to all matching sites"
