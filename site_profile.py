@@ -164,7 +164,10 @@ TIER_COMMAND = "command"
 # OCT-08, settled 23 Sep. The split below is Akash's, and it moves two
 # things from where this file had them:
 #
-#   * the resident app and visitor management move from Watch to GUARD.
+#   * visitor management moves from Watch to GUARD. The resident app
+#     moved with it on 23 Sep and MOVED BACK on 28 Sep -- see the Watch
+#     list below. Selling proved it the other way round, exactly as the
+#     next line invited.
 #     The comment above still records the argument for the old placement —
 #     residents are who make a society renew — and it is a real one. This
 #     is a pricing decision, not a technical one, and it lives in one list:
@@ -183,14 +186,21 @@ _TIER_ADDS = {
         "morning_brief",
         "resident_directory",
         "bulk_resident_import",
+        # Moved down from GUARD, 28 Sep. The resident app is now priced
+        # PER FLAT rather than per tier, so it has to exist at every tier
+        # or a Watch society would be invoiced for a screen its own config
+        # switches off. panic_button comes with it, which also settles
+        # OCT-88: "a site that has not bought a feature should lose the
+        # feature; nobody should lose the alarm." Until today a Watch
+        # society's residents had no SOS at all.
+        "resident_app",
+        "panic_button",
     ],
     # GUARD — verify: a guard can close the loop, and residents take part
     TIER_GUARD: [
         "guard_decision_flow",
         "visitor_management",
         "flat_visitor_notifications",
-        "resident_app",
-        "panic_button",
         "contractor_passes",
         "dvr_recording",
         "security_score",
