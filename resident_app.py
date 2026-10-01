@@ -724,6 +724,34 @@ def site_info():
                     "whatsapp": ch["whatsapp"]})
 
 
+def _send_wa_tpl(to: str, kind: str, variables, body: str) -> dict:
+    """Template-first send for the alert paths (OCT-86).
+
+    Same recipient handling as _send_wa, but routes through
+    whatsapp_alerts.send_alert so an approved template is used when one is
+    configured. `body` stays the freeform fallback and the source of truth
+    for the wording -- the template is a copy of it.
+    """
+    if _is_pin_id(to):
+        return {"success": False, "error": "pin identity - no number on file"}
+    to = _norm_phone(to)
+    if not to:
+        return {"success": False, "error": "no number"}
+    try:
+        from whatsapp_alerts import send_alert
+        r = send_alert("whatsapp:" + to, kind, variables, body)
+        if isinstance(r, dict) and not r.get("success") and \
+                "channel" in str(r.get("error", "")).lower():
+            r = send_alert(to, kind, variables, body)
+        if isinstance(r, dict):
+            return r
+    except Exception as e:
+        logger.debug(f"[RESIDENT] template path unavailable: {e}")
+    # No whatsapp_alerts at all (laptop, or a stripped image): the old
+    # path still works and still reaches anyone inside the 24h window.
+    return _send_wa(to, body)
+
+
 def _send_wa(to: str, body: str) -> dict:
     """Send a WhatsApp text. Tries whatsapp_alerts._send_whatsapp first
     (the path every other Octa alert uses), then the Twilio client.
@@ -1773,9 +1801,11 @@ def sos():
                  f"then this escalates automatically."
                + (f"\n🆔 {incident_id}" if incident_id else "")
                + "\n_S&N GuardianGrid Security System_")
+        _tpl_vars = [flat, res["name"], res["phone"],
+                     _fmt_time(_now_str()), note or "", incident_id or ""]
         for who, num in targets:
             if num:
-                r = _send_wa(num, msg)
+                r = _send_wa_tpl(num, "sos", _tpl_vars, msg)
                 sent.append(f"{who}:{'ok' if r.get('success') else 'fail'}")
             else:
                 # OCT-102. This used to contribute nothing, so an SOS read
@@ -2426,8 +2456,9 @@ def _daily_brief_tick():
         msg = (f"☀️ *Defender Octa* — {_site_name()} morning brief\n\n{text}"
                + (f"\n\nSecurity score: {score}/100" if score is not None else "")
                + "\n_Daily brief — turn off in the app._")
+        _bscore = f"{score}/100" if score is not None else "not scored yet"
         for ph in phones:
-            _send_wa(ph, msg)
+            _send_wa_tpl(ph, "brief", [_site_name(), text, _bscore], msg)
     else:
         # App-only society: the brief still reaches the resident, as a
         # notification they can tap into the app.

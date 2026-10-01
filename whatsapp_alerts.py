@@ -20,6 +20,7 @@ Usage:
 """
 
 import logging
+import json
 import os
 import threading
 from datetime import datetime
@@ -263,6 +264,108 @@ def _send_whatsapp(to: str, message: str, media_url: str = None) -> dict:
     except Exception as e:
         logger.error(f"WhatsApp send failed: {e}")
         return {"success": False, "error": str(e)}
+
+
+# ── Templates: reaching a phone outside the 24-hour window (OCT-86) ──
+# A freeform body only delivers while the recipient has messaged us within
+# the last 24 hours. That is the whole of OCT-86: a guard's SOS stops
+# arriving about a day after they last replied, Twilio still returns
+# success, and nothing says otherwise.
+#
+# An approved template delivers either way. So the alert paths send a
+# TEMPLATE when one is configured, and fall back to freeform when it is
+# not -- which keeps every site working before the templates are approved,
+# and keeps the laptop working with no Twilio at all.
+#
+# The SIDs are per-site env vars rather than literals, because a template
+# belongs to a WhatsApp sender and a sender belongs to a site.
+
+WA_TEMPLATES = {
+    "sos":        os.environ.get("WA_TPL_SOS", "").strip(),
+    "escalation": os.environ.get("WA_TPL_ESCALATION", "").strip(),
+    "brief":      os.environ.get("WA_TPL_BRIEF", "").strip(),
+}
+
+
+def _template_sid_looks_real(sid: str) -> bool:
+    """Shape check, not a validity check -- OCT-120's lesson.
+
+    bool(sid) would accept a pasted placeholder and we would silently send
+    nothing. A Twilio Content SID is "HX" plus 32 hex characters. This
+    cannot tell an approved template from a rejected one; only Twilio can.
+    """
+    if not sid or not sid.startswith("HX") or len(sid) != 34:
+        return False
+    return all(c in "0123456789abcdefABCDEF" for c in sid[2:])
+
+
+def _content_vars(*values) -> str:
+    """Twilio wants {"1": "...", "2": "..."} as a JSON string.
+
+    Every variable must carry a value: a missing one fails the whole send,
+    so an empty becomes an em dash rather than nothing.
+    """
+    out = {}
+    for i, v in enumerate(values, 1):
+        text = "" if v is None else str(v).strip()
+        out[str(i)] = text or "\u2014"
+    return json.dumps(out, ensure_ascii=False)
+
+
+def send_alert(to: str, kind: str, variables, fallback_body: str,
+               media_url: str = None) -> dict:
+    """Send an alert as a template when one is configured, else freeform.
+
+    `kind` is a key of WA_TEMPLATES. `variables` is the ordered list of
+    template values. `fallback_body` is the freeform text, which stays the
+    source of truth for what the message says -- the template is a copy of
+    it, so the two must be edited together.
+
+    Returns the usual dict plus `path`: "template" or "freeform". Callers
+    log it, because "the alert went out" and "the alert went out in a way
+    that can reach a cold phone" are different claims.
+    """
+    sid = WA_TEMPLATES.get(kind, "")
+    if not _template_sid_looks_real(sid):
+        r = _send_whatsapp(to, fallback_body, media_url=media_url)
+        r["path"] = "freeform"
+        if sid:
+            logger.error(
+                f"[WA] template for '{kind}' is set but not a Content SID "
+                f"(expected HX + 32 hex, got {len(sid)} chars) -- sent "
+                f"freeform, which cannot reach a phone outside the "
+                f"24-hour window")
+        return r
+
+    for guard, why in ((CONFIG_LOADED, "no Twilio credentials"),
+                       (TWILIO_AVAILABLE, "twilio package not installed"),
+                       (ENABLE_WHATSAPP_ALERTS, "alerts disabled in config")):
+        if not guard:
+            return {"success": False, "error": why, "path": "template"}
+    if not to or "XXXXXXXXXX" in to:
+        return {"success": False, "error": "Recipient number not configured",
+                "path": "template"}
+
+    try:
+        client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+        msg = client.messages.create(
+            from_=TWILIO_WHATSAPP_FROM, to=to,
+            content_sid=sid,
+            content_variables=_content_vars(*variables))
+        logger.info(f"WhatsApp template '{kind}' accepted by Twilio for {to} "
+                    f"-- SID: {msg.sid}")
+        _verify_delivery_later(msg.sid, to)
+        return {"success": True, "sid": msg.sid, "path": "template"}
+    except Exception as e:
+        # Falling back is deliberate. A rejected or deleted template must
+        # not mean an SOS goes nowhere; freeform still reaches anyone
+        # inside the window, which is better than silence.
+        logger.error(f"[WA] template '{kind}' send failed ({e}) -- falling "
+                     f"back to freeform, which cannot reach a cold phone")
+        r = _send_whatsapp(to, fallback_body, media_url=media_url)
+        r["path"] = "freeform-after-template-error"
+        r["template_error"] = str(e)
+        return r
 
 
 # ── Did it actually arrive? (OCT-86) ──────────────────────────────

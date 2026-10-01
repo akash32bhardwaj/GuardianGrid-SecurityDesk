@@ -242,7 +242,15 @@ def _send_escalation_whatsapp(incident: dict, reason: str):
                f"No guard acknowledgment on the dashboard \u2014 "
                f"please check the live feed / call the gate.\n"
                f"_S&N GuardianGrid Security System_")
-        r = _send_whatsapp(to, msg)
+        try:
+            from whatsapp_alerts import send_alert
+            r = send_alert(to, "escalation", [
+                incident.get("title", "Incident"),
+                incident.get("camera_name") or incident.get("camera") or "site",
+                incident.get("severity", ""),
+                iid, reason], msg)
+        except Exception:
+            r = _send_whatsapp(to, msg)
         logger.info(f"[ACK] escalated {iid}: sent={r.get('success')}")
     except Exception as e:
         logger.error(f"[ACK] escalation send failed for {iid}: {e}")
