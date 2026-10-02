@@ -114,6 +114,7 @@ SOS_COOLDOWN_SECONDS  = 60          # ignore double-taps from the same flat
 PASS_CODE_PREFIX      = "OCTA"
 HOME_LOOKBACK_HOURS   = 24
 PULSE_CACHE_SECONDS   = 60
+SEEN_THROTTLE_SECONDS = 3600        # one last_seen write per flat per hour
 # Below this many acknowledged incidents in the window, a median is one
 # night's luck rather than a measurement, so the resident screen says
 # there is not enough history yet instead of printing a number.
@@ -395,12 +396,22 @@ def _ensure_tables():
             pin_hash TEXT,
             created_at TEXT, created_by TEXT,
             attempts INTEGER DEFAULT 0, locked_until REAL DEFAULT 0,
-            last_login TEXT
+            last_login TEXT, last_seen TEXT
         );
         CREATE TABLE IF NOT EXISTS resident_logins (
             phone TEXT PRIMARY KEY, flat_no TEXT, first_login TEXT, last_login TEXT, logins INTEGER DEFAULT 0
         );
         """)
+        # last_seen arrived after flat_pins existed, so CREATE TABLE IF NOT
+        # EXISTS will not add it to a database already in the field. Both
+        # live sites have one. PRAGMA first, because ALTER TABLE ADD COLUMN
+        # on an existing column raises and would take table init down with
+        # it -- and this function already swallows sqlite3.Error, so the
+        # failure would be a log line nobody reads and a column nobody has.
+        cols = {r[1] for r in con.execute("PRAGMA table_info(flat_pins)")}
+        if "last_seen" not in cols:
+            con.execute("ALTER TABLE flat_pins ADD COLUMN last_seen TEXT")
+            logger.info("[RESIDENT] flat_pins: added last_seen column")
         con.commit()
         con.close()
     except sqlite3.Error as e:
@@ -632,6 +643,53 @@ def _read_token(tok: str):
         return None
 
 
+# ── Who is actually still using the app? ─────────────────────────
+#
+# last_login answers "did they ever get in", and that is NOT the question
+# the closed test turns on. TOKEN_TTL_DAYS is 30, so a tester logs in once
+# on day one and never authenticates again however often they open the
+# app: last_login stops moving while usage carries on. Google checks that
+# testers actually USED the app across the fourteen days, so "logged in
+# once on day one and never came back" and "opens it every morning" look
+# identical in the only record we had.
+#
+# This writes last_seen on any authenticated resident request, throttled
+# to one write per flat per hour. Sixteen flats means at most sixteen
+# writes an hour, which is nothing, and the hour's resolution is far finer
+# than the daily question being asked.
+#
+# It must never break a request. A resident opening the app during a
+# database hiccup should see their gate log, not an error, so every
+# failure here is swallowed deliberately -- missing telemetry is a worse
+# outcome than no telemetry only if you forget it can be missing.
+
+_seen_cache = {}          # flat_no -> epoch of the last write
+
+
+def _touch_seen(flat_no: str) -> None:
+    flat = (flat_no or "").strip()
+    if not flat:
+        return
+    now = time.time()
+    with _lock:
+        if now - _seen_cache.get(flat, 0) < SEEN_THROTTLE_SECONDS:
+            return
+        _seen_cache[flat] = now
+    try:
+        con = _con()
+        # UPDATE, never INSERT: a row here means "this flat has a PIN".
+        # Creating one for a phone-login resident would make them look
+        # like a PIN flat to pins_status and to the mint script.
+        con.execute("UPDATE flat_pins SET last_seen=? WHERE flat_no=?",
+                    (_now_str(), flat))
+        con.commit()
+        con.close()
+    except Exception as e:
+        with _lock:                      # let the next request retry
+            _seen_cache.pop(flat, None)
+        logger.debug(f"[RESIDENT] last_seen not recorded for {flat}: {e}")
+
+
 def resident_required(fn):
     @wraps(fn)
     def _wrap(*a, **kw):
@@ -651,6 +709,7 @@ def resident_required(fn):
                 "flat_no": p["flat"], "name": p["name"], "phone": p["sub"],
                 "plates": []}
         request.resident = res
+        _touch_seen(res.get("flat_no") or p.get("flat"))
         return fn(*a, **kw)
     return _wrap
 
@@ -2901,11 +2960,21 @@ def pins_status():
     con.close()
     flats = sorted({_norm_flat(f.get("flat_no") or f.get("flat") or "")
                     for f in _all_directory_flats()} - {""})
+    def _seen(r):
+        # sqlite3.Row has no .get, and a database that predates the
+        # migration has no such column at all.
+        try:
+            return r["last_seen"]
+        except (IndexError, KeyError):
+            return None
+
     out = [{"flat_no": f, "has_pin": f in have,
-            "last_login": have[f]["last_login"] if f in have else None} for f in flats]
+            "last_login": have[f]["last_login"] if f in have else None,
+            "last_seen": _seen(have[f]) if f in have else None} for f in flats]
     for f, r in have.items():          # PINs for flats not in the directory yet
         if f not in {x["flat_no"] for x in out}:
-            out.append({"flat_no": f, "has_pin": True, "last_login": r["last_login"]})
+            out.append({"flat_no": f, "has_pin": True,
+                        "last_login": r["last_login"], "last_seen": _seen(r)})
     return jsonify({"success": True, "flats": out,
                     "with_pin": sum(1 for x in out if x["has_pin"]),
                     "total": len(out)})
