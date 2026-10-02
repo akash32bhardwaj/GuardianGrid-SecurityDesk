@@ -6,6 +6,50 @@ LINK = os.environ.get("OPTIN_LINK", "").strip()
 if not LINK:
     sys.exit("OPTIN_LINK is empty. Set it, then run this again.")
 
+# The link is checked, not just required. Both of these happened on 2 Oct
+# and each one burned a full run of eight PINs:
+#
+#   1. The command was pasted with a PLACEHOLDER still in it, and twelve
+#      messages were printed saying "PASTE_THE_LINK_HERE". Non-empty is not
+#      the same as real. whatsapp_alerts.py already learned this -- it has
+#      a "PASTE_YOUR" check and a Content-SID shape guard for exactly this.
+#
+#   2. The STORE LISTING url was used instead of the opt-in link. They look
+#      equally plausible and only one works: a closed-test app is not
+#      published publicly, so a tester who opens
+#      play.google.com/store/apps/details?id=... before opting in gets
+#      "Item not found". The opt-in link is play.google.com/apps/testing/...
+#      and Play Console labels it "Join on the web".
+#
+# A PIN is shown once. A bad link means every PIN printed in that run has
+# to be thrown away and re-minted, so the link is worth more scrutiny than
+# it looks.
+_low = LINK.lower()
+if "paste" in _low or "<" in LINK or "your_" in _low or " " in LINK:
+    sys.exit("OPTIN_LINK looks like a placeholder (%r).\n"
+             "Paste the real URL from Play Console: Testers tab -> "
+             "'Join on the web'." % LINK)
+if "/store/apps/details" in _low:
+    sys.exit("OPTIN_LINK is the public STORE LISTING, not the opt-in link.\n"
+             "A closed-test app is not published publicly, so testers who "
+             "open that url before opting in get 'Item not found'.\n"
+             "Use the one Play Console calls 'Join on the web' -- "
+             "Testers tab, scroll down. It looks like\n"
+             "  https://play.google.com/apps/testing/<package name>")
+if not _low.startswith("https://"):
+    sys.exit("OPTIN_LINK must start with https:// (got %r)." % LINK)
+if "play.google.com/apps/testing/" not in _low:
+    # Not fatal: Play Console has changed this url before and may again.
+    # But say so loudly, because the cost of being wrong is eight PINs.
+    print("!! WARNING: OPTIN_LINK is not the play.google.com/apps/testing/")
+    print("!! form this script expects. If Play Console gave you this url "
+          "under")
+    print("!! 'Join on the web', it is probably fine. If you typed it from "
+          "memory,")
+    print("!! stop now -- every PIN below would have to be re-minted.")
+    print("!! Link: %s" % LINK)
+    print()
+
 # The key every PIN is hashed with.
 #
 # Importing this module does NOT load it: _SECRET is b"" at module level

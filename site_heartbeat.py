@@ -29,12 +29,21 @@ Setup:
   4. Cron:       sudo crontab -e
                  */15 * * * * /usr/bin/python3 /opt/octa-ops/site_heartbeat.py >> /var/log/octa_heartbeat.log 2>&1
 
+CREDENTIALS: the ENVIRONMENT WINS over this file (OCT-130). Every other
+WhatsApp path on this stack reads TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN /
+TWILIO_WHATSAPP_FROM, and this script used to read its sender ONLY from the
+JSON below. So a sender switchover done the normal way -- edit the .env
+files, recreate the containers -- moved every alert EXCEPT the monitor,
+silently, because the monitor only transmits when something is already
+wrong. The JSON keys still work as a fallback for a box with no env set.
+
 heartbeat_config.json template (NO real credentials in git — this file
 lives only on the droplet):
 {
   "twilio_sid":   "ACxxxxxxxx",
   "twilio_token": "xxxxxxxx",
   "twilio_from":  "whatsapp:+14155238886",
+  "wa_tpl_monitor": "HX...32 hex...",
   "alert_to":     "whatsapp:+91XXXXXXXXXX",
   "quiet_ok_hours": [1, 2, 3, 4],
   "sites": [
@@ -156,29 +165,90 @@ def last_event_age_hours(db_path: str):
         return None
 
 
-def send_whatsapp(cfg, body: str):
-    """Send via Twilio REST API. Prints instead if creds are placeholders."""
-    sid, tok = cfg.get("twilio_sid", ""), cfg.get("twilio_token", "")
+def _cred(cfg, key: str, env_name: str) -> str:
+    """Environment first, heartbeat_config.json second (OCT-130).
+
+    Values are never printed -- only the fact that the two disagree.
+    """
+    env_value = (os.environ.get(env_name) or "").strip()
+    file_value = (cfg.get(key) or "").strip()
+    if env_value and file_value and env_value != file_value:
+        print(f"  [alert] NOTE: {env_name} is set in both the environment "
+              f"and heartbeat_config.json and they disagree. Using the "
+              f"environment. Remove {key!r} from the JSON to silence this.")
+    return env_value or file_value
+
+
+def _template_sid_looks_real(sid: str) -> bool:
+    """Shape check only -- the same guard as whatsapp_alerts and
+    visitor_notify. A Content SID is HX plus 32 hex characters. bool(sid)
+    would accept a pasted placeholder and we would silently send nothing."""
+    if not sid or not sid.startswith("HX") or len(sid) != 34:
+        return False
+    return all(c in "0123456789abcdefABCDEF" for c in sid[2:])
+
+
+def send_whatsapp(cfg, body: str, variables=None):
+    """Send via Twilio REST API. Prints instead if creds are placeholders.
+
+    Sends as a TEMPLATE when one is configured, freeform otherwise.
+
+    Why the template matters here more than anywhere else (OCT-129's shape,
+    third instance): a freeform WhatsApp body only reaches a phone that
+    messaged the business within the previous 24 hours. This script alerts
+    the founder, who has no reason to have messaged it -- and it only
+    transmits when a site is ALREADY DOWN. So on a production sender with
+    no template, the one message you cannot afford to lose is the one that
+    fails, and it fails into `[alert-FAILED]` in a cron log nobody reads.
+    A monitor whose alert path depends on someone having chatted to it
+    yesterday is not a monitor.
+    """
+    sid = _cred(cfg, "twilio_sid", "TWILIO_ACCOUNT_SID")
+    tok = _cred(cfg, "twilio_token", "TWILIO_AUTH_TOKEN")
+    frm = _cred(cfg, "twilio_from", "TWILIO_WHATSAPP_FROM")
+    to = (os.environ.get("OCTA_ALERT_TO") or cfg.get("alert_to") or "").strip()
+    tpl = _cred(cfg, "wa_tpl_monitor", "WA_TPL_MONITOR")
+
     if not sid.startswith("AC") or "xxx" in sid.lower():
         print(f"  [alert-DRYRUN] {body}")
         return
+    if not frm or not to:
+        print(f"  [alert-FAILED] no sender or recipient configured :: {body}")
+        return
+
+    use_tpl = _template_sid_looks_real(tpl)
+    if tpl and not use_tpl:
+        print(f"  [alert] WA_TPL_MONITOR is set but is not a Content SID "
+              f"(expected HX + 32 hex, got {len(tpl)} chars) -- sending "
+              f"freeform, which cannot reach a phone outside the 24-hour "
+              f"window")
+
+    fields = {"From": frm, "To": to}
+    if use_tpl:
+        vals = list(variables or [body])
+        fields["ContentSid"] = tpl
+        fields["ContentVariables"] = json.dumps(
+            {str(n): (str(v).strip() or "\u2014")
+             for n, v in enumerate(vals, 1)}, ensure_ascii=False)
+    else:
+        fields["Body"] = body
+
     try:
         import urllib.request
         import urllib.parse
         import base64
         url = (f"https://api.twilio.com/2010-04-01/Accounts/{sid}"
                "/Messages.json")
-        data = urllib.parse.urlencode({
-            "From": cfg["twilio_from"],
-            "To": cfg["alert_to"],
-            "Body": body,
-        }).encode()
+        data = urllib.parse.urlencode(fields).encode()
         req = urllib.request.Request(url, data=data)
         auth = base64.b64encode(f"{sid}:{tok}".encode()).decode()
         req.add_header("Authorization", f"Basic {auth}")
         with urllib.request.urlopen(req, timeout=15) as resp:
-            print(f"  [alert] sent ({resp.status}): {body}")
+            path = "template" if use_tpl else "freeform"
+            print(f"  [alert] sent ({resp.status}, {path}): {body}")
     except Exception as e:
+        # Twilio ACCEPTING the message is not a phone receiving it (OCT-86).
+        # This prints the send attempt, not a delivery.
         print(f"  [alert-FAILED] {e} :: {body}")
 
 
@@ -231,12 +301,18 @@ def check_site(site, cfg, state, now):
         )
         if old_status == "OK" or due_reminder:
             tag = "🔴 BLIND" if old_status == "OK" else "🔴 STILL BLIND"
-            send_whatsapp(cfg, f"{tag} — {name}: " + "; ".join(problems) +
-                          f" ({now:%d %b %H:%M})")
+            _detail = "; ".join(problems)
+            send_whatsapp(cfg, f"{tag} — {name}: {_detail} "
+                               f"({now:%d %b %H:%M})",
+                          variables=[tag, name, _detail,
+                                     f"{now:%d %b %H:%M}"])
             st["last_alert"] = now.isoformat()
     elif old_status == "DOWN":
         send_whatsapp(cfg, f"🟢 RESTORED — {name}: all checks "
-                      f"healthy again ({now:%d %b %H:%M})")
+                           f"healthy again ({now:%d %b %H:%M})",
+                      variables=["🟢 RESTORED", name,
+                                 "all checks healthy again",
+                                 f"{now:%d %b %H:%M}"])
         st["last_alert"] = None
 
     st["status"] = new_status
