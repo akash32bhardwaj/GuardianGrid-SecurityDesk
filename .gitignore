@@ -36,3 +36,15 @@ whatsapp_config.py
 config.py
 gate_captures/
 clips_cache/
+
+
+# Rollback copies made before an edit. The existing *.bak rule does not
+# match these: a suffixed name like foo.py.bak-pre-oct130 is not *.bak.
+*.bak-*
+
+# Local backups and archives, never the repo's business
+_backups/
+
+# Tooling and mount artefacts
+.claude/
+.fuse_hidden*

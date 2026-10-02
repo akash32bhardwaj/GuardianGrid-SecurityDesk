@@ -680,10 +680,26 @@ def _touch_seen(flat_no: str) -> None:
         # UPDATE, never INSERT: a row here means "this flat has a PIN".
         # Creating one for a phone-login resident would make them look
         # like a PIN flat to pins_status and to the mint script.
-        con.execute("UPDATE flat_pins SET last_seen=? WHERE flat_no=?",
-                    (_now_str(), flat))
+        cur = con.execute("UPDATE flat_pins SET last_seen=? WHERE flat_no=?",
+                          (_now_str(), flat))
         con.commit()
+        matched = cur.rowcount
         con.close()
+        # An UPDATE that matches nothing is a SUCCESS as far as sqlite is
+        # concerned, and this is the shape that has cost the most time on
+        # this project: a write that silently does nothing, leaving a
+        # column empty that reads exactly like "nobody has used the app".
+        #
+        # Zero rows is EXPECTED for a phone-login resident, whose flat has
+        # no PIN row -- so this is a debug line, not a warning. What it
+        # buys is that an empty last_seen column is never ambiguous again:
+        # either the log names the flats that did not match, or they
+        # genuinely have not opened the app.
+        if matched == 0:
+            logger.debug(f"[RESIDENT] last_seen matched no flat_pins row "
+                         f"for {flat!r} (expected for a phone-login "
+                         f"resident; otherwise the flat number does not "
+                         f"match the PIN table)")
     except Exception as e:
         with _lock:                      # let the next request retry
             _seen_cache.pop(flat, None)
