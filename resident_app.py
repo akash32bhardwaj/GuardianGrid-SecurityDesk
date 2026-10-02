@@ -2701,51 +2701,107 @@ def resident_sw():
 # Android checks https://<site>/.well-known/assetlinks.json to open the
 # wrapped app full-screen without browser chrome.
 #
-# Three sources, most specific first:
-#   1. OCTA_TWA_FINGERPRINT in the site's env file
-#   2. assetlinks_fingerprint.txt in the site's data dir
-#   3. frontend/.well-known/assetlinks.json, shipped with the build
+# Sources are UNIONED, not ranked. That is the fix for OCT-111, and the
+# ranking it replaces is worth describing because it cost a launch day.
 #
-# (3) is the one that matters for onboarding. The fingerprint identifies
-# the APP, not the site — it is the same for every client — so without a
-# packaged copy every new site served an empty list, and the failure is
-# silent: the app still opens, just in a browser with a URL bar, and only
-# on a real phone. An earlier comment here called that "harmless". It is
-# not: it is the difference between an app and a bookmark, and the only
-# copy of the fingerprint once lived in a single client's data folder
-# that was nearly deleted with them.
+# It used to be "most specific first": OCTA_TWA_FINGERPRINT, else a file
+# in the data dir, else the packaged frontend/.well-known/assetlinks.json.
+# Each of the first two built the statement itself with
+# sha256_cert_fingerprints: [fp] -- a list of exactly ONE. So the moment
+# Play App Signing entered the picture, every site with that variable set
+# served only the upload key and silently shadowed the packaged file that
+# had both. demo.snguardiangrid.com did exactly that: the file on disk was
+# correct, the endpoint served one fingerprint, and the app opened with a
+# browser bar on every phone. Same shape as OCT-96 and OCT-128 -- a more
+# specific source quietly beating the one that was updated.
+#
+# Ranking was wrong on its own terms. The comment here already said the
+# fingerprint "identifies the APP, not the site -- it is the same for
+# every client", and a value that is the same everywhere has no business
+# being overridden per site. An app has as many valid signing keys as it
+# has (upload key, Play app signing key, and any future key reset), so
+# the question is never "which fingerprint" but "all of them".
+#
+# Unioning also makes this self-healing: a site that still has the old
+# single-fingerprint variable set gets the packaged pair PLUS that value,
+# which is already in the pair. Nothing has to be unset anywhere, now or
+# at the next onboarding -- which matters, because "remember to unset a
+# variable on every future site" is the kind of fix this register keeps
+# recording as having failed.
+
+_FP_CHARS = set("0123456789ABCDEF:")
+
+
+def _clean_fingerprint(raw: str) -> str:
+    """Normalise one SHA-256 fingerprint, or return '' if it is not one.
+
+    A malformed entry is dropped rather than served: Android rejects the
+    WHOLE document if it cannot parse it, so one bad paste would take the
+    good fingerprints down with it.
+    """
+    fp = (raw or "").strip().upper()
+    if not fp or not set(fp) <= _FP_CHARS:
+        return ""
+    parts = fp.split(":")
+    if len(parts) != 32 or any(len(x) != 2 for x in parts):
+        return ""
+    return fp
+
+
+def _twa_fingerprints() -> list:
+    """Every signing key this app may legitimately carry, deduplicated."""
+    found, seen = [], set()
+
+    def add(raw):
+        fp = _clean_fingerprint(raw)
+        if fp and fp not in seen:
+            seen.add(fp)
+            found.append(fp)
+
+    # 1. the packaged statement list -- the baseline, correct for every site
+    try:
+        here = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(here, "frontend",
+                               ".well-known", "assetlinks.json")) as f:
+            for st in json.load(f) or []:
+                for fp in (st.get("target") or {}).get(
+                        "sha256_cert_fingerprints", []):
+                    add(fp)
+    except (OSError, ValueError):
+        pass
+
+    # 2 & 3. per-site additions. Comma, space or newline separated, so one
+    #        variable can carry several keys.
+    extra = os.environ.get("OCTA_TWA_FINGERPRINT", "")
+    try:
+        with open(os.path.join(_data_dir(),
+                               "assetlinks_fingerprint.txt")) as f:
+            extra += "," + f.read()
+    except OSError:
+        pass
+    for chunk in extra.replace("\n", ",").replace(" ", ",").split(","):
+        add(chunk)
+
+    return found
+
 
 @resident_app_bp.route("/.well-known/assetlinks.json")
 def assetlinks():
-    fp = os.environ.get("OCTA_TWA_FINGERPRINT", "").strip()
-    if not fp:
-        try:
-            with open(os.path.join(_data_dir(), "assetlinks_fingerprint.txt")) as f:
-                fp = f.read().strip()
-        except OSError:
-            fp = ""
-    if not fp:
-        # Serve the packaged statement list as-is: it is already a
-        # complete, valid document, and reusing it avoids rebuilding the
-        # same JSON from parts and getting a field name wrong.
-        try:
-            here = os.path.dirname(os.path.abspath(__file__))
-            with open(os.path.join(here, "frontend",
-                                   ".well-known", "assetlinks.json")) as f:
-                packaged = json.load(f)
-            if packaged:
-                return Response(json.dumps(packaged),
-                                mimetype="application/json")
-        except (OSError, ValueError):
-            pass          # fall through to the empty list below
+    fps = _twa_fingerprints()
     body = []
-    if fp:
+    if fps:
         body = [{
             "relation": ["delegate_permission/common.handle_all_urls"],
             "target": {"namespace": "android_app",
-                       "package_name": os.environ.get("OCTA_TWA_PACKAGE", "in.defenderocta.resident"),
-                       "sha256_cert_fingerprints": [fp]},
+                       "package_name": os.environ.get(
+                           "OCTA_TWA_PACKAGE", "in.defenderocta.resident"),
+                       "sha256_cert_fingerprints": fps},
         }]
+    else:
+        # Loud, because the failure is otherwise invisible: the app still
+        # opens, just in a browser with a URL bar, and only on a phone.
+        logger.error("[TWA] assetlinks.json served with NO fingerprints -- "
+                     "every installed app will show a browser bar")
     return Response(json.dumps(body), mimetype="application/json")
 
 
