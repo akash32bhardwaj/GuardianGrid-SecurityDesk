@@ -9,6 +9,66 @@ Usage:
   python api_server.py --camera 1 --port 5000
 """
 
+# ---------------------------------------------------------------------
+# Logging level, set before anything else imports and starts logging.
+#
+# Measured on the droplet, 2 Oct: the effective level was WARNING, so
+# 48 log calls across this codebase -- 10 debug and 38 info -- went
+# nowhere. Three of them matter more than the rest:
+#
+#   [RESIDENT] app armed (db=...)            which database it bound to
+#   [RESIDENT] pin key changed X -> Y        EVERY resident PIN just broke
+#   [RESIDENT] flat_pins: added last_seen    whether a migration ran
+#
+# The middle one is the point. _check_pin_key() detects that the PIN
+# signing key changed, which makes every stored hash unverifiable and
+# tells every resident their PIN is wrong -- OCT-94 exactly. The
+# detection works. It reported at INFO, to nobody. A check that cannot
+# be read is the same as a check that was never written, which is this
+# register's most repeated finding.
+#
+# Why it happened: nothing here ever configured logging, so the root
+# logger kept Python's WARNING default. core/anpr_engine.py calls
+# basicConfig(INFO) at import, but basicConfig is a NO-OP once the root
+# logger has a handler, so whether it won depended on import order.
+# Hence the explicit setLevel below: it takes effect either way.
+#
+# OCTA_LOG_LEVEL overrides. None of the 38 info lines sit in a
+# per-request path -- they are startup, key changes, WhatsApp sends and
+# incident acknowledgements -- so INFO is a handful of lines a day.
+# ---------------------------------------------------------------------
+import logging as _logging
+import os as _os
+
+
+def _resolve_log_level(raw):
+    """(level, bad_name). Never raises: an unusable value must not stop
+    the server from starting, it must start loudly at INFO instead."""
+    name = (raw or "").strip().upper()
+    if not name:
+        return _logging.INFO, ""
+    if name.isdigit():
+        n = int(name)
+        return (n, "") if 0 < n <= 50 else (_logging.INFO, name)
+    level = getattr(_logging, name, None)
+    if isinstance(level, int) and name in ("CRITICAL", "FATAL", "ERROR",
+                                           "WARNING", "WARN", "INFO", "DEBUG"):
+        return level, ""
+    return _logging.INFO, name
+
+
+_LEVEL, _BAD_LEVEL = _resolve_log_level(_os.environ.get("OCTA_LOG_LEVEL"))
+_logging.basicConfig(
+    level=_LEVEL,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+_logging.getLogger().setLevel(_LEVEL)
+if _BAD_LEVEL:
+    _logging.getLogger("octa.boot").warning(
+        "OCTA_LOG_LEVEL=%r is not a level name - using INFO", _BAD_LEVEL)
+_logging.getLogger("octa.boot").info(
+    "log level %s (set OCTA_LOG_LEVEL to change)",
+    _logging.getLevelName(_LEVEL))
+
 import cv2
 import hmac
 import os
