@@ -1,0 +1,99 @@
+{
+  "_README": [
+    "The closed-test roster. mint_tester_pins.py and tester_status.py BOTH",
+    "read this file, so there is one list instead of two that drift.",
+    "",
+    "To add a tester: add a line to 'testers' with their gmail and the demo",
+    "flat they log in with, then add the same address to the Play Console",
+    "tester list (Testers tab). Both are needed -- the Play list decides who",
+    "CAN install, this file decides who gets a PIN.",
+    "",
+    "Two testers may share a flat. It works, but a login timestamp then",
+    "cannot tell them apart, and PIN lockout is per flat -- five wrong",
+    "attempts locks BOTH of them out for ten minutes. Prefer one flat each.",
+    "",
+    "reviewer_flat is Google's reviewer. It must never appear in 'testers':",
+    "its PIN went into App Access before rollout, and re-minting it would",
+    "hand the reviewer a login that fails.",
+    "",
+    "opted_on: set this to the date (YYYY-MM-DD) a tester CONFIRMS they",
+    "pressed 'Become a tester'. It matters most on a shared flat: a login",
+    "there proves ONE of the two opted in and cannot say which, so without",
+    "this field the count would credit both and overstate your progress."
+  ],
+  "reviewer_flat": "D-404",
+  "testers": [
+    {
+      "email": "akash08bhardwaj@gmail.com",
+      "flat": "A-101",
+      "name": "Akash",
+      "opted_on": "2026-10-02"
+    },
+    {
+      "email": "aakash.aakashb.bhardwaj@gmail.com",
+      "flat": "A-204",
+      "name": "",
+      "opted_on": ""
+    },
+    {
+      "email": "saroj08bhardwaj@gmail.com",
+      "flat": "B-302",
+      "name": "Saroj",
+      "opted_on": ""
+    },
+    {
+      "email": "brijb424@gmail.com",
+      "flat": "B-405",
+      "name": "",
+      "opted_on": ""
+    },
+    {
+      "email": "ritesh.chander02@gmail.com",
+      "flat": "C-108",
+      "name": "Ritesh",
+      "opted_on": ""
+    },
+    {
+      "email": "neeru012125@gmail.com",
+      "flat": "C-210",
+      "name": "",
+      "opted_on": ""
+    },
+    {
+      "email": "nancyluthra16@gmail.com",
+      "flat": "D-112",
+      "name": "",
+      "opted_on": ""
+    },
+    {
+      "email": "sahilsharma2471@gmail.com",
+      "flat": "D-306",
+      "name": "",
+      "opted_on": ""
+    },
+    {
+      "email": "singh.amandeep1989@gmail.com",
+      "flat": "A-101",
+      "name": "",
+      "opted_on": ""
+    },
+    {
+      "email": "prajwalbhushan.pb@gmail.com",
+      "flat": "A-204",
+      "name": "",
+      "opted_on": ""
+    },
+    {
+      "email": "amandeep2020@gmail.com",
+      "flat": "B-302",
+      "name": "Amandeep",
+      "opted_on": "2026-10-02"
+    },
+    {
+      "email": "hbembey18@gmail.com",
+      "flat": "B-405",
+      "name": "H. Bembey",
+      "opted_on": "2026-10-02"
+    }
+  ]
+}

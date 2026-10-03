@@ -1,3 +1,4 @@
+import json
 import os, sys
 sys.path.insert(0, "/app")
 import resident_app as ra
@@ -71,27 +72,33 @@ if stored and stored != ra._secret_fp():
     sys.exit("Key fingerprint %s does not match the stored %s. Refusing."
              % (ra._secret_fp(), stored))
 
-TESTERS = [
-    ("akash08bhardwaj@gmail.com",         "A-101"),
-    ("aakash.aakashb.bhardwaj@gmail.com", "A-204"),
-    ("saroj08bhardwaj@gmail.com",         "B-302"),
-    ("brijb424@gmail.com",                "B-405"),
-    ("ritesh.chander02@gmail.com",        "C-108"),
-    ("neeru012125@gmail.com",             "C-210"),
-    ("nancyluthra16@gmail.com",           "D-112"),
-    ("sahilsharma2471@gmail.com",         "D-306"),
-    ("singh.amandeep1989@gmail.com",      "A-101"),
-    ("prajwalbhushan.pb@gmail.com",       "A-204"),
-    ("amandeep2020@gmail.com",            "B-302"),
-    ("hbembey18@gmail.com",               "B-405"),
-]
+# The roster lives in closed_test_roster.json, which tester_status.py also
+# reads. One list, not two: a second copy of the same twelve addresses is
+# how OCT-24, OCT-48, OCT-53 and OCT-80 all started, and adding a tester
+# should be editing a data file rather than editing Python.
+_ROSTER_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "closed_test_roster.json")
+try:
+    with open(_ROSTER_PATH, encoding="utf-8") as _f:
+        _ROSTER = json.load(_f)
+except (OSError, ValueError) as e:
+    sys.exit("Cannot read %s: %s" % (_ROSTER_PATH, e))
+
+TESTERS = [(t["email"].strip(), ra._norm_flat(t["flat"]))
+           for t in _ROSTER.get("testers", [])
+           if t.get("email", "").strip() and t.get("flat", "").strip()]
+if not TESTERS:
+    sys.exit("No testers in %s -- nothing to mint." % _ROSTER_PATH)
+
 # D-404 is deliberately NOT in this list. It is Google's reviewer's flat,
 # its PIN goes into App Access before the release is rolled out, and this
 # script runs after rollout. Minting it here would replace the PIN already
 # submitted and hand the reviewer a login that fails.
-REVIEWER_FLAT = "D-404"
+REVIEWER_FLAT = ra._norm_flat(_ROSTER.get("reviewer_flat", "D-404"))
 flats = sorted({f for _, f in TESTERS})
-assert REVIEWER_FLAT not in flats, "reviewer flat must not be re-minted here"
+assert REVIEWER_FLAT not in flats, (
+    "reviewer flat %s must not be re-minted here -- remove it from "
+    "closed_test_roster.json" % REVIEWER_FLAT)
 
 con = ra._con()
 pins = {}
