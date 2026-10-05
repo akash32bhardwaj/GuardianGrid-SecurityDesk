@@ -93,6 +93,23 @@ MARK_GUARD  = "demo-seed"
 MARK_AUTHOR = "Committee (demo)"
 MARK_CODE   = "DM"
 
+# Every flat a tester logs into MUST be in this list.
+#
+# The D-404 comment further down records what happens when one is not:
+# the flat was added by hand, the seeder wrote sightings for eight other
+# flats and none for it, and the resident's own screen read "Nothing at
+# the gate for flat D-404 in the last 24 hours". That comment was written
+# as a warning and then C-101 was created by hand on 4 Oct anyway, given
+# to a tester, and had no owner, no members, no vehicle and no gate
+# history -- an empty app, which a tester reads as a broken app.
+#
+# mint_tester_pins.py now refuses to mint a flat that is not in this list,
+# so the two files cannot drift apart again.
+#
+# The first eight phone numbers are +9198765-00 plus the flat digits. That
+# scheme cannot extend: C-101 and A-101 have the same digits. Flats added
+# after 5 Oct therefore carry a block digit (A=1, B=2, C=3, D=4) in the
+# middle, which keeps every number distinct.
 DEMO_FLATS = [
     ("A-101", "Rajinder Singh",   "+919876500101"),
     ("A-204", "Simran Kaur",      "+919876500204"),
@@ -102,6 +119,14 @@ DEMO_FLATS = [
     ("C-210", "Gurpreet Bajwa",   "+919876500210"),
     ("D-112", "Amandeep Dhillon", "+919876500112"),
     ("D-306", "Kiran Malhotra",   "+919876500306"),
+    # added 5 Oct -- C-101 retrofitted, the rest are headroom for testers
+    ("C-101", "Anita Kalra",      "+919876503101"),
+    ("A-302", "Baljit Sekhon",    "+919876501302"),
+    ("B-108", "Ravi Chopra",      "+919876502108"),
+    ("B-210", "Meena Bedi",       "+919876502210"),
+    ("C-304", "Tarun Ahluwalia",  "+919876503304"),
+    ("D-205", "Sunil Khatri",     "+919876504205"),
+    ("D-410", "Preeti Walia",     "+919876504410"),
 ]
 
 PURPOSES = ["Delivery", "Guest", "Maid", "Cab", "Maintenance", "Courier"]
@@ -164,6 +189,12 @@ def seed_members(con):
         ("B-302", "driver", "Sukhwinder",      "+919876511302", "Family driver"),
         ("C-108", "staff",  "Pooja",           "+919876511108", "Cook, evenings"),
         ("D-306", "family", "Ishaan Malhotra", "+919876511306", "Son, college"),
+        # added 5 Oct, for the flats above
+        ("C-101", "family", "Rohit Kalra",     "+919876513101", "Son"),
+        ("A-302", "staff",  "Shanti",          "+919876511302", "Househelp, mornings"),
+        ("B-210", "driver", "Jaswant",         "+919876512210", "Family driver"),
+        ("C-304", "family", "Nisha Ahluwalia", "+919876513304", "Mother"),
+        ("D-410", "family", "Simran Walia",    "+919876514410", "Daughter, school"),
     ]
     for flat, kind, name, phone, note in people:
         con.execute(
@@ -190,6 +221,13 @@ def seed_requests(con):
         ("C-210", "family",  "Ravneet Bajwa",  "",           "+919876512210", "Daughter, moving in",      "PENDING",  -110),
         ("B-405", "vehicle", "PB10DR4417",     "PB10DR4417", "+919876500405", "Mahindra XUV700, black",   "APPROVED", -60 * 30),
         ("D-112", "staff",   "Unverified help", "",          "+919876512112", "No ID provided",           "REJECTED", -60 * 50),
+        # added 5 Oct. Deliberately DECIDED rather than PENDING: a resident
+        # opening a new flat should see that the request loop has been used,
+        # and the guard screen's waiting queue is meant to stay at two so a
+        # walkthrough is predictable.
+        ("C-101", "vehicle", "PB12AN3101",     "PB12AN3101", "+919876503101", "Hyundai Venue, grey",      "APPROVED", -60 * 36),
+        ("B-108", "family",  "Aarti Chopra",   "",           "+919876502108", "Wife",                     "APPROVED", -60 * 60),
+        ("D-205", "staff",   "Ramphal",        "",           "+919876504205", "Gardener, twice a week",   "APPROVED", -60 * 72),
     ]
     for flat, kind, name, plate, phone, note, status, mins in rows:
         decided_by = None if status == "PENDING" else "admin-demo"
@@ -247,6 +285,23 @@ def seed_arrivals(con):
         ("D-306", "Plumber",        "Maintenance", "APPROVED", "ALLOW",  -210, True),
         ("A-204", "Courier",        "Courier",     "EXPIRED",  None,     -300, False),
         ("B-405", "Cab driver",     "Cab",         "APPROVED", "ALLOW",  -420, True),
+        # C-210 and D-112 were missing from this list since it was written.
+        # Both are tester flats. Both residents opened an app whose arrivals
+        # list was blank while the dashboard beside it showed a busy society,
+        # and neither has engaged. Found by a test that asked the question
+        # per flat rather than checking that the seeder ran.
+        ("C-210", "Dominos rider",  "Delivery",    "APPROVED", "ALLOW",  -75,  True),
+        ("D-112", "Water tanker",   "Maintenance", "APPROVED", "ALLOW",  -240, True),
+        # added 5 Oct. This is the row that decides whether a tester's app
+        # has anything on it: without one, their arrivals list is empty and
+        # the app looks broken rather than quiet.
+        ("C-101", "Zomato rider",   "Delivery",    "APPROVED", "ALLOW",  -55,  True),
+        ("A-302", "Electrician",    "Maintenance", "APPROVED", "ALLOW",  -130, True),
+        ("B-108", "Blinkit rider",  "Delivery",    "APPROVED", "ALLOW",  -190, True),
+        ("B-210", "Guest",          "Guest",       "DECLINED", "DENY",   -260, False),
+        ("C-304", "Kamla",          "Maid",        "APPROVED", "ALLOW",  -340, True),
+        ("D-205", "Courier",        "Courier",     "EXPIRED",  None,     -400, False),
+        ("D-410", "Cab driver",     "Cab",         "APPROVED", "ALLOW",  -470, True),
     ]
     for flat, visitor, purpose, status, decision, mins, admitted in rows:
         con.execute(
@@ -295,6 +350,18 @@ def seed_notices(con):
 # also get their own events in vehicle_events, so a guard can look one up,
 # see KNOWN with a name and flat, and find the same car in the log.
 
+# Two places used to each decide this with `"Activa" in model`, which is
+# not a rule, it is one example. A Jupiter or an Access would have been
+# filed as a car in the vehicle log and in the registry independently --
+# the two-copies-drift shape of OCT-24, OCT-48 and OCT-80. One function,
+# called by both.
+TWO_WHEELERS = ("Activa", "Jupiter", "Access", "Splendor", "Pulsar", "Vespa")
+
+
+def vehicle_type(model):
+    return "Motorcycle" if any(w in model for w in TWO_WHEELERS) else "Car"
+
+
 REGISTERED = [
     # plate,        owner,              flat,    block, model,               colour,   status
     ("PB10AB2025", "Rajinder Singh",   "A-101", "A", "Maruti Swift",       "Silver", "KNOWN"),
@@ -315,6 +382,16 @@ REGISTERED = [
     # the gate for flat D-404 in the last 24 hours" -- which is the first
     # thing a reviewer would have seen.
     ("PB09ZZ1111", "Test Resident",    "D-404", "D", "Maruti Swift",       "White",  "KNOWN"),
+    # added 5 Oct, one per new flat, for the same reason the D-404 line
+    # above exists: no registered car means no sightings, and no sightings
+    # means the resident's own screen says nothing happened at the gate.
+    ("PB12AN3101", "Anita Kalra",      "C-101", "C", "Hyundai Venue",      "Grey",   "KNOWN"),
+    ("PB14BS4302", "Baljit Sekhon",    "A-302", "A", "Tata Punch",         "White",  "KNOWN"),
+    ("PB16RC5108", "Ravi Chopra",      "B-108", "B", "Maruti Ertiga",      "Silver", "KNOWN"),
+    ("PB18MB6210", "Meena Bedi",       "B-210", "B", "TVS Jupiter",        "Blue",   "KNOWN"),
+    ("PB21TA7304", "Tarun Ahluwalia",  "C-304", "C", "Kia Sonet",          "Red",    "KNOWN"),
+    ("PB23SK8205", "Sunil Khatri",     "D-205", "D", "Honda Amaze",        "Black",  "KNOWN"),
+    ("PB25PW9410", "Preeti Walia",     "D-410", "D", "Renault Kwid",       "White",  "KNOWN"),
 ]
 
 
@@ -327,8 +404,7 @@ def seed_registry():
     for plate, owner, flat, block, model, colour, status in REGISTERED:
         records[plate] = dict(
             plate_number=plate, resident_name=owner, flat_number=flat,
-            block=block, phone="", vehicle_type=(
-                "Motorcycle" if "Activa" in model else "Car"),
+            block=block, phone="", vehicle_type=vehicle_type(model),
             vehicle_model=model, vehicle_color=colour, status=status,
             notes=("Vehicle barred by the committee"
                    if status == "BLACKLISTED" else ""),
@@ -365,7 +441,7 @@ def seed_registry_events(con):
     all along."""
     rows = []
     for plate, _o, _f, _b, model, _c, status in REGISTERED:
-        vtype = "Motorcycle" if "Activa" in model else "Car"
+        vtype = vehicle_type(model)
         access = "BLACKLISTED" if status == "BLACKLISTED" else (
             "VISITOR" if status == "VISITOR" else "KNOWN")
         for day in range(3):
@@ -416,11 +492,18 @@ def main():
     seed_registry()
     seed_registry_events(con)
     con.commit()
-    con.close()
 
-    print("\nThe Security Gate screen now has: two approvals waiting, a live "
-          f"pass code ({MARK_CODE}4417), several decided arrivals and three "
-          "notices.")
+    # Counted, not asserted. The sentence used to say "two" while the data
+    # three functions up could change without it -- a claim in a print
+    # statement is still a claim. Counted BEFORE the close, which is where
+    # the first draft of this put it.
+    waiting = con.execute(
+        "SELECT COUNT(*) FROM household_requests WHERE status='PENDING'"
+    ).fetchone()[0] if table_exists(con, "household_requests") else 0
+    con.close()
+    print(f"\nThe Security Gate screen now has: {waiting} approval(s) waiting, "
+          f"a live pass code ({MARK_CODE}4417), several decided arrivals and "
+          "three notices.")
     print("To demo a live hold, use Manual Capture on the gate screen and "
           "create one in front of the client — it appears on the resident's "
           "phone and expires after three minutes if nobody answers.")

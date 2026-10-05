@@ -100,6 +100,52 @@ assert REVIEWER_FLAT not in flats, (
     "reviewer flat %s must not be re-minted here -- remove it from "
     "closed_test_roster.json" % REVIEWER_FLAT)
 
+# A flat that is not in seed_gate.DEMO_FLATS has no owner, no household
+# members, no registered car and no gate history, so a tester who logs
+# into it sees an empty app -- which reads as a broken app, and is worse
+# for engagement than sharing an active flat with someone else.
+#
+# This has now happened twice. D-404 was added by hand during testing and
+# the seeder wrote sightings for eight other flats and none for the one
+# every screenshot was taken from. The comment recording that is in
+# seed_gate.py, directly above the line that fixed it -- and on 4 Oct
+# C-101 was created by hand anyway and handed to a tester.
+#
+# A comment is not a check. This is the check.
+try:
+    import seed_gate
+    _SEEDED = {ra._norm_flat(f[0]) for f in seed_gate.DEMO_FLATS}
+except Exception as _e:
+    _SEEDED = None
+    print("!! WARNING: cannot read seed_gate.DEMO_FLATS (%s)." % _e)
+    print("!! Skipping the empty-flat check. If a flat below is not in the")
+    print("!! seeder, its tester will open the app to a blank screen.")
+    print()
+
+if _SEEDED is not None:
+    _unseeded = sorted(f for f in flats if f not in _SEEDED)
+    if _unseeded and os.environ.get("OCTA_ALLOW_UNSEEDED", "").strip() != "1":
+        sys.exit(
+            "These flats are not in seed_gate.DEMO_FLATS: %s\n"
+            "\n"
+            "A flat the seeder does not know about has no owner, no members,\n"
+            "no registered vehicle and no gate history. The tester would log\n"
+            "in successfully and see an empty app, then stop opening it.\n"
+            "\n"
+            "Add them to DEMO_FLATS in seed_gate.py -- with a vehicle in\n"
+            "REGISTERED and a row in seed_arrivals, or the flat is still\n"
+            "blank where it matters -- then reseed, then run this again.\n"
+            "\n"
+            "To mint anyway: OCTA_ALLOW_UNSEEDED=1 (the tester gets a\n"
+            "working login to an empty society)."
+            % ", ".join(_unseeded))
+    if _unseeded:
+        print("!! OCTA_ALLOW_UNSEEDED=1 -- minting %d flat(s) the seeder does"
+              % len(_unseeded))
+        print("!! not populate: %s" % ", ".join(_unseeded))
+        print("!! Those testers will open the app to a blank screen.")
+        print()
+
 con = ra._con()
 
 # Only mint flats that do NOT already have a PIN.

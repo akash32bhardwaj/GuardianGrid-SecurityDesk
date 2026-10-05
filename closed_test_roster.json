@@ -21,16 +21,22 @@
     "there proves ONE of the two opted in and cannot say which, so without",
     "this field the count would credit both and overstate your progress.",
     "",
-    "FLAT SUPPLY, 5 Oct: the demo society has only TEN flats and they are",
-    "all now spoken for. New testers therefore share a flat with an",
-    "existing one, which is a compromise, not a design.",
+    "FLAT SUPPLY, 5 Oct: the society was grown from eight populated flats to",
+    "fifteen. seed_gate.py now seeds C-101 (which had been created by hand and",
+    "was empty) plus A-302, B-108, B-210, C-304, D-205 and D-410, each with an",
+    "owner, a registered vehicle and gate history.",
     "",
-    "The real fix is to grow the demo society -- more flats, each with a",
-    "resident, vehicles and gate history. Adding a bare flat with",
-    "set_flat() is NOT enough: a tester would open the app to an empty",
-    "screen, which is worse for engagement than sharing an active flat.",
-    "That also makes the demo more convincing to a prospect; a ten-flat",
-    "society is small for the product being sold."
+    "A flat MUST be in seed_gate.DEMO_FLATS before a tester is given it.",
+    "mint_tester_pins.py refuses otherwise. A flat the seeder does not know",
+    "about has no owner, no vehicle and no gate history, so the tester logs in",
+    "successfully and sees an empty app -- which reads as a broken app.",
+    "",
+    "Sharing a flat is now unnecessary for new testers and there are spare",
+    "flats. The five existing shared pairs were left alone deliberately: moving",
+    "someone to a new flat means minting a new PIN and re-sending their message,",
+    "and two of them are already opted in with the fourteen-day clock running.",
+    "The cost of leaving them is that last_seen is per flat, so on a shared flat",
+    "it cannot say WHICH of the two opened the app."
   ],
   "reviewer_flat": "D-404",
   "testers": [
@@ -116,6 +122,12 @@
       "email": "manalimulay881@gmail.com",
       "flat": "D-306",
       "name": "Manali",
+      "opted_on": ""
+    },
+    {
+      "email": "clbhardwaj1943@gmail.com",
+      "flat": "A-302",
+      "name": "",
       "opted_on": ""
     }
   ]

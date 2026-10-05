@@ -13,8 +13,13 @@
 #   sudo /opt/octa/reset_demo.sh                  # container octa-demo
 #   sudo /opt/octa/reset_demo.sh octa-society1
 #
-# Nightly (3 AM IST) — root's crontab:
-#   0 3 * * * /opt/octa/reset_demo.sh >> /var/log/octa-demo-reset.log 2>&1
+# Nightly (3 AM IST) — root's crontab. Cron runs in HOST time and the host
+# is UTC, so the line is written in UTC with the IST intent beside it. This
+# comment said "0 3 * * *" for a week after the crontab was corrected, which
+# is how a stale comment becomes the most trusted wrong answer in the repo:
+#   30 21 * * * /opt/octa/reset_demo.sh >> /var/log/octa-demo-reset.log 2>&1
+# Do NOT add CRON_TZ. Debian/Ubuntu cron ignores it, and a crontab
+# environment line only applies to the jobs BELOW it.
 #
 # Adjust APP_DIR if the seed_*.py files are not at /app inside the image.
 
