@@ -19,7 +19,18 @@
     "opted_on: set this to the date (YYYY-MM-DD) a tester CONFIRMS they",
     "pressed 'Become a tester'. It matters most on a shared flat: a login",
     "there proves ONE of the two opted in and cannot say which, so without",
-    "this field the count would credit both and overstate your progress."
+    "this field the count would credit both and overstate your progress.",
+    "",
+    "FLAT SUPPLY, 5 Oct: the demo society has only TEN flats and they are",
+    "all now spoken for. New testers therefore share a flat with an",
+    "existing one, which is a compromise, not a design.",
+    "",
+    "The real fix is to grow the demo society -- more flats, each with a",
+    "resident, vehicles and gate history. Adding a bare flat with",
+    "set_flat() is NOT enough: a tester would open the app to an empty",
+    "screen, which is worse for engagement than sharing an active flat.",
+    "That also makes the demo more convincing to a prospect; a ten-flat",
+    "society is small for the product being sold."
   ],
   "reviewer_flat": "D-404",
   "testers": [
@@ -94,6 +105,18 @@
       "flat": "B-405",
       "name": "H. Bembey",
       "opted_on": "2026-10-02"
+    },
+    {
+      "email": "saswatiiparida6@gmail.com",
+      "flat": "C-101",
+      "name": "Saswati",
+      "opted_on": ""
+    },
+    {
+      "email": "manalimulay881@gmail.com",
+      "flat": "D-306",
+      "name": "Manali",
+      "opted_on": ""
     }
   ]
 }

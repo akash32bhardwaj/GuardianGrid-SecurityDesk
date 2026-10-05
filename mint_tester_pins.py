@@ -101,6 +101,40 @@ assert REVIEWER_FLAT not in flats, (
     "closed_test_roster.json" % REVIEWER_FLAT)
 
 con = ra._con()
+
+# Only mint flats that do NOT already have a PIN.
+#
+# The whole roster is in this list, and most of those PINs are already in
+# somebody's WhatsApp. Re-minting them would invalidate every message
+# already sent -- and the failure is silent and delayed: the tester types
+# the PIN they were given, is told it is wrong, and neither of you knows
+# why. Nine people were one command away from exactly that when two
+# testers were added on 4 Oct.
+#
+# So adding a tester is now a safe operation: it mints only the new
+# flats. Re-minting an existing one is deliberate and loud.
+_existing = {ra._norm_flat(r[0]) for r in
+             con.execute("SELECT flat_no FROM flat_pins WHERE pin_hash IS NOT NULL")}
+_REMINT = os.environ.get("OCTA_REMINT", "").strip() == "1"
+_skipped = [f for f in flats if f in _existing] if not _REMINT else []
+if _skipped and not _REMINT:
+    flats = [f for f in flats if f not in _existing]
+    print("Skipping %d flat(s) that already have a PIN: %s"
+          % (len(_skipped), ", ".join(_skipped)))
+    print("Their PINs are unchanged, so messages already sent still work.")
+    print("To regenerate them anyway: OCTA_REMINT=1 (this invalidates every")
+    print("PIN already given out for those flats).")
+    print()
+if _REMINT:
+    print("!! OCTA_REMINT=1 -- regenerating PINs for ALL %d flats." % len(flats))
+    print("!! Every PIN already sent for these flats stops working.")
+    print()
+if not flats:
+    con.close()
+    sys.exit("Every flat in the roster already has a PIN. Nothing to mint.\n"
+             "Add a tester to closed_test_roster.json with a NEW flat, or set "
+             "OCTA_REMINT=1 to regenerate.")
+
 pins = {}
 for f in flats:
     p = ra._gen_pin()
@@ -155,9 +189,13 @@ print("  submitted in App Access. Do not give that flat to a tester.")
 print("-" * W)
 print()
 
-for i, (email, flat) in enumerate(TESTERS, 1):
+_SEND = [(e, f) for e, f in TESTERS if f in pins]
+print("  %d message(s) to send, for %d newly minted flat(s)."
+      % (len(_SEND), len(pins)))
+print()
+for i, (email, flat) in enumerate(_SEND, 1):
     print("=" * W)
-    print("  MESSAGE %2d of %d   ->   %s" % (i, len(TESTERS), email))
+    print("  MESSAGE %2d of %d   ->   %s" % (i, len(_SEND), email))
     print("=" * W)
     print(MSG.format(link=LINK, flat=flat, pin=pins[flat]))
     print()
