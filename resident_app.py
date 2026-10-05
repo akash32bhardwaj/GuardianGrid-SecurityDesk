@@ -664,6 +664,8 @@ def _read_token(tok: str):
 # outcome than no telemetry only if you forget it can be missing.
 
 _seen_cache = {}          # flat_no -> epoch of the last write
+_seen_unmatched = set()   # flats already named in the log, so the
+                          # diagnostic below fires once, not hourly
 
 
 def _touch_seen(flat_no: str) -> None:
@@ -691,19 +693,30 @@ def _touch_seen(flat_no: str) -> None:
         # column empty that reads exactly like "nobody has used the app".
         #
         # Zero rows is EXPECTED for a phone-login resident, whose flat has
-        # no PIN row -- so this is a debug line, not a warning. What it
-        # buys is that an empty last_seen column is never ambiguous again:
-        # either the log names the flats that did not match, or they
-        # genuinely have not opened the app.
+        # no PIN row -- so this is not a warning. What it buys is that an
+        # empty last_seen column is never ambiguous again: either the log
+        # names the flats that did not match, or they genuinely have not
+        # opened the app.
+        #
+        # It is INFO, not debug, because the level this runs at is INFO and
+        # a diagnostic nobody can read is the exact failure this register
+        # keeps recording. And it fires ONCE PER FLAT per process, not once
+        # per hour: on a phone-login site every resident would otherwise
+        # print this every hour forever, and the noise would bury the one
+        # line that matters.
         if matched == 0:
-            logger.debug(f"[RESIDENT] last_seen matched no flat_pins row "
-                         f"for {flat!r} (expected for a phone-login "
-                         f"resident; otherwise the flat number does not "
-                         f"match the PIN table)")
+            with _lock:
+                first = flat not in _seen_unmatched
+                _seen_unmatched.add(flat)
+            if first:
+                logger.info(f"[RESIDENT] last_seen matched no flat_pins row "
+                            f"for {flat!r} (expected for a phone-login "
+                            f"resident; otherwise the flat number does not "
+                            f"match the PIN table). Logged once per flat.")
     except Exception as e:
         with _lock:                      # let the next request retry
             _seen_cache.pop(flat, None)
-        logger.debug(f"[RESIDENT] last_seen not recorded for {flat}: {e}")
+        logger.warning(f"[RESIDENT] last_seen not recorded for {flat}: {e}")
 
 
 def resident_required(fn):
