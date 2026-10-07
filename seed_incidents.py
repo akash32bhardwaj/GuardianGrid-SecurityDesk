@@ -87,15 +87,69 @@ def _plate():
             f"{random.randint(1000, 9999)}")
 
 
+# How close to the present a seeded timestamp may come. Two minutes of
+# margin so a slow run cannot drift past the clock between building a row
+# and writing it -- the same margin demo_pulse.py uses, for the same reason.
+MARGIN = timedelta(minutes=2)
+
+
 def _ts(days_ago, hour_range):
+    """A timestamp inside the scenario's hours, NEVER ahead of now.
+
+    OCT-65. This took today's date and replaced the hour with one from the
+    scenario's range. Every range here is daytime -- (10,21), (9,19),
+    (8,20), (7,18) -- and the nightly reseed runs at 03:00 IST, so the
+    incident forced into slot 0 ("today's incident stays open") was dated
+    hours into the FUTURE on essentially every run.
+
+    Two things that cost:
+
+    A prospect opening the demo in the morning saw the one OPEN incident
+    stamped later than the clock on their own screen.
+
+    And ack_watchdog auto-registers it -- the comment in seed() below says
+    so, which is why slot 0 is kept non-HIGH. A future created_at gives a
+    NEGATIVE age, and a negative age can never exceed a threshold, so the
+    watchdog's timers were meaningless for the only open case on the site.
+    That is OCT-24b's shape: not a clock that is wrong, a comparison across
+    one.
+
+    demo_pulse.py and seed_demo.py both already carried this rule and said
+    so in their own comments. This file never got it. A lesson filed where
+    it was found gets applied where it was found.
+    """
     h1, h2 = hour_range
-    day = datetime.now() - timedelta(days=days_ago)
+    now = datetime.now()
+    day = now - timedelta(days=days_ago)
     if h1 <= h2:
         hour = random.randint(h1, h2)
     else:  # wraps midnight, e.g. (22, 2)
         hour = random.choice(list(range(h1, 24)) + list(range(0, h2 + 1)))
-    return day.replace(hour=hour, minute=random.randint(0, 59),
-                       second=random.randint(0, 59), microsecond=0)
+    ts = day.replace(hour=hour, minute=random.randint(0, 59),
+                     second=random.randint(0, 59), microsecond=0)
+
+    latest = now - MARGIN
+    if ts <= latest:
+        return ts
+
+    # Compressed into the elapsed part of that day rather than clipped to a
+    # single instant: several seeded incidents would otherwise land on the
+    # same second and read as one burst.
+    start = day.replace(hour=0, minute=0, second=0, microsecond=0)
+    if latest <= start:
+        # Run within two minutes of midnight; nothing of today has elapsed.
+        return latest.replace(microsecond=0)
+    span = (latest - start).total_seconds()
+    return (start + timedelta(seconds=random.uniform(0, span))
+            ).replace(microsecond=0)
+
+
+def _not_future(dt):
+    """Clamp a derived timestamp. resolved_at and the acknowledgement time
+    are built by ADDING minutes to created_at, so clamping created alone
+    still let them run past the clock."""
+    latest = datetime.now() - timedelta(minutes=1)
+    return min(dt, latest).replace(microsecond=0)
 
 
 def seed(days):
@@ -124,7 +178,7 @@ def seed(days):
         status = "OPEN" if is_open else "RESOLVED"
         resolve_minutes = random.randint(12, 95)
         resolved_at = (None if is_open else
-                       (created + timedelta(minutes=resolve_minutes))
+                       _not_future(created + timedelta(minutes=resolve_minutes))
                        .isoformat(sep=" ", timespec="seconds"))
         notes = [] if is_open else [{
             "operator": "GuardianGrid Ops",
@@ -172,7 +226,7 @@ def seed(days):
              resolved_at, None if is_open else "DEMO-SEED",
              None,
              None if is_open else
-             (created + timedelta(seconds=ack_latency))
+             _not_future(created + timedelta(seconds=ack_latency))
              .isoformat(sep=" ", timespec="seconds"),
              ack_latency, 0),
         )
