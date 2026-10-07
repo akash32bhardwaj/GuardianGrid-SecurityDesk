@@ -412,6 +412,13 @@ def _ensure_tables():
         if "last_seen" not in cols:
             con.execute("ALTER TABLE flat_pins ADD COLUMN last_seen TEXT")
             logger.info("[RESIDENT] flat_pins: added last_seen column")
+        # CREATE TABLE IF NOT EXISTS does not add a column to a database that
+        # is already in the field, and both live sites have one.
+        acols = {r[1] for r in con.execute("PRAGMA table_info(arrival_requests)")}
+        for col in ("admitted_by", "override_reason"):
+            if col not in acols:
+                con.execute(f"ALTER TABLE arrival_requests ADD COLUMN {col} TEXT")
+                logger.info("[RESIDENT] arrival_requests: added %s column", col)
         con.commit()
         con.close()
     except sqlite3.Error as e:
@@ -2132,8 +2139,35 @@ def gate_arrivals():
     return jsonify({"success": True, "arrivals": [_arrival_dict(r) for r in rows]})
 
 
+#: The minimum a guard has to type to overrule a resident. Short enough to
+#: type one-handed at a gate, long enough that "ok" does not pass.
+OVERRIDE_MIN_CHARS = 10
+
+
 @resident_app_bp.route("/api/gate/arrivals/<int:aid>/admit", methods=["POST"])
 def gate_arrival_admit(aid):
+    """Log a held visitor in.
+
+    WHAT A RESIDENT'S "WAIT" MEANS, decided 8 Oct.
+
+    This used to block only DENY. WAIT and an unanswered hold both admitted,
+    silently, and the visitor log recorded the reason -- "resident asked to
+    wait", "no answer in 3 min" -- so it was honest in the log and invisible
+    to the one person it concerned. The resident pressed a button that said
+    WAIT and was never told it had been overruled.
+
+    Hard-blocking is not the answer either. The visitor is physically at the
+    gate and the guard is a person with authority; a system that refuses
+    just moves the decision off-system, and then the log stops describing
+    what actually happened, which is worse than an override.
+
+    So: the guard keeps the authority and loses the silence. Anything other
+    than ALLOW needs an explicit override flag AND a typed reason, both
+    stored, attributed to the authenticated guard, and pushed to the
+    resident's phone immediately. An override nobody can see is just the old
+    behaviour with more code.
+    """
+    data = request.get_json(silent=True) or {}
     con = _con()
     r = con.execute("SELECT * FROM arrival_requests WHERE id=?", (aid,)).fetchone()
     if not r:
@@ -2141,22 +2175,82 @@ def gate_arrival_admit(aid):
     if r["admitted_at"]:
         con.close(); return jsonify({"success": True, "message": "already admitted"})
     if r["decision"] == "DENY":
-        con.close(); return jsonify({"success": False, "message": "Resident declined entry"}), 400
+        con.close(); return jsonify({"success": False,
+                                     "message": "Resident declined entry"}), 400
+
+    # Identity from the session, never the body -- same rule as the gate pass.
+    auth = (getattr(request, "auth_user", None) or {}).get("username", "")
+    guard = str(auth).strip() or "guard"
+
+    decision = r["decision"]
+    needs_override = decision != "ALLOW"
+    reason = str(data.get("override_reason") or "").strip()[:300]
+
+    if needs_override:
+        why = {"WAIT": "The resident asked you to wait.",
+               None: "The resident has not answered."}.get(
+                   decision, "The resident has not approved this visitor.")
+        if not data.get("override"):
+            con.close()
+            return jsonify({
+                "success": False, "override_required": True,
+                "decision": decision,
+                "message": f"{why} To let them in anyway, confirm the "
+                           f"override and say why. The resident is told."}), 409
+        if len(reason) < OVERRIDE_MIN_CHARS:
+            con.close()
+            return jsonify({
+                "success": False, "override_required": True,
+                "decision": decision,
+                "message": f"Give a reason of at least "
+                           f"{OVERRIDE_MIN_CHARS} characters. It goes on the "
+                           f"record and to the resident."}), 409
+
     vid = None
     try:
         from db import add_visitor
         tag = {"ALLOW": "approved in app", "WAIT": "resident asked to wait",
-               None: "no answer in 3 min"}.get(r["decision"], "")
+               None: "no answer in 3 min"}.get(decision, "")
+        if needs_override:
+            tag = f"{tag} · GUARD OVERRIDE by {guard}: {reason}".strip(" ·")
         vid = add_visitor(r["visitor_name"], r["flat_no"], "",
                           f"{r['purpose'] or 'Visitor'} · {tag}".strip(" ·"))
     except Exception as e:
         logger.warning(f"[RESIDENT] add_visitor failed: {e}")
-    con.execute("UPDATE arrival_requests SET admitted_at=?, visitor_id=?, "
-                "status=CASE WHEN status='PENDING' THEN 'ADMITTED' ELSE status END WHERE id=?",
-                (_now_str(), vid, aid))
-    con.commit(); con.close()
+
+    # AND admitted_at IS NULL -- the same check-then-act gap the gate pass
+    # had. The read above and this write are separate statements, so two
+    # taps could both pass the check and log the visitor twice.
+    cur = con.execute(
+        "UPDATE arrival_requests SET admitted_at=?, visitor_id=?, "
+        "admitted_by=?, override_reason=?, "
+        "status=CASE WHEN status='PENDING' THEN 'ADMITTED' ELSE status END "
+        "WHERE id=? AND admitted_at IS NULL",
+        (_now_str(), vid, guard, (reason if needs_override else None), aid))
+    con.commit()
+    won = cur.rowcount
+    con.close()
+    if won == 0:
+        return jsonify({"success": True, "message": "already admitted"})
+
+    if needs_override:
+        logger.warning("[RESIDENT] arrival %s (%s): %s OVERRODE decision=%r "
+                       "for %r at %s. Reason: %s", aid, r["flat_no"], guard,
+                       decision, r["visitor_name"], r["flat_no"], reason)
+        try:
+            _push_to_phones(
+                _flat_phones(r["flat_no"]) + [f"flat:{r['flat_no']}"],
+                {"title": f"\u26a0\ufe0f {r['visitor_name']} was let in",
+                 "body": f"The guard admitted them although you had not "
+                         f"approved it. Reason given: {reason}",
+                 "tag": f"arrival-override-{aid}"})
+        except Exception as e:
+            logger.warning(f"[RESIDENT] override push failed: {e}")
+
     return jsonify({"success": True, "visitor_id": vid,
-                    "message": f"Logged {r['visitor_name']} → {r['flat_no']}"})
+                    "overridden": bool(needs_override),
+                    "message": f"Logged {r['visitor_name']} → {r['flat_no']}"
+                               + (" (override recorded)" if needs_override else "")})
 
 
 @resident_app_bp.route("/api/resident/arrivals/pending")
