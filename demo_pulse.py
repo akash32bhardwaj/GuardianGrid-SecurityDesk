@@ -379,9 +379,19 @@ def main() -> int:
 
     if args.dry_run:
         print(f"[PULSE] DRY RUN — would write {len(events)} events to {gg_db.DB_PATH}")
+        # `state` is printed because it was the column this job was getting
+        # wrong, and a dry run that omits a column cannot be used to check
+        # that column. The point of a preview is to show what will be
+        # written, not a selection of it.
         for e in events:
             print(f"    {e['timestamp']}  {e['event']:5}  {e['plate']:12} "
-                  f"{e['access']:12} {e['camera']}")
+                  f"{e['access']:12} {str(e.get('state') or '-'):18} "
+                  f"{e['type']:11} {e['camera']}")
+        seen = {}
+        for e in events:
+            seen[str(e.get("state") or "")] = seen.get(str(e.get("state") or ""), 0) + 1
+        print("    state values: " + ", ".join(
+            f"{k or '(empty)'}×{v}" for k, v in sorted(seen.items())))
         return 0
 
     written = 0
