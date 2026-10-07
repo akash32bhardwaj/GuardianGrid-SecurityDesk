@@ -39,6 +39,7 @@ STATUSES
   revoked  -> manually blocked (misconduct etc.); revoked wins over dates
 """
 
+import logging
 import os
 import re
 import secrets
@@ -48,6 +49,9 @@ from datetime import datetime, date
 from flask import Blueprint, jsonify, request
 
 from site_profile import feature_required, is_enabled
+
+# This module had no logger at all -- its one diagnostic was a print.
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # OCT-96. This defaulted to the folder holding this file. In the container
@@ -83,11 +87,16 @@ def _adopt_legacy_db():
     if n:
         import shutil
         shutil.copy2(legacy, DB_PATH)
-        print(f"[contractors] carried {n} pass(es) from {legacy} to {DB_PATH}")
+        logger.info("[contractors] carried %d pass(es) from %s to %s",
+                    n, legacy, DB_PATH)
 
 
 _adopt_legacy_db()
-print(f"[contractors] storage -> {DB_PATH}")
+# These two were prints, so they went to stdout and not to the log that
+# 98ed487 configured a level for. A boot line that cannot be filtered,
+# levelled or timestamped alongside everything else is a boot line nobody
+# correlates with anything.
+logger.info("[contractors] storage -> %s", DB_PATH)
 
 PASS_PREFIX = "CP"  # printed on the pass: CP-4F7K
 _CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # no 0/O, 1/I/L confusion
@@ -333,10 +342,10 @@ def gate_event(pass_id):
             ).fetchone(),
             conn,
         )
-    # Optional WhatsApp hook — only if the site has alerts on. Kept as a
-    # stub so this module works standalone; wire to your Twilio sender.
+    # Only if the site has alerts on. This used to call a stub that printed
+    # to stdout, so the flag promised a notification and delivered nothing.
     if is_enabled("whatsapp_alerts"):
-        _notify_whatsapp_stub(d, event_type)
+        _notify_whatsapp(d, event_type)
     return jsonify({"ok": True, "pass": d})
 
 
@@ -394,10 +403,64 @@ def onsite_now():
 
 
 # ---------------------------------------------------------------------------
-def _notify_whatsapp_stub(pass_dict, event_type):
-    """Replace this body with a call to your existing Twilio sender
-    (the same one behind flat visitor notifications). Message idea:
-      'Contractor {name} ({company}) checked {IN/OUT} at {gate}, {time}'.
-    Left as a print so the module never crashes without Twilio wiring."""
-    print(f"[contractors] WhatsApp stub: {pass_dict['name']} "
-          f"checked {event_type.upper()}")
+def _notify_whatsapp(pass_dict, event_type):
+    """Tell the security head that a contractor came in or went out.
+
+    This was a print statement for as long as the module existed, sitting
+    behind `if is_enabled("whatsapp_alerts")`. A site with alerts switched
+    ON believed contractor check-in and check-out were being notified, and
+    the entire implementation wrote a line to stdout. The feature flag was
+    the lie: it did not gate a send, it gated a print.
+
+    Three rules this follows, each learned elsewhere in this codebase:
+
+    - It goes through send_alert(), so it uses a TEMPLATE when one is
+      configured and says which path it took. A freeform WhatsApp body
+      only arrives inside a 24-hour window (OCT-129), and a contractor
+      arriving at the gate is exactly the message that has to reach a cold
+      phone.
+    - It NEVER raises into the request. A guard scanning a pass at the
+      gate must not see an error because Twilio is slow.
+    - A send that does not happen says WHY, at warning level, naming the
+      missing piece. Silence is what this function used to do.
+    """
+    name = pass_dict.get("name") or "A contractor"
+    company = pass_dict.get("company") or ""
+    gate = (pass_dict.get("last_event") or {}).get("gate") or "the gate"
+    when = (pass_dict.get("last_event") or {}).get("event_time") or ""
+    when = str(when).replace("T", " ")[:16]
+    direction = "IN" if str(event_type).lower() == "in" else "OUT"
+    who = f"{name} ({company})" if company else name
+
+    body = (f"\U0001f477 *Contractor {direction}*\n"
+            f"{who}\n"
+            f"{gate} — {when}")
+
+    try:
+        import whatsapp_alerts as wa
+    except Exception as e:
+        logger.warning("[contractors] WhatsApp not notified for %s (%s): "
+                       "whatsapp_alerts unavailable: %s", name, direction, e)
+        return
+
+    try:
+        to = wa._security_number()
+        if not to:
+            logger.warning("[contractors] WhatsApp not notified for %s (%s): "
+                           "no security number configured (dashboard setting "
+                           "'security_whatsapp', or SECURITY_WHATSAPP)",
+                           name, direction)
+            return
+        r = wa.send_alert(to, "contractor",
+                          [who, direction, gate, when or "\u2014"],
+                          fallback_body=body)
+        if r.get("success"):
+            logger.info("[contractors] %s checked %s — WhatsApp sent (%s)",
+                        name, direction, r.get("path", "?"))
+        else:
+            logger.warning("[contractors] %s checked %s — WhatsApp NOT sent: %s",
+                           name, direction, r.get("error") or r)
+    except Exception as e:
+        # Deliberately swallowed: the gate scan must succeed regardless.
+        logger.warning("[contractors] WhatsApp notify failed for %s (%s): %s",
+                       name, direction, e)

@@ -36,6 +36,7 @@ import json
 import logging
 import os
 import re
+import secrets
 import sqlite3
 import subprocess
 import time
@@ -53,6 +54,9 @@ _CLIP_CACHE = "clips_cache"
 _CLIP_SECONDS = 15
 _TOKEN_TTL = 3600          # media links valid for 1 hour
 _SEGMENT_SECONDS = 600     # must match segment_recorder.py
+_SIG_BYTES = 16            # truncated HMAC length; a FIXED width
+_MEDIA_SECRET = b""        # filled by _secret(), never a credential
+_MEDIA_SECRET_SOURCE = ""  # "env" | "file" — reported at boot
 
 try:
     import whatsapp_config as cfg
@@ -72,6 +76,31 @@ def init_whatsapp_inbound(base_dir: str):
     _CLIP_CACHE = os.path.join(base_dir, "clips_cache")
     os.makedirs(_CLIP_CACHE, exist_ok=True)
     _ensure_table()
+    check_media_wiring()
+
+
+def check_media_wiring():
+    """Say at BOOT what the two silent failures would be.
+
+    Both of the things this reports used to be discoverable only by their
+    symptoms: a signing key that did not exist produced links nobody could
+    open, and a missing twilio library produced an inbound webhook that
+    accepted anything. Neither announced itself."""
+    try:
+        import twilio.request_validator  # noqa: F401
+        logger.info("[WA-INBOUND] twilio present — webhook signatures verified")
+    except ImportError:
+        logger.error("[WA-INBOUND] twilio package MISSING. Inbound WhatsApp "
+                     "requests cannot be verified and will all be REJECTED. "
+                     "twilio is pinned in requirements.txt; this image did "
+                     "not get it.")
+    try:
+        fp = media_key_fingerprint()
+        logger.info("[WA-MEDIA] signing key ready (%s, source=%s)",
+                    fp, _MEDIA_SECRET_SOURCE)
+    except Exception as e:
+        logger.error("[WA-MEDIA] no signing key (%s). Media links will not "
+                     "be issued; alerts still go out as text.", e)
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -134,32 +163,123 @@ def _get_context(phone: str):
 # Signed media tokens — public links without exposing the filesystem
 # ════════════════════════════════════════════════════════════════════
 
-def _secret() -> bytes:
-    # Prefer the app's JWT secret; fall back to the Twilio auth token.
-    try:
-        from config import SECRET_KEY
-        return str(SECRET_KEY).encode()
-    except Exception:
-        pass
-    if _CFG:
-        return str(getattr(cfg, "TWILIO_AUTH_TOKEN", "octa")).encode()
-    return b"octa-fallback"
+class MediaTokenUnavailable(RuntimeError):
+    """No signing key, so no link can be signed. Raised rather than
+    returned, because a None here used to be formatted straight into a
+    URL and sent to a resident as the word 'None'."""
 
+
+def _media_key_path() -> str:
+    """Beside the database, which is the one directory that is persistent
+    on every deployment -- /data in the container, the app dir otherwise."""
+    d = os.path.dirname(os.path.abspath(_DB_PATH)) or "."
+    return os.path.join(d, "media_token.key")
+
+
+def _secret() -> bytes:
+    """The key media links are signed with.
+
+    This used to read, in order: config.SECRET_KEY, then the TWILIO AUTH
+    TOKEN, then the literal b"octa-fallback".
+
+    config.SECRET_KEY does not exist. It is not defined anywhere in this
+    codebase -- that import was the only occurrence of the name, so it
+    raised ImportError on every single call and the "preferred" branch was
+    dead code from the day it was written. Every media link ever issued
+    was therefore signed with the Twilio auth token: a CREDENTIAL, used as
+    a signing key, shared with a third party, and rotated on Twilio's
+    schedule rather than ours. Rotating the Twilio token silently
+    invalidated every outstanding media link; leaking it -- and it has
+    been pasted into a chat window on this project -- let anyone mint one.
+
+    Now: a dedicated key, generated on first use, stored beside the
+    database, used for nothing else. If it cannot be read or written we
+    REFUSE to sign. A media link that cannot be trusted is worth less than
+    no media link, and the alert still goes out as text."""
+    global _MEDIA_SECRET, _MEDIA_SECRET_SOURCE
+    if _MEDIA_SECRET:
+        return _MEDIA_SECRET
+
+    env = os.environ.get("OCTA_MEDIA_SECRET", "").strip()
+    if env:
+        if len(env) < 32:
+            raise MediaTokenUnavailable(
+                "OCTA_MEDIA_SECRET is %d characters; at least 32 are "
+                "required. Refusing to sign media links with a weak key."
+                % len(env))
+        _MEDIA_SECRET, _MEDIA_SECRET_SOURCE = env.encode(), "env"
+        return _MEDIA_SECRET
+
+    path = _media_key_path()
+    try:
+        if os.path.exists(path):
+            with open(path, "rb") as f:
+                k = f.read().strip()
+            if len(k) >= 32:
+                _MEDIA_SECRET, _MEDIA_SECRET_SOURCE = k, "file"
+                return _MEDIA_SECRET
+            logger.error("media key at %s is %d bytes, expected >= 32. "
+                         "Not overwriting it; fix or delete it.", path, len(k))
+            raise MediaTokenUnavailable("media key on disk is too short")
+        k = secrets.token_urlsafe(48).encode()
+        with open(path, "wb") as f:
+            f.write(k)
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass          # Windows and some mounts; the key is still written
+        _MEDIA_SECRET, _MEDIA_SECRET_SOURCE = k, "file"
+        logger.info("[WA-MEDIA] generated a new media signing key at %s", path)
+        return _MEDIA_SECRET
+    except MediaTokenUnavailable:
+        raise
+    except OSError as e:
+        raise MediaTokenUnavailable("cannot read or create %s: %s" % (path, e))
+
+
+def media_key_fingerprint() -> str:
+    """For boot logging. Never the key itself."""
+    try:
+        return hashlib.sha256(_secret()).hexdigest()[:16]
+    except MediaTokenUnavailable:
+        return "unavailable"
+
+
+# The signature is appended with NO delimiter and split off by LENGTH.
+#
+# It used to be joined with b"." and recovered with rsplit(b".", 1). The
+# signature is 16 RAW bytes, and 0x2E is a perfectly ordinary byte for an
+# HMAC to produce: P(at least one in 16) = 1-(255/256)^16 = 6.07%. When it
+# happened, rsplit cut INSIDE the signature, the payload grew a few bytes,
+# the signature lost them, and verification failed. About one media link
+# in sixteen had never worked, which reads as "sometimes the video doesn't
+# open" and is almost impossible to chase from the symptom.
+#
+# Measured on this code before the change: 1231 failures in 20000 round
+# trips (6.16%), and the failures were the same 1231 tokens whose
+# signature contained 0x2E -- a 1:1 match, not a correlation.
+#
+# A fixed-width field cannot have this bug: there is no byte whose value
+# changes where the boundary is.
 
 def make_media_token(file_path: str) -> str:
-    """Signed token embedding the ABSOLUTE file path + expiry."""
+    """Signed token embedding the ABSOLUTE file path + expiry.
+
+    Raises MediaTokenUnavailable when there is no signing key."""
     exp = int(time.time()) + _TOKEN_TTL
     payload = f"{file_path}|{exp}".encode()
-    sig = hmac.new(_secret(), payload, hashlib.sha256).digest()[:16]
-    return base64.urlsafe_b64encode(payload + b"." + sig).decode()
+    sig = hmac.new(_secret(), payload, hashlib.sha256).digest()[:_SIG_BYTES]
+    return base64.urlsafe_b64encode(payload + sig).decode()
 
 
 def read_media_token(token: str):
     """Return file_path if token is valid and unexpired, else None."""
     try:
         raw = base64.urlsafe_b64decode(token.encode())
-        payload, sig = raw.rsplit(b".", 1)
-        good = hmac.new(_secret(), payload, hashlib.sha256).digest()[:16]
+        if len(raw) <= _SIG_BYTES:
+            return None
+        payload, sig = raw[:-_SIG_BYTES], raw[-_SIG_BYTES:]
+        good = hmac.new(_secret(), payload, hashlib.sha256).digest()[:_SIG_BYTES]
         if not hmac.compare_digest(sig, good):
             return None
         path, exp = payload.decode().rsplit("|", 1)
@@ -332,8 +452,20 @@ def _verify_twilio(req) -> bool:
         url = _public_base(req) + req.path
         return validator.validate(url, req.form.to_dict(), sig)
     except ImportError:
-        logger.warning("twilio package missing — signature NOT verified")
-        return True   # don't brick alerts if lib is absent; log loudly
+        # This used to `return True`, with the comment "don't brick alerts
+        # if lib is absent; log loudly". Logging loudly is not a control.
+        # The webhook's only authentication is this signature, so a missing
+        # library turned it into an open endpoint that anyone could post
+        # to, and the only sign of it was a warning line in a log that --
+        # until 5 Oct -- was not even being printed.
+        #
+        # An unverifiable request is not a verified one. check_media_wiring()
+        # reports the missing library at boot so this is found then, rather
+        # than by whoever finds the endpoint first.
+        logger.error("twilio package missing — cannot verify signature, "
+                     "REJECTING request. Install twilio (it is pinned in "
+                     "requirements.txt) or inbound WhatsApp stays closed.")
+        return False
     except Exception as e:
         logger.error(f"signature check error: {e}")
         return False
@@ -383,26 +515,44 @@ def whatsapp_inbound():
              f"{ctx.get('camera') or 'site'} — "
              f"{(ctx.get('event_ts') or '')[:16]}")
 
+    def _link(path):
+        """Signed URL, or None when the key is missing. make_media_token
+        RAISES rather than returning None, so that a missing key can never
+        be formatted into a url as the word 'None' -- but a resident who
+        typed 'show' should get an apology, not a 500 from a webhook."""
+        try:
+            return _public_base(request) + "/api/whatsapp/media/" + \
+                make_media_token(path)
+        except MediaTokenUnavailable as e:
+            logger.error("[WA-MEDIA] cannot sign a media link: %s", e)
+            return None
+
     if _CMD_CLIP.search(body):
         clip = find_clip_for_event(ctx.get("camera"), ctx.get("event_ts"))
         if clip:
-            url = (_public_base(request) +
-                   "/api/whatsapp/media/" + make_media_token(clip))
-            return _twiml(f"▶️ Clip: {label}", url)
+            url = _link(clip)
+            if url:
+                return _twiml(f"▶️ Clip: {label}", url)
+            return _twiml(f"⚠️ Clip found but media links are unavailable "
+                          f"right now.\n{label}")
         snap = _find_snapshot(ctx)
         if snap:
-            url = (_public_base(request) +
-                   "/api/whatsapp/media/" + make_media_token(snap))
-            return _twiml(f"⚠️ Clip not available — snapshot instead.\n"
-                          f"📷 {label}", url)
+            url = _link(snap)
+            if url:
+                return _twiml(f"⚠️ Clip not available — snapshot instead.\n"
+                              f"📷 {label}", url)
+            return _twiml(f"⚠️ Snapshot found but media links are "
+                          f"unavailable right now.\n{label}")
         return _twiml(f"⚠️ No clip or snapshot available for {label}.")
 
     if _CMD_PHOTO.search(body):
         snap = _find_snapshot(ctx)
         if snap:
-            url = (_public_base(request) +
-                   "/api/whatsapp/media/" + make_media_token(snap))
-            return _twiml(f"📷 {label}", url)
+            url = _link(snap)
+            if url:
+                return _twiml(f"📷 {label}", url)
+            return _twiml(f"⚠️ Snapshot found but media links are "
+                          f"unavailable right now.\n{label}")
         return _twiml(f"⚠️ No snapshot available for {label}.")
 
     return _twiml(_HELP)

@@ -39,6 +39,7 @@ import io
 import logging
 import os
 import re
+import shutil
 import sqlite3
 import threading
 import time
@@ -293,6 +294,59 @@ def _write_flats(flats: dict) -> tuple:
         return 0, f"flat table write failed: {e}", 0
 
 
+def _registry_path():
+    """resident_db owns the location; never guess it here (OCT-66)."""
+    try:
+        import resident_db as rdb
+        return str(rdb.DB_FILE)
+    except Exception:
+        return ""
+
+
+def _snapshot_registry():
+    """Copy the vehicle registry aside before a bulk write.
+
+    The flats half of an import cannot be rolled back -- set_flat() is one
+    write per flat with no transaction. The vehicles half CAN be, because
+    it is a single JSON file, and half a rollback is better than none: it
+    is the difference between "no vehicles were added" and "some unknown
+    subset of vehicles was added"."""
+    p = _registry_path()
+    if not p or not os.path.exists(p):
+        return None
+    try:
+        bak = p + ".preimport"
+        shutil.copy2(p, bak)
+        return bak
+    except OSError as e:
+        logger.warning("[IMPORT] could not snapshot the vehicle registry "
+                       "(%s); a failed vehicle write will not be rolled back", e)
+        return None
+
+
+def _restore_registry(bak):
+    """True if the registry was put back, False if it was not -- and the
+    caller MUST tell the operator which, because the two situations need
+    different things from them."""
+    if not bak:
+        return False
+    p = _registry_path()
+    if not p:
+        return False
+    try:
+        shutil.copy2(bak, p)
+        try:
+            import resident_db as rdb
+            if hasattr(rdb.db, "reload"):
+                rdb.db.reload()        # drop an in-memory copy of the old file
+        except Exception:
+            pass
+        return True
+    except OSError as e:
+        logger.error("[IMPORT] registry restore FAILED: %s", e)
+        return False
+
+
 def _write_vehicles(vehicles: list) -> int:
     from resident_db import db as rdb, Resident
     n = 0
@@ -339,12 +393,27 @@ def import_residents():
     if dry:
         return jsonify(out)
 
-    # An import is all-or-nothing. An error-level issue means the sheet itself
-    # is wrong — a mobile that is not a phone number, a plate claimed by two
-    # flats, a flat listed twice under different owners. Half-importing a
-    # client's society and reporting success is worse than importing none of
+    # VALIDATION is all-or-nothing. An error-level issue means the sheet
+    # itself is wrong — a mobile that is not a phone number, a plate claimed
+    # by two flats, a flat listed twice under different owners. Half-importing
+    # a client's society and reporting success is worse than importing none of
     # it, so the write is refused and the operator fixes the sheet. force=1 is
     # the deliberate, explicit override.
+    #
+    # The WRITE is not all-or-nothing, and the sentence above used to say it
+    # was. That is the dangerous kind of comment: it states a safety property
+    # the code does not have, so the next reader stops looking.
+    #
+    # What actually happens: flats go through flat_directory.set_flat() ONE AT
+    # A TIME, each its own write, and vehicles go into resident_db's JSON
+    # registry — a different storage system with no shared transaction. There
+    # is no way to roll back twenty set_flat() calls.
+    #
+    # So instead of pretending: the registry file is snapshotted and RESTORED
+    # if the vehicle write fails, and a partial outcome is reported as a
+    # partial outcome, naming exactly what landed. An operator who is told
+    # "40 flats written, 0 vehicles, registry unchanged" can finish the job.
+    # One who is told "success" cannot.
     force = (request.form.get("force", "0") == "1")
     if out["errors"] and not force:
         out.update({
@@ -355,12 +424,46 @@ def import_residents():
         })
         return jsonify(out), 409
 
-    fw, how, no_phone = _write_flats(flats)
-    vw = _write_vehicles(vehicles)
+    snap = _snapshot_registry()
+
+    try:
+        fw, how, no_phone = _write_flats(flats)
+    except Exception as e:
+        logger.error("[IMPORT] %s: flat write raised: %s", f.filename, e)
+        out.update({"success": False, "written": False, "partial": False,
+                    "message": f"Nothing was imported — the flat write failed "
+                               f"before it started ({e}). The sheet is fine; "
+                               f"this is a server problem."})
+        return jsonify(out), 500
+
+    try:
+        vw = _write_vehicles(vehicles)
+    except Exception as e:
+        restored = _restore_registry(snap)
+        logger.error("[IMPORT] %s: %d flats written, vehicle write FAILED "
+                     "(%s), registry %s", f.filename, fw, e,
+                     "restored" if restored else "NOT restored")
+        out.update({
+            "success": False, "written": True, "partial": True,
+            "flats_written": fw, "flats_how": how,
+            "flats_without_phone": no_phone, "vehicles_written": 0,
+            "message": (
+                f"PARTIAL IMPORT. {fw} flat(s) were written and are live. "
+                f"The vehicle registry failed ({e}) and was "
+                + ("rolled back to its previous contents, so no vehicles "
+                   "from this sheet were added. "
+                   if restored else
+                   "NOT rolled back — check the vehicle registry by hand. ")
+                + "Re-uploading the same sheet is safe: flats are matched by "
+                  "flat number and updated, not duplicated."),
+        })
+        return jsonify(out), 500
+
     out.update({"flats_written": fw, "flats_how": how,
                 "flats_without_phone": no_phone,
                 "flats_skipped_no_phone": 0,   # nothing is skipped any more
-                "vehicles_written": vw, "written": True, "forced": force})
+                "vehicles_written": vw, "written": True, "partial": False,
+                "forced": force})
     try:
         con = sqlite3.connect(_DB_PATH)
         con.execute("INSERT INTO resident_imports (filename, flats, vehicles, issues, imported_at, by_user) "

@@ -284,6 +284,12 @@ WA_TEMPLATES = {
     "sos":        os.environ.get("WA_TPL_SOS", "").strip(),
     "escalation": os.environ.get("WA_TPL_ESCALATION", "").strip(),
     "brief":      os.environ.get("WA_TPL_BRIEF", "").strip(),
+    # Added 7 Oct with the contractor notification. Until Meta approves it
+    # this is empty, send_alert() falls back to freeform, and freeform only
+    # reaches a phone inside a 24-hour window -- OCT-129. That is a known
+    # and stated limit, which is a different thing from the print statement
+    # this replaced.
+    "contractor": os.environ.get("WA_TPL_CONTRACTOR", "").strip(),
 }
 
 
