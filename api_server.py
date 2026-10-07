@@ -69,6 +69,15 @@ _logging.getLogger("octa.boot").info(
     "log level %s (set OCTA_LOG_LEVEL to change)",
     _logging.getLevelName(_LEVEL))
 
+# This module had no module-level logger. 98ed487 gave the process a level
+# and a boot line and stopped there, so every later caller either used
+# _logging.getLogger(...) inline or, as of 2af224f, wrote `logger.error(...)`
+# against a name that did not exist -- a NameError that would only fire
+# inside an exception handler, i.e. exactly when something had already gone
+# wrong. pyflakes caught it in the deploy's own lint step; I did not, two
+# hours after finding the identical missing logger in contractors.py.
+logger = _logging.getLogger("octa.api")
+
 import cv2
 import hmac
 import os
