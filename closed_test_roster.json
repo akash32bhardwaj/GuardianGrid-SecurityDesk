@@ -21,6 +21,29 @@
     "there proves ONE of the two opted in and cannot say which, so without",
     "this field the count would credit both and overstate your progress.",
     "",
+    "PLAY CONSOLE IS A THIRD LIST, 7 Oct. This file and the Play Console email",
+    "list drifted apart in BOTH directions and nothing compared them. Three",
+    "testers here were never on the Play list and could not opt in however long",
+    "they were chased; one address on the Play list",
+    "(saswatiiiparida05@gmail.com) has no flat here and could opt in but not",
+    "log in. Before chasing anyone, compare the two lists.",
+    "",
+    "A tester needs THREE things and the absence of any one is silent:",
+    "  1. on the Play Console email list   -> can opt in",
+    "  2. a row in 'testers' below         -> gets a PIN",
+    "  3. an ANDROID phone                 -> can INSTALL and USE it",
+    "",
+    "device: android | ios | unknown. Opting in does NOT prove android --",
+    "the opt-in page is a Google-account action in a browser, so an iPhone",
+    "owner can press 'Become a tester' and then never install anything. That",
+    "is the worst case for this test, because it counts toward the twelve",
+    "while contributing no usage, and Google looks at both.",
+    "",
+    "One PERSON, not one address. Two accounts belonging to the same person",
+    "on the same handset are one tester, whatever the list says.",
+    "",
+    "_dropped records who was removed and why, so nobody re-adds them.",
+    "",
     "FLAT SUPPLY, 5 Oct: the society was grown from eight populated flats to",
     "fifteen. seed_gate.py now seeds C-101 (which had been created by hand and",
     "was empty) plus A-302, B-108, B-210, C-304, D-205 and D-410, each with an",
@@ -44,91 +67,94 @@
       "email": "akash08bhardwaj@gmail.com",
       "flat": "A-101",
       "name": "Akash",
+      "device": "android",
       "opted_on": "2026-10-02"
     },
     {
       "email": "aakash.aakashb.bhardwaj@gmail.com",
       "flat": "A-204",
       "name": "",
+      "device": "android",
       "opted_on": ""
     },
     {
       "email": "saroj08bhardwaj@gmail.com",
       "flat": "B-302",
       "name": "Saroj",
-      "opted_on": ""
-    },
-    {
-      "email": "brijb424@gmail.com",
-      "flat": "B-405",
-      "name": "",
-      "opted_on": ""
-    },
-    {
-      "email": "ritesh.chander02@gmail.com",
-      "flat": "C-108",
-      "name": "Ritesh",
-      "opted_on": ""
-    },
-    {
-      "email": "neeru012125@gmail.com",
-      "flat": "C-210",
-      "name": "",
-      "opted_on": ""
-    },
-    {
-      "email": "nancyluthra16@gmail.com",
-      "flat": "D-112",
-      "name": "",
+      "device": "android",
       "opted_on": ""
     },
     {
       "email": "sahilsharma2471@gmail.com",
       "flat": "D-306",
       "name": "",
+      "device": "android",
       "opted_on": ""
     },
     {
       "email": "singh.amandeep1989@gmail.com",
       "flat": "A-101",
       "name": "",
-      "opted_on": ""
-    },
-    {
-      "email": "prajwalbhushan.pb@gmail.com",
-      "flat": "A-204",
-      "name": "",
+      "device": "android",
       "opted_on": ""
     },
     {
       "email": "amandeep2020@gmail.com",
       "flat": "B-302",
       "name": "Amandeep",
+      "device": "unknown",
       "opted_on": "2026-10-02"
     },
     {
       "email": "hbembey18@gmail.com",
       "flat": "B-405",
       "name": "H. Bembey",
+      "device": "android",
       "opted_on": "2026-10-02"
     },
     {
       "email": "saswatiiparida6@gmail.com",
       "flat": "C-101",
       "name": "Saswati",
+      "device": "unknown",
       "opted_on": ""
-    },
+    }
+  ],
+  "_dropped": [
     {
-      "email": "manalimulay881@gmail.com",
-      "flat": "D-306",
-      "name": "Manali",
-      "opted_on": ""
+      "email": "brijb424@gmail.com",
+      "was_flat": "B-405",
+      "reason": "iPhone, confirmed 7 Oct. Cannot opt in to an Android closed test."
     },
     {
       "email": "clbhardwaj1943@gmail.com",
-      "flat": "A-302",
-      "name": "",
-      "opted_on": ""
+      "was_flat": "A-302",
+      "reason": "iPhone, confirmed 7 Oct (first reported as iOS, listed once as Android, confirmed iOS). Cannot opt in to an Android closed test."
+    },
+    {
+      "email": "manalimulay881@gmail.com",
+      "was_flat": "D-306",
+      "reason": "out of scope, 7 Oct. Never on the Play Console list, so could never opt in."
+    },
+    {
+      "email": "nancyluthra16@gmail.com",
+      "was_flat": "D-112",
+      "reason": "iPhone, confirmed 7 Oct. Cannot opt in to an Android closed test."
+    },
+    {
+      "email": "neeru012125@gmail.com",
+      "was_flat": "C-210",
+      "reason": "out of scope, 7 Oct. Never on the Play Console list, so could never opt in."
+    },
+    {
+      "email": "prajwalbhushan.pb@gmail.com",
+      "was_flat": "A-204",
+      "reason": "iPhone, confirmed 7 Oct. Cannot opt in to an Android closed test."
+    },
+    {
+      "email": "ritesh.chander02@gmail.com",
+      "was_flat": "C-108",
+      "reason": "out of scope, 7 Oct. Never on the Play Console list, so could never opt in."
     }
   ]
 }
