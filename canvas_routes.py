@@ -90,19 +90,38 @@ def _resolve_incident(iid: str, note: str) -> bool:
     except Exception as e:
         logger.error(f"[CANVAS] incident store unavailable: {e}")
         return False
-    for attempt in (
-        lambda: update_incident(iid, {"status": "RESOLVED"}),
-        lambda: update_incident(iid, status="RESOLVED"),
-    ):
+    # `attempt(); break` then `return True` reported success whenever the
+    # call did not raise. update_incident returns None when no row matched
+    # -- its way of saying the incident does not exist -- and that was
+    # thrown away, so resolving a missing incident answered "resolved".
+    try:
+        row = update_incident(iid, {"status": "RESOLVED"},
+                              expected_status=("OPEN", "IN_PROGRESS"))
+    except TypeError:
+        logger.warning("[CANVAS] incident store has no expected_status "
+                       "guard; re-resolving will overwrite resolved_at")
         try:
-            attempt()
-            break
-        except TypeError:
-            continue
+            row = update_incident(iid, {"status": "RESOLVED"})
         except Exception as e:
             logger.error(f"[CANVAS] resolve failed: {e}")
             return False
-    else:
+    except Exception as e:
+        logger.error(f"[CANVAS] resolve failed: {e}")
+        return False
+
+    if row is None:
+        # Two different situations and the operator needs to tell them
+        # apart: already closed (fine, nothing to do) vs no such incident
+        # (something is wrong upstream).
+        try:
+            from backend.incidents.incident_models import get_incident_by_id
+            existing = get_incident_by_id(iid)
+        except Exception:
+            existing = None
+        if existing and str(existing.get("status")) == "RESOLVED":
+            logger.info("[CANVAS] %s was already resolved; left as it was", iid)
+            return True
+        logger.error("[CANVAS] %s not resolved: no incident with that id", iid)
         return False
     try:
         add_note(iid, operator="Guardian/canvas", message=note)

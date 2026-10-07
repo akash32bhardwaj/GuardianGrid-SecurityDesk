@@ -170,7 +170,25 @@ def get_all_incidents():
         return _attach_disposition(c, [_row_to_dict(r) for r in rows])
 
 
-def update_incident(incident_id, updates):
+def update_incident(incident_id, updates, expected_status=None):
+    """Update an incident. Returns the new row, or None if nothing matched.
+
+    `expected_status` is a status, or a sequence of them, that the row must
+    ALREADY be in for the update to apply. It becomes part of the WHERE
+    clause, so the check and the write are one statement and cannot be
+    interleaved -- a read-then-write guard here would just be a smaller
+    version of the same race.
+
+    It exists because an acknowledgement arriving late, or twice, could
+    move a RESOLVED incident back to IN_PROGRESS. A closed case reopening
+    itself is bad on its own; it was worse here because resolved_at is only
+    written when the status becomes RESOLVED, so the reopened case kept a
+    resolution timestamp in its own past.
+
+    None has always meant "no row matched". Callers did not check it. Two
+    of them reported success for incidents that do not exist. The value was
+    right; nobody read it.
+    """
     safe = {k: v for k, v in (updates or {}).items() if k in _UPDATABLE}
     now = datetime.now().isoformat()
     safe["updated_at"] = now
@@ -178,10 +196,16 @@ def update_incident(incident_id, updates):
         safe["resolved_at"] = now
 
     sets = ", ".join(f"{k} = ?" for k in safe)
+    where, params = "incident_id = ?", [*safe.values(), incident_id]
+    if expected_status:
+        allowed = ([expected_status] if isinstance(expected_status, str)
+                   else list(expected_status))
+        where += " AND status IN (%s)" % ", ".join("?" * len(allowed))
+        params.extend(allowed)
+
     with _conn() as c:
         cur = c.execute(
-            f"UPDATE incidents SET {sets} WHERE incident_id = ?",
-            (*safe.values(), incident_id),
+            f"UPDATE incidents SET {sets} WHERE {where}", params,
         )
         if cur.rowcount == 0:
             return None

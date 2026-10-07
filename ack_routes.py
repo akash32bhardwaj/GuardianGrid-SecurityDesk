@@ -113,27 +113,51 @@ def _all_incidents():
         return []
 
 
+#: An acknowledgement means "someone is looking at this now". That is only
+#: meaningful for a case that is still open. RESOLVED is deliberately NOT
+#: here: a late or repeated ack used to reopen a closed case, and because
+#: resolved_at is only written on RESOLVED, the reopened case kept a
+#: resolution time in its own past.
+ACK_ELIGIBLE = ("OPEN", "IN_PROGRESS")
+
+
 def _set_in_progress(iid: str) -> bool:
-    """Flexible against update_incident signatures."""
+    """True only if a row was actually moved to IN_PROGRESS.
+
+    This used to be `attempt(); return True` -- success meant "the call did
+    not raise". update_incident returns None when no row matched, which is
+    how it says the incident does not exist, and that answer was discarded.
+    The dashboard was told the acknowledgement landed either way.
+    """
     try:
         from backend.incidents.incident_models import update_incident
     except Exception as e:
         logger.error(f"[ACK] no update_incident: {e}")
         return False
-    for attempt in (
-        lambda: update_incident(iid, status="IN_PROGRESS"),
-        lambda: update_incident(iid, {"status": "IN_PROGRESS"}),
-        lambda: update_incident(incident_id=iid, status="IN_PROGRESS"),
-    ):
+
+    try:
+        row = update_incident(iid, {"status": "IN_PROGRESS"},
+                              expected_status=ACK_ELIGIBLE)
+    except TypeError:
+        # An older incident store without the guard. Still check the return
+        # value -- half the fix is better than none -- and say which path
+        # was taken, because this one cannot stop a resolved case reopening.
+        logger.warning("[ACK] incident store has no expected_status guard; "
+                       "a resolved incident could be reopened by this ack")
         try:
-            attempt()
-            return True
-        except TypeError:
-            continue
+            row = update_incident(iid, {"status": "IN_PROGRESS"})
         except Exception as e:
             logger.error(f"[ACK] update_incident error: {e}")
             return False
-    return False
+    except Exception as e:
+        logger.error(f"[ACK] update_incident error: {e}")
+        return False
+
+    if row is None:
+        logger.warning("[ACK] %s was not acknowledged: no incident with that "
+                       "id, or it is not %s", iid, " or ".join(ACK_ELIGIBLE))
+        return False
+    return True
 
 
 def _note(iid: str, msg: str):
@@ -313,9 +337,13 @@ def acks_acknowledge():
                                         "%Y-%m-%d %H:%M:%S")
             response_seconds = round(
                 (datetime.now() - created).total_seconds(), 1)
+        # AND acked_at IS NULL -- the FIRST acknowledgement is the one that
+        # matters. Without it a second press overwrote the original time and
+        # recomputed response_seconds from the later one, quietly improving
+        # the number that this whole module exists to measure.
         con.execute(
             "UPDATE ack_log SET acked_at=?, response_seconds=? "
-            "WHERE incident_id=?",
+            "WHERE incident_id=? AND acked_at IS NULL",
             (datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
              response_seconds, iid))
         con.commit()

@@ -1495,16 +1495,64 @@ def gate_pass_use(code):
     if p is None or problem:
         return jsonify({"success": False, "message": problem}), 400
     data = request.get_json(silent=True) or {}
-    operator = (data.get("operator") or
-                (getattr(request, "auth_user", None) or {}).get("username")
-                or "guard")
+
+    # WHO ADMITTED THIS VISITOR comes from the session, not the request body.
+    #
+    # It used to be `data.get("operator") or auth_user...`, so the body WON.
+    # Any signed-in user could attribute an admission to somebody else by
+    # putting their name in the JSON. In a product whose output is an audit
+    # trail, a name anyone can choose is not a record of anything.
+    auth = (getattr(request, "auth_user", None) or {}).get("username", "")
+    operator = str(auth).strip() or "guard"
+    claimed = str(data.get("operator") or "").strip()
+    if claimed and claimed != operator:
+        logger.warning("[RESIDENT] pass %s: body claimed operator %r, "
+                       "recording the authenticated user %r instead",
+                       p["code"], claimed[:40], operator)
+
     plate_seen = _norm_plate(data.get("plate", "")) or p["vehicle_plate"]
     now = _now_str()
     new_status = "ACTIVE" if p["multi_entry"] else "USED"
+
+    # CLAIM THE PASS IN ONE STATEMENT, then look at how many rows moved.
+    #
+    # _pass_check() reads on its own connection and closes it. The update
+    # that followed was unconditional: `WHERE code=?`. Two taps a moment
+    # apart -- a guard double-pressing, two guards on two consoles, a phone
+    # retrying a request it thinks timed out -- both read ACTIVE, both
+    # updated, and a single-entry pass admitted two people. The validity
+    # check and the consumption were separate operations with a gap in the
+    # middle, which is the whole bug in one sentence.
+    #
+    # The conditions below repeat what _pass_check() just verified. That
+    # duplication is the point: checking in the WHERE clause means SQLite
+    # decides, once, under its write lock. rowcount is then the answer to
+    # "did I get it, or did somebody else?"
+    #
+    # EXPIRED is never stored -- it is derived from valid_to at read time
+    # (seed_gate.py says so) -- so the window has to be in the WHERE clause
+    # too, not just the status.
     con = _con()
-    con.execute("UPDATE gate_passes SET uses=uses+1, last_used_at=?, used_by=?, "
-                "status=? WHERE code=?", (now, operator, new_status, p["code"]))
-    con.commit(); con.close()
+    cur = con.execute(
+        "UPDATE gate_passes SET uses=uses+1, last_used_at=?, used_by=?, "
+        "status=? WHERE code=? AND status='ACTIVE' "
+        "AND valid_from<=? AND valid_to>=?",
+        (now, operator, new_status, p["code"], now, now))
+    con.commit()
+    won = cur.rowcount
+    con.close()
+
+    if won == 0:
+        # Somebody else claimed it between the check and here, or it was
+        # cancelled or expired in that gap. Refuse rather than log a second
+        # entry: a guard who sees "already used" holds the visitor and asks,
+        # which is the correct outcome. 409 because this is a conflict, not
+        # a malformed request.
+        logger.warning("[RESIDENT] pass %s: lost the race or no longer "
+                       "valid; nothing was admitted", p["code"])
+        return jsonify({"success": False, "message":
+                        "This pass was just used, cancelled or expired. "
+                        "Do not admit — check with the resident."}), 409
 
     # Log as a visitor entry so the register, brief and search all see it
     vid = None
