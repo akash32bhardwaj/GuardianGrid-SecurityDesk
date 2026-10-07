@@ -166,27 +166,97 @@ def gate_log_vehicle():
 
     info = _lookup(plate)
     status = info.get("status", "UNKNOWN") if info.get("found") else "UNKNOWN"
-    access = {"KNOWN": "RESIDENT", "BLACKLISTED": "BLACKLIST"}.get(status, "UNKNOWN")
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    try:
-        con = sqlite3.connect(_DB_PATH)
-        cur = con.execute(
-            "INSERT INTO vehicle_events (plate, vtype, state, event,"
-            " confidence, image, access, camera, timestamp)"
-            " VALUES (?,?,?,?,?,?,?,?,?)",
-            (plate, data.get("vtype") or "car", status, event,
-             float(data.get("confidence") or 1.0), image, access, camera, ts))
-        con.commit()
-        event_id = cur.lastrowid
-        con.close()
-    except sqlite3.Error as e:
-        return jsonify({"success": False, "message": f"DB error: {e}"}), 500
+    # WHO logged this, from the session. Same rule as the gate pass and the
+    # arrival admit: an audit field the caller can choose is not a record.
+    operator = str((getattr(request, "auth_user", None) or {})
+                   .get("username", "")).strip() or "guard"
 
-    # Keep the live "inside" list in sync so the guard's existing
-    # Exit buttons work on captured vehicles too. Lazy import avoids a
-    # circular dependency (api_server imports this module at startup;
-    # by request time api_server is fully loaded in sys.modules).
+    # ── Log through commit_vehicle_event, not around it ──────────────
+    #
+    # This used to run its own INSERT. Three things went wrong because of
+    # it, every time a guard used the console:
+    #
+    #   access  was built here as {"KNOWN": "RESIDENT", "BLACKLISTED":
+    #           "BLACKLIST"} instead of canon_access(), so the column
+    #           gained RESIDENT and BLACKLIST next to the canonical
+    #           KNOWN/BLACKLISTED. That is OCT-61 exactly -- "normalise on
+    #           the way in, so the column stops accumulating new
+    #           spellings" -- re-committed by the one path that bypassed
+    #           the function holding the rule.
+    #
+    #   vtype   went in as the raw body value, so "car", "truck" and
+    #           "bike" landed beside Car, Truck and Motorcycle and every
+    #           grouping counted the same type twice.
+    #
+    #   state   got the RESIDENT STATUS. That column holds the number
+    #           plate's issuing state -- Punjab, Haryana -- everywhere
+    #           else. Two meanings in one column, which is OCT-50's shape:
+    #           a value written in a vocabulary the column does not use.
+    #
+    #   and     vehicle_stats and entry_times were never updated, so a
+    #           manually logged vehicle was invisible to the dashboard
+    #           totals and to occupancy.
+    #
+    # Lazy import avoids a circular dependency: api_server imports this
+    # module at startup, and by request time it is fully in sys.modules.
+    event_id, committed = None, False
+    try:
+        import api_server as _srv
+        rec = _srv.commit_vehicle_event(
+            plate, event,
+            vtype=data.get("vtype") or "Car",
+            # The guard typed a plate; they did not tell us which state
+            # issued it. Empty is what the camera path writes when it does
+            # not know, and it is the majority value in the column.
+            state=str(data.get("state") or ""),
+            confidence=float(data.get("confidence") or 1.0),
+            snapshot_path=image,
+            operator=operator,
+            camera=camera,
+            # NO INCIDENT FROM THIS PATH, which is what happens today.
+            #
+            # commit_vehicle_event raises a MEDIUM "Unknown Vehicle
+            # Entered" incident for an unregistered ENTRY. For the camera
+            # that is right. Here the guard is standing at the gate making
+            # a conscious decision, and REQUIRE_GUARD_DECISION means this
+            # console is precisely where unknown vehicles get admitted --
+            # so every delivery scooter and cab would raise an incident,
+            # and ack_watchdog would start an escalation timer on each one.
+            # Flooding a live society's escalation queue is a bigger
+            # change than the bug being fixed.
+            #
+            # Whether a guard admitting an unregistered vehicle SHOULD
+            # raise an incident is a real question, and a separate one.
+            raise_unknown_incident=False,
+        )
+        event_id, committed = rec.get("id"), True
+    except Exception as e:
+        logger.error(f"commit_vehicle_event unavailable, falling back: {e}")
+
+    if not committed:
+        # api_server could not be reached. Still log it -- losing the event
+        # is worse -- but normalise with the SAME functions, so the
+        # fallback cannot reintroduce the bug above.
+        try:
+            from db import record_event
+            from api_server import canon_access, canon_vtype
+            event_id = record_event({
+                "plate": plate, "type": canon_vtype(data.get("vtype") or "Car"),
+                "state": str(data.get("state") or ""), "event": event,
+                "confidence": float(data.get("confidence") or 1.0),
+                "image": image, "timestamp": ts,
+                "access": canon_access(status), "camera": camera,
+            })
+        except Exception as e:
+            return jsonify({"success": False, "message": f"DB error: {e}"}), 500
+
+    # Keep the live "inside" list in sync so the guard's existing Exit
+    # buttons work on captured vehicles too. The activity_feed entry that
+    # used to be here is gone: commit_vehicle_event already writes one, and
+    # both running meant every gate-console event appeared in the feed
+    # twice.
     try:
         import api_server as _srv
         with _srv.lock:
@@ -195,11 +265,6 @@ def gate_log_vehicle():
                                           "since": datetime.now().isoformat()}
             else:
                 _srv.gate_state.pop(plate, None)
-            _srv.activity_feed.appendleft({
-                "time": datetime.now().isoformat(),
-                "event": f"{event} (gate capture): {plate}",
-                "type": "vehicle",
-            })
     except Exception as e:
         logger.warning(f"gate_state sync skipped: {e}")
 

@@ -200,7 +200,7 @@ def record_event(record: dict):
     future caller does.
     """
     with _conn() as c:
-        c.execute(
+        cur = c.execute(
             """INSERT INTO vehicle_events
                (plate, vtype, state, event, confidence, image, timestamp, access, camera)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -216,6 +216,11 @@ def record_event(record: dict):
                 record.get("camera", "Main Gate"),
             ),
         )
+        # Returned so a caller can answer "which row did I just make?"
+        # without a second query -- gate_capture needs it for its response
+        # and used to get it by doing its own INSERT, which is how the
+        # normalisation above got bypassed in the first place.
+        return cur.lastrowid
 
 
 def hourly_stats(date_str: str | None = None):

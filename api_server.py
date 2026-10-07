@@ -548,9 +548,30 @@ def _norm(p):
     return re.sub(r"[^A-Z0-9]", "", (p or "").upper())
 
 def commit_vehicle_event(plate, event_type, *, vtype="Manual", state="",
-                         confidence=100.0, snapshot_path="", operator="system"):
+                         confidence=100.0, snapshot_path="", operator="system",
+                         camera="Main Gate", raise_unknown_incident=True):
     """THE single place an event becomes real: stats, log, SQLite,
-    activity feed, plus unknown-vehicle incident on ENTRY."""
+    activity feed, plus unknown-vehicle incident on ENTRY.
+
+    It said "THE single place" and was not. gate_capture.py wrote its own
+    INSERT, so every event a guard logged from the Gate Console skipped
+    canon_access() and canon_vtype(), skipped vehicle_stats and
+    entry_times, and put the RESIDENT STATUS into the `state` column --
+    which holds the number plate's issuing state everywhere else. One
+    database showed Haryana, Delhi and Maharashtra sitting beside UNKNOWN
+    and REGISTERED in the same column, RESIDENT and APPROVED beside the
+    canonical KNOWN in `access`, and Car next to car, truck and bike.
+
+    `camera` is new. The record never carried one, so record_event() fell
+    through to its "Main Gate" default for every event ever written, and
+    which console logged a manual entry was not recoverable.
+
+    `raise_unknown_incident` is new and defaults to True, which is the
+    behaviour every existing caller already has. The Gate Console passes
+    False -- see the note where it does.
+
+    Returns the record, with `id` set to the vehicle_events row.
+    """
     plate = re.sub(r"[^A-Z0-9]", "", (plate or "").upper())
     now = datetime.now()
     resident_info = resident_db.lookup(plate)
@@ -581,6 +602,7 @@ def commit_vehicle_event(plate, event_type, *, vtype="Manual", state="",
             "timestamp": now.isoformat(),
             "image": Path(snapshot_path).name if snapshot_path else "",
             "access": access,
+            "camera": camera,
         }
         vehicle_log.appendleft(record)
         vehicle_db[plate] = record
@@ -589,10 +611,17 @@ def commit_vehicle_event(plate, event_type, *, vtype="Manual", state="",
             "event": f"{event_type} ({operator}): {plate}",
             "type": "vehicle",
         })
-    record_event(record)
+    try:
+        record["id"] = record_event(record)
+    except Exception as e:
+        # The in-memory half already happened; say the durable half did not
+        # rather than returning a record that implies it did.
+        logger.error("[VEHICLE] %s %s not written to SQLite: %s",
+                     plate, event_type, e)
+        record["id"] = None
 
     # Unknown vehicle actually ENTERING → now it's incident-worthy
-    if event_type == "ENTRY" and not resident_info:
+    if raise_unknown_incident and event_type == "ENTRY" and not resident_info:
         push_alert({
             "time": now.isoformat(),
             "title": "UNKNOWN VEHICLE ENTERED",
