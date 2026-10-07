@@ -132,8 +132,40 @@ QUIET_START_HOUR = 0
 QUIET_END_HOUR = 6
 QUIET_MAX_EVENTS = 1
 
-STATE_REGISTERED = "REGISTERED"
-STATE_UNKNOWN = "UNKNOWN"
+# The `state` column holds the number plate's ISSUING STATE -- Punjab,
+# Haryana -- which is what core/anpr_engine.py puts there via STATE_CODES
+# and what every reader of the column assumes.
+#
+# This file used to write "REGISTERED" or "UNKNOWN" into it: a resident
+# STATUS, in a column whose vocabulary is place names. On the demo site
+# that is 247 rows and counting, because the pulse runs every hour, and the
+# demo is the site prospects are shown. A report grouped by state listed
+# REGISTERED beside Delhi.
+#
+# The sharp part: four lines below where this was used, the same function
+# already normalised `access` with the comment "OCT-61: one vocabulary".
+# The author knew the lesson, applied it to one column, and wrote the same
+# class of error into its neighbour in the same breath.
+#
+# STATE_CODES is imported rather than copied. A second table of Indian
+# state codes in this file would drift from the engine's, which is how
+# OCT-24, OCT-48 and OCT-80 all began.
+
+
+def _state_for(plate: str) -> str:
+    """Issuing state from the plate prefix, or "" when it cannot be told.
+
+    Empty is the honest answer and already the majority value in the
+    column -- the camera writes it whenever the ANPR cannot read a state.
+    Inventing one would be a nicer-looking lie.
+    """
+    try:
+        from core.anpr_engine import STATE_CODES
+    except Exception:
+        # The engine needs cv2. If it cannot be imported, write nothing
+        # rather than keeping a second copy of the table here.
+        return ""
+    return STATE_CODES.get(str(plate or "")[:2].upper(), "")
 
 
 def _weighted(pairs):
@@ -264,7 +296,7 @@ def build_events(count: int) -> list[dict]:
             if access == "RESIDENT":
                 access = "KNOWN"          # OCT-61: one vocabulary
             vtype = match.get("vehicle_type") or _weighted(VTYPES)
-            state = STATE_REGISTERED
+            state = _state_for(plate)
         else:
             # An unregistered plate leaving must leave as whatever it
             # arrived as. Only a genuinely new arrival gets a fresh roll.
@@ -279,7 +311,7 @@ def build_events(count: int) -> list[dict]:
                 access = ("VISITOR" if random.random() < VISITOR_CHANCE
                           else "UNKNOWN")
                 vtype = _weighted(VTYPES)
-            state = STATE_UNKNOWN
+            state = _state_for(plate)
 
         chosen[plate] = (access, vtype)
 
