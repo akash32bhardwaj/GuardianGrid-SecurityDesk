@@ -1380,13 +1380,26 @@ def _validity(kind: str, custom_to: str = ""):
     return now, end_today
 
 
+def _valid_to_h(valid_to):
+    """"8:30 PM today" / "9:00 AM tomorrow". One definition, two callers.
+
+    This was a line inside _pass_dict, and the expected-passes route reached
+    into _pass_dict with a PARTIAL row to borrow it -- which raised KeyError
+    on 'status', a column that route has no reason to select. Pulling the
+    formatting out is the fix; the alternative was selecting columns purely
+    to satisfy a function that did not need them.
+    """
+    day = _fmt_day(valid_to)
+    return _fmt_time(valid_to) + (" today" if day == "today" else " " + day)
+
+
 def _pass_dict(r):
     d = dict(r)
     now = _now_str()
     exp = d["valid_to"] and d["valid_to"] < now
     if d["status"] == "ACTIVE" and exp:
         d["status"] = "EXPIRED"
-    d["valid_to_h"] = _fmt_time(d["valid_to"]) + (" " + _fmt_day(d["valid_to"]) if _fmt_day(d["valid_to"]) != "today" else " today")
+    d["valid_to_h"] = _valid_to_h(d["valid_to"])
     return d
 
 
@@ -1482,6 +1495,64 @@ def _pass_check(code: str):
     if p["valid_from"] > _now_str():
         return p, "Pass not valid yet"
     return p, ""
+
+
+@resident_app_bp.route("/api/gate/passes/expected")
+def gate_passes_expected():
+    """Who the residents are expecting at the gate RIGHT NOW.
+
+    WHY THIS EXISTS. A gate pass was a credential the VISITOR carried: the
+    resident created it, the visitor showed a code or a QR, the guard typed
+    it in. The guard was blind until somebody presented something.
+
+    That assumption does not survive a real gate. The cook, the delivery
+    rider and the electrician do not have the QR, often cannot show the
+    resident's phone, and a guard squinting at a stranger's cracked screen
+    at seven in the evening is not a workflow. The person with the app is
+    the RESIDENT. So what the resident creates has to reach the guard's
+    console on its own.
+
+    VISIBILITY ONLY, and deliberately. The code is NOT in this payload.
+    If it were, "the guard still needs the code to admit" would be
+    satisfied by reading their own screen, and the proof requirement would
+    be decorative. A guard who sees an expected visitor but no code can
+    still ring the flat -- which is what they do today, except the call is
+    now informed instead of blind.
+
+    So this route reads and nothing else. Admitting still goes through
+    /api/gate/pass/<code>/use, which is the single guarded path: the
+    atomic claim, the rowcount check, the 409 on a lost race, the operator
+    taken from the session. A second way in would be OCT-144's shape --
+    a writer going around the one that holds the rules -- one day after
+    that entry was filed.
+
+    Resident names and flat numbers are not masked here; the after_request
+    PII filter in api_server.py does that for VIEWER accounts on every
+    route, which is why this one does not have to remember to.
+    """
+    now = _now_str()
+    try:
+        con = _con()
+        rows = con.execute(
+            "SELECT flat_no, resident_name, visitor_name, visitor_type, "
+            "       vehicle_plate, valid_from, valid_to, multi_entry, uses "
+            "FROM gate_passes "
+            "WHERE status='ACTIVE' AND valid_from<=? AND valid_to>=? "
+            "ORDER BY valid_to ASC LIMIT 100", (now, now)).fetchall()
+        con.close()
+    except sqlite3.Error as e:
+        logger.error("[RESIDENT] expected-passes query failed: %s", e)
+        return jsonify({"success": False, "expected": [], "count": 0,
+                        "message": "Could not read the pass list."}), 500
+
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["valid_to_h"] = _valid_to_h(d["valid_to"])
+        d.pop("valid_from", None)
+        out.append(d)
+    return jsonify({"success": True, "expected": out, "count": len(out),
+                    "as_of": now})
 
 
 @resident_app_bp.route("/api/gate/pass/<code>")
