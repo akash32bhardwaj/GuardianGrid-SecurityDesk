@@ -39,9 +39,15 @@
     "is the worst case for this test, because it counts toward the twelve",
     "while contributing no usage, and Google looks at both.",
     "",
-    "One PERSON, not one address. Two accounts belonging to the same person",
-    "on the same handset are one tester, whatever the list says.",
+    "One PERSON, not one address. Two accounts belonging to the same person on",
+    "the same handset are one tester, whatever the list says. Confirmed 8 Oct:",
+    "akash08bhardwaj and aakash.aakashb.bhardwaj are both Akash;",
+    "saswatiiiparida05 and saswatiiparida6 are both Saswati. So the Play Console",
+    "list of 15 addresses is 13 people, and 4 of those are on iPhones.",
     "",
+    "saswatiiiparida05 is deliberately NOT given a flat. It is Saswati's second",
+    "address on Saswati's phone; a flat for it would be padding, and padding is",
+    "the small version of the thing that gets a developer account terminated.",
     "_dropped records who was removed and why, so nobody re-adds them.",
     "",
     "FLAT SUPPLY, 5 Oct: the society was grown from eight populated flats to",
@@ -116,7 +122,21 @@
       "email": "saswatiiparida6@gmail.com",
       "flat": "C-101",
       "name": "Saswati",
-      "device": "unknown",
+      "device": "android",
+      "opted_on": ""
+    },
+    {
+      "email": "kshreya0404@gmail.com",
+      "flat": "B-108",
+      "name": "Shreya",
+      "device": "android",
+      "opted_on": ""
+    },
+    {
+      "email": "er.neha9994@gmail.com",
+      "flat": "B-210",
+      "name": "Neha",
+      "device": "android",
       "opted_on": ""
     }
   ],
