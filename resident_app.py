@@ -2292,10 +2292,18 @@ def gate_arrival_admit(aid):
     # AND admitted_at IS NULL -- the same check-then-act gap the gate pass
     # had. The read above and this write are separate statements, so two
     # taps could both pass the check and log the visitor twice.
+    # OCT-143 addendum. The CASE here used to promote only PENDING, so an
+    # overridden WAIT kept status='WAITING' with admitted_at set -- a row
+    # that says two different things. The guard console reads BOTH: it
+    # moves the card out of the active list on admitted_at, then labels it
+    # from status, so the same card read "Resident said WAIT" and
+    # "admitted" at once. The resident's answer is not lost by writing
+    # ADMITTED here -- it lives in decision/decided_by/decided_at, and the
+    # override itself in override_reason. DENY never reaches this line; it
+    # is refused above.
     cur = con.execute(
         "UPDATE arrival_requests SET admitted_at=?, visitor_id=?, "
-        "admitted_by=?, override_reason=?, "
-        "status=CASE WHEN status='PENDING' THEN 'ADMITTED' ELSE status END "
+        "admitted_by=?, override_reason=?, status='ADMITTED' "
         "WHERE id=? AND admitted_at IS NULL",
         (_now_str(), vid, guard, (reason if needs_override else None), aid))
     con.commit()
