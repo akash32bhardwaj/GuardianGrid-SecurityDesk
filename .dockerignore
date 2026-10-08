@@ -2,8 +2,19 @@
 .git
 __pycache__
 *.pyc
+# *.bak alone does NOT match *.bak-pre-lastseen. Three stale source files
+# -- resident_app.py.bak-pre-assetlinks, resident_app.py.bak-pre-lastseen,
+# api_server.py.bak-pre-loglevel -- were being baked into every image: 412 KB
+# of PRE-FIX code, including copies that predate OCT-131 and the logging fix.
+#
+# .gitignore already said *.bak-* . Two ignore files, two patterns, one
+# intent, and the one that decides what ships was the wrong one. OCT-24's
+# shape in a place nobody thinks to look.
 *.bak
+*.bak-*
+*.pre-*
 backups
+_backups
 *.db
 *.db-shm
 *.db-wal
