@@ -74,14 +74,16 @@
       "flat": "A-101",
       "name": "Akash",
       "device": "android",
-      "opted_on": "2026-10-02"
+      "opted_on": "2026-10-02",
+      "person": "akash"
     },
     {
       "email": "aakash.aakashb.bhardwaj@gmail.com",
       "flat": "A-204",
       "name": "",
       "device": "android",
-      "opted_on": ""
+      "opted_on": "",
+      "person": "akash"
     },
     {
       "email": "saroj08bhardwaj@gmail.com",
@@ -123,7 +125,7 @@
       "flat": "C-101",
       "name": "Saswati",
       "device": "android",
-      "opted_on": ""
+      "opted_on": "2026-10-06"
     },
     {
       "email": "kshreya0404@gmail.com",

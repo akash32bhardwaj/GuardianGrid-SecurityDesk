@@ -69,6 +69,19 @@ def _ago(dt, now):
     return "%dd ago" % int(h / 24)
 
 
+def _person(t):
+    """Who this row belongs to -- a PERSON, not an address.
+
+    Google counts twelve TESTERS. Two Gmail accounts on one handset are one
+    tester however the list is written, and padding the count with your own
+    addresses is the small version of the thing that gets a developer
+    account terminated. The roster says so in prose; this makes the script
+    agree with it. `person` is optional and falls back to the address, so a
+    roster that never sets it behaves exactly as before.
+    """
+    return (t.get("person") or t.get("name") or t.get("email", "")).strip().lower()
+
+
 def _parse_day(s):
     if not s:
         return None
@@ -116,6 +129,30 @@ def resolve(testers, rows):
     return status, ambiguous
 
 
+def count_active(testers, rows, now, norm):
+    """How many testers opened the app inside STALE_HOURS.
+
+    Counted per FLAT, not per row. last_seen lives on the flat, so two
+    people sharing one credit the SAME session twice if you iterate rows --
+    which is precisely the double-count resolve() exists to prevent, one
+    function further down the same file. With five shared flats this could
+    report ten where three had opened the app, and it feeds the warning
+    that is supposed to say nobody is using it.
+
+    A shared flat with a fresh last_seen means at least one of its people
+    opened the app. Credit one; crediting two is a guess in the direction
+    that flatters.
+    """
+    fresh = set()
+    for t in testers:
+        flat = norm(t["flat"])
+        row = rows.get(flat)
+        seen = _parse(row["last_seen"]) if row else None
+        if seen and (now - seen) <= timedelta(hours=STALE_HOURS):
+            fresh.add(flat)
+    return len(fresh)
+
+
 def main():
     now = datetime.now()
     con = ra._con()
@@ -136,7 +173,8 @@ def main():
           % ("TESTER", "FLAT", "OPTED IN", "LAST OPENED", "NOTE"))
     print("  " + "-" * 88)
 
-    opted_dates, active = [], 0
+    active = count_active(TESTERS, rows, now, ra._norm_flat)
+    opted_dates, credited = [], set()
     for t in TESTERS:
         flat = ra._norm_flat(t["flat"])
         row = rows.get(flat)
@@ -145,9 +183,11 @@ def main():
         st = status.get(id(t))
 
         if st:
-            opted_dates.append(st[1])
-        if seen and (now - seen) <= timedelta(hours=STALE_HOURS):
-            active += 1
+            # once per PERSON -- two addresses on one handset are one tester
+            person = _person(t)
+            if person not in credited:
+                credited.add(person)
+                opted_dates.append(st[1])
 
         note = st[2] if st else ""
         if not note and len(shared.get(flat, [])) > 1:
@@ -165,6 +205,11 @@ def main():
         print("  %s: somebody logged in but the flat is shared -- ask who, and"
               % ", ".join(ambiguous))
         print("  put the date in closed_test_roster.json under opted_on.")
+
+    people = {_person(t) for t in TESTERS}
+    if len(people) != len(TESTERS):
+        print("  %d rows, %d people -- addresses sharing a handset are counted once."
+              % (len(TESTERS), len(people)))
 
     n = len(opted_dates)
     print()
