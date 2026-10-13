@@ -68,6 +68,13 @@
     "it cannot say WHICH of the two opened the app."
   ],
   "reviewer_flat": "D-404",
+  "_alt_addresses": [
+    {
+      "email": "saswatiiiparida05@gmail.com",
+      "person": "saswati",
+      "reason": "Saswati's second address, on Saswati's phone. On the Play list, deliberately given no flat: a flat for it would be padding, and padding is the small version of the thing that gets a developer account terminated. Listed here so check_play_list.py does not report it as a stray."
+    }
+  ],
   "testers": [
     {
       "email": "akash08bhardwaj@gmail.com",
