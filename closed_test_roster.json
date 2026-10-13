@@ -147,6 +147,13 @@
       "name": "Neha",
       "device": "android",
       "opted_on": ""
+    },
+    {
+      "name": "Kaushal",
+      "email": "kaushalgulipalli2002@gmail.com",
+      "flat": "C-304",
+      "device": "unknown",
+      "opted_on": null
     }
   ],
   "_dropped": [
