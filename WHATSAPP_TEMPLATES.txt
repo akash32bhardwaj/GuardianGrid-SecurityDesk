@@ -1,101 +1,114 @@
-WHATSAPP BUSINESS SENDER — WHAT DEFENDER OCTA ACTUALLY NEEDS
-============================================================
-Decided 23 Sep 2026. Residents are app-only: they log in with a flat
-number and the PIN on their printed slip, no phone number is stored, and
-everything reaches them as an app notification. WhatsApp is now only for
-the people who ANSWER an emergency — the security head, the committee
-and you — because they are not residents and have no resident app.
+WHATSAPP TEMPLATES — THE ONE LIST
+=================================
+Rewritten 16 Oct 2026. This file is now the ONLY record of which
+templates exist. Before today there were three lists and they disagreed:
 
-That cuts the templates to submit from seven to three, and removes the
-authentication (login code) template, which is the slowest kind to get
-approved.
+  * this file (23 Sep) said submit THREE, and explicitly listed
+    visitor_at_gate under "not needed any more — app notification"
+  * docs/SWITCHOVER_RUNBOOK.md (1 Oct) assumed FOUR, including visitor
+  * the code reads SIX
 
-Switches, per site, in site_config.json:
-    "resident_whatsapp":  false     (default) nothing to residents
-    "resident_otp_login": false     (default) no WhatsApp login codes
-Set either to true for a society that specifically wants it — the two
-optional templates at the end of this file cover that case.
+The visitor template was written off on 23 Sep and reinstated on 1 Oct
+when OCT-129 showed notify_flat() sends WhatsApp to the flat. contractor
+arrived 7 Oct and monitor later still, and neither document was updated.
 
+Nothing broke, because the gap was found by reading. Had the switchover
+been run against the 23 Sep list it would have silently killed visitor
+notifications, contractor passes AND the site heartbeat — the monitor
+whose only job is to say a site has gone dark.
 
-SUBMIT THESE THREE
-------------------
-
-1. sos_alert            Category: UTILITY
-   Sent to: security head + committee, the moment a resident presses SOS.
-
-   🆘 *Defender Octa* — {{1}}
-
-   Flat {{2}} · {{3}}
-   Time {{4}}
-   {{5}}
-
-   Acknowledge on the dashboard within 3 minutes or this escalates.
-
-   {{1}} society name · {{2}} flat · {{3}} resident name
-   {{4}} time · {{5}} incident id or the resident's note
-
-2. incident_escalation  Category: UTILITY
-   Sent to: you (and the security head) when an incident is NOT
-   acknowledged inside the window.
-
-   ⚠️ *Defender Octa* — {{1}}
-
-   {{2}} has not been acknowledged for {{3}} minutes.
-   Incident {{4}}.
-
-   {{1}} society name · {{2}} what happened · {{3}} minutes waited
-   {{4}} incident id
-
-3. morning_brief        Category: UTILITY
-   Sent to: the committee's nominated number, 7:35 am.
-
-   ☀️ *Defender Octa* — {{1}} morning brief
-
-   {{2}}
-
-   Response score: {{3}}
-
-   {{1}} society name · {{2}} the night in one paragraph
-   {{3}} score out of 100, or "nothing to score"
+The rule from here: the code is the source of truth for WHICH templates
+exist. Anything that reads a WA_TPL_* variable belongs in this table.
 
 
-ONLY IF A SOCIETY ASKS FOR RESIDENT WHATSAPP
---------------------------------------------
+THE SIX
+-------
+env var             template name         SID                                  status
+-----------------   -------------------   ----------------------------------   --------
+WA_TPL_SOS          resident_sos_alert    HX94bacbb39552d1ccd9767d5f52dc69a7   APPROVED
+WA_TPL_ESCALATION   guard_escalation      HX15cc176aeebc992ed6cbdc464bdb563f   APPROVED
+WA_TPL_BRIEF        resident_morning_brief HX360bae40df9c4b31ec689c7ef396e3bf  APPROVED
+WA_TPL_VISITOR      visitor_at_gate       HX1047e6ea862699667d5f320d3807f830   APPROVED
+WA_TPL_CONTRACTOR   contractor_movement   (awaiting approval)                  SUBMITTED 16 Oct
+WA_TPL_MONITOR      site_monitor          (awaiting approval)                  SUBMITTED 16 Oct
 
-4. vehicle_movement     Category: UTILITY
-   🚗 *Defender Octa* — {{1}}
+The four approved ones were created 1 Oct and confirmed on 16 Oct:
+"WhatsApp approval status: Approved", category Utility, and channel
+eligibility includes WhatsApp BUSINESS INITIATED — which is the mode that
+matters. User-initiated only works inside the 24-hour window the sandbox
+already gives you.
 
-   {{2}} {{3}} {{4}} at {{5}}.
-   You asked to be told when your vehicle moves — turn this off in the app.
-
-   {{1}} society · {{2}} plate · {{3}} entered/left · {{4}} gate · {{5}} time
-
-5. household_decision   Category: UTILITY
-   *Defender Octa* — {{1}}
-
-   Your request to add {{2}} to flat {{3}} was {{4}}.
-
-   {{1}} society · {{2}} what was requested · {{3}} flat
-   {{4}} approved / not approved
-
-
-NOT NEEDED ANY MORE
--------------------
-   login_code          residents sign in with flat + PIN
-   visitor_at_gate     app notification
-   hold_at_gate        app notification
-   pass_used           app notification
+A Content SID is HX + 32 hex = 34 characters. The code checks the SHAPE
+and falls back to freeform if it fails (OCT-120), so a mistyped SID
+produces a silent freeform send, not an error.
 
 
-NOTES FOR THE APPLICATION
+WHERE EACH IS READ, AND THE VARIABLE ORDER
+------------------------------------------
+Variable order is not negotiable: it is the order the caller passes.
+Changing the template without changing the caller breaks the send.
+
+1. WA_TPL_SOS          whatsapp_alerts.WA_TEMPLATES["sos"]
+   Resident presses SOS -> security head + committee.
+
+2. WA_TPL_ESCALATION   whatsapp_alerts.WA_TEMPLATES["escalation"]
+   An incident not acknowledged inside the window.
+
+3. WA_TPL_BRIEF        whatsapp_alerts.WA_TEMPLATES["brief"]
+   Morning brief, 7:35 am, to the committee's nominated number.
+
+4. WA_TPL_VISITOR      visitor_notify.py — its OWN credential path, not
+   whatsapp_alerts. Somebody is standing at the gate. OCT-128/OCT-129.
+
+5. WA_TPL_CONTRACTOR   whatsapp_alerts.WA_TEMPLATES["contractor"]
+   contractors.py _notify_whatsapp(), added 7 Oct.
+   send_alert(to, "contractor", [who, direction, gate, when], body)
+       {{1}} who (name, or "name (company)")
+       {{2}} IN or OUT
+       {{3}} gate
+       {{4}} time
+
+6. WA_TPL_MONITOR      site_heartbeat.py — runs on the HOST under cron,
+   reads cfg["wa_tpl_monitor"] OR the env var. Not in a container.
+   variables=[tag, name, detail, time]
+       {{1}} tag, INCLUDING its emoji (the code sends "🔴 BLIND" /
+             "🟢 RESTORED") — the template must NOT add its own
+       {{2}} site name
+       {{3}} what happened
+       {{4}} time
+   This is the most important one. It alerts the founder, who has no
+   reason to have messaged the business, and it only transmits when a
+   site is ALREADY DOWN. Without the template, the one message you
+   cannot afford to lose is the one that fails — into a cron log.
+
+
+CATEGORY AND OPT-IN (unchanged, still true)
+-------------------------------------------
+Every template is UTILITY, never MARKETING: each is a response to
+something that happened at that person's own gate.
+
+Opt-in: staff numbers are given to us by the society in writing when it
+signs. Meta's form asks how people consented — say that.
+
+Business: S&N GuardianGrid Technologies. Sender display name shows
+"GuardianGrid"; the app installs as "Octa Resident". Decide which one a
+resident should see (noted in the runbook as unfinished).
+
+Residents are app-only — flat number plus the PIN on a printed slip, no
+phone number stored — so there is no login_code template and no
+hold_at_gate or pass_used. Those are app notifications.
+
+Optional, only if a society asks for resident WhatsApp (not submitted,
+switches default false in site_config.json):
+   vehicle_movement     "resident_whatsapp": true
+   household_decision   "resident_whatsapp": true
+
+
+WHAT TO DO WITH THIS LIST
 -------------------------
-* Business: S&N GuardianGrid Technologies. Use the Meta Business account
-  you already own; verification is the slow part, so start it first.
-* Opt-in: staff numbers are given to us by the society in writing when it
-  signs. Say so on the form — Meta asks how people consented.
-* Sender display name: "Defender Octa" (or "GuardianGrid Security").
-* Every template above is UTILITY, not MARKETING: each is a response to
-  something that happened at that person's own gate.
-* Until the sender is approved, Twilio's sandbox still works for numbers
-  that have joined it — fine for your own phone and for demos, not for a
-  client's security head.
+Switching the sender is docs/SWITCHOVER_RUNBOOK.md. Do not switch until
+all six have an approved SID: freeform from the production sender to a
+phone with no open window fails with error 63016 and nothing arrives.
+
+NOTE: that runbook still says "all four". It means all six. Fix it in
+the same change that sets the last two SIDs.
