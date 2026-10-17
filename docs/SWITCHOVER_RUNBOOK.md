@@ -1,11 +1,49 @@
 # WhatsApp sender switchover runbook
 
 Moving every alert off the Twilio sandbox (`whatsapp:+14155238886`) onto the
-production sender (`whatsapp:+918427590032`), and turning on the four
-approved templates at the same time.
+production sender (`whatsapp:+918427590032`), and turning on the templates
+at the same time.
 
-Written 1 Oct 2026. Register entries: OCT-86, OCT-96, OCT-128, OCT-129,
-OCT-130, and OCT-04 for the restart trap.
+Written 1 Oct 2026. **Corrected 17 Oct 2026: this document said "four
+templates" throughout and there are six.** It also claimed the heartbeat
+does not read the environment, which stopped being true when `_cred()` was
+added. Both errors are corrected below, where they were.
+
+Register entries: OCT-86, OCT-96, OCT-128, OCT-129, OCT-130, OCT-170, and
+OCT-04 for the restart trap.
+
+---
+
+## The six templates, and where each one is set
+
+`WHATSAPP_TEMPLATES.txt` in the repository root is the authoritative list of
+SIDs. This table is about **where each value has to be written**, which is
+not the same place for all six and is what this runbook got wrong.
+
+| env var | template | written where | verified how |
+|---|---|---|---|
+| `WA_TPL_SOS` | `resident_sos_alert` | container env files | `wa.WA_TEMPLATES` |
+| `WA_TPL_ESCALATION` | `guard_escalation` | container env files | `wa.WA_TEMPLATES` |
+| `WA_TPL_BRIEF` | `resident_morning_brief` | container env files | `wa.WA_TEMPLATES` |
+| `WA_TPL_CONTRACTOR` | `contractor_movement` | container env files | `wa.WA_TEMPLATES` |
+| `WA_TPL_VISITOR` | `visitor_at_gate` | container env files | `visitor_notify` constant |
+| `WA_TPL_MONITOR` | `site_monitor` | **`heartbeat_config.json`** | `site_heartbeat._cred()` |
+
+Three modules read these, three different ways, each carrying its own copy
+of the 34-character shape check:
+
+- `whatsapp_alerts.py` holds a `WA_TEMPLATES` dict of **four** of them.
+  `visitor` and `monitor` are not in it, so any check that iterates that
+  dict is checking four of six.
+- `visitor_notify.py` reads `WA_TPL_VISITOR` into a module constant **at
+  import time** — another reason Step 4 must be a recreate, not a restart.
+- `site_heartbeat.py` reads `WA_TPL_MONITOR` through `_cred()`, which takes
+  the environment first and `heartbeat_config.json` second. It runs on the
+  host under cron, and host cron does not load the container env files, so
+  **the JSON is the only reliable place to put it.**
+
+`site_monitor` is the template whose only job is to tell you a site has gone
+dark, and it is the one this runbook never mentioned.
 
 ---
 
@@ -34,9 +72,22 @@ across days.
 
 ## Preconditions — do not start until every line is true
 
-- [ ] All four templates show **Approved** in the Twilio Content Template
-      Builder, not "Pending" and not "Approved by Meta, pending Twilio".
-- [ ] All four Content SIDs are in hand: SOS, escalation, brief, visitor.
+- [ ] Every template you intend to switch on shows **Approved** in the
+      Twilio Content Template Builder — not "Pending" and not "Approved by
+      Meta, pending Twilio". Open each one and read the detail view: the
+      list-view colours are not approval status. `WhatsApp approval status:
+      Approved` with channel eligibility including **business initiated** is
+      what counts; user-initiated only works inside the 24-hour window the
+      sandbox already gives you.
+- [ ] The Content SIDs are in hand for all six: SOS, escalation, brief,
+      contractor, visitor, monitor.
+- [ ] **If contractor or monitor is still pending, decide explicitly what
+      happens to it.** Leaving its variable empty is a legitimate choice —
+      `send_alert()` falls back to freeform (OCT-129) — but on the
+      production sender freeform reaches nobody outside a 24-hour window.
+      For `site_monitor` that means the site-dark alert cannot be
+      delivered, so either wait for it or accept, in writing, that
+      site-dark alerting is off until it lands.
 - [ ] `visitor_notify.py` (OCT-128 / OCT-129) is committed and pushed.
 - [ ] You have a **cold phone** — a WhatsApp number that has NOT messaged
       +918427590032 in the last 24 hours — that you are allowed to send a
@@ -54,7 +105,7 @@ A Twilio Content SID is `HX` followed by **32 hexadecimal characters** —
 which means a mistyped SID produces a *freeform* send rather than an error.
 That is the quiet failure this whole runbook exists to avoid.
 
-For each of the four, count the characters and confirm it starts `HX`. If
+For each of the six, count the characters and confirm it starts `HX`. If
 any one of them is not exactly 34 characters, stop and fix it in the Twilio
 console before going further.
 
@@ -99,12 +150,17 @@ TWILIO_WHATSAPP_FROM=whatsapp:+918427590032
 WA_TPL_SOS=
 WA_TPL_ESCALATION=
 WA_TPL_BRIEF=
+WA_TPL_CONTRACTOR=
 WA_TPL_VISITOR=
 ```
 
+`WA_TPL_MONITOR` is deliberately **not** in this list. The heartbeat runs on
+the host under cron and never sees these files; it goes into
+`heartbeat_config.json` in Step 3.
+
 Paste each SID after its `=`. Save, then repeat for `primera.env` with the
-same five lines and the same four SIDs — the templates are account-level,
-not per-site.
+same six lines and the same SIDs — the templates are account-level, not
+per-site.
 
 Before saving, check there is no second `TWILIO_WHATSAPP_FROM` line further
 down the file. A duplicate key in an env file means the last one wins, and
@@ -114,16 +170,28 @@ the one you edited may not be the last one.
 
 ## Step 3 — edit heartbeat_config.json (this is the step that gets skipped)
 
-`site_heartbeat.py` runs on the **host**, not in a container, and takes its
-sender from `cfg["twilio_from"]` in its JSON config. **It does not read the
-environment at all** (OCT-130). Steps 2 and 4 will not touch it.
+`site_heartbeat.py` runs on the **host**, not in a container. Steps 2 and 4
+do not touch it.
+
+**Correction, 17 Oct.** This step used to say the heartbeat "does not read
+the environment at all (OCT-130)". That stopped being true when `_cred()`
+was added: it reads the environment **first** and `heartbeat_config.json`
+second, and prints a note if the two disagree. The practical conclusion is
+unchanged but the reason matters — the heartbeat runs under host cron, and
+host cron does not load the container env files, so the JSON is where these
+values reliably live. If `WA_TPL_MONITOR` ever does get exported into
+cron's environment, it silently wins over the JSON.
 
 ```
 sudo nano /opt/octa-ops/heartbeat_config.json
 ```
 
-Change `"twilio_from"` to `"whatsapp:+918427590032"`. Then check the file is
-still valid JSON before you walk away from it:
+Two keys, not one:
+
+- `"twilio_from"` -> `"whatsapp:+918427590032"`
+- `"wa_tpl_monitor"` -> the `site_monitor` Content SID
+
+Then check the file is still valid JSON before you walk away from it:
 
 ```
 python3 -c "import json;json.load(open('/opt/octa-ops/heartbeat_config.json'));print('valid json')"
@@ -143,7 +211,7 @@ sudo /opt/octa/deploy.sh
 
 `--env-file` is expanded into the container config at **create** time. A
 `docker restart` re-runs the baked-in environment and your new lines are
-invisible forever (OCT-04). `deploy_v2.sh` does `stop` + `rm` + `run`, so it
+invisible forever (OCT-04). `deploy.sh` does `stop` + `rm` + `run`, so it
 is a real recreate — but verify rather than trust:
 
 ```
@@ -161,7 +229,8 @@ not reload and everything below will mislead you. Stop and find out why.
 sudo docker exec octa-demo python -c "
 import os
 for k in ('TWILIO_ACCOUNT_SID','TWILIO_AUTH_TOKEN','TWILIO_WHATSAPP_FROM',
-          'WA_TPL_SOS','WA_TPL_ESCALATION','WA_TPL_BRIEF','WA_TPL_VISITOR'):
+          'WA_TPL_SOS','WA_TPL_ESCALATION','WA_TPL_BRIEF',
+          'WA_TPL_CONTRACTOR','WA_TPL_VISITOR'):
     v = os.environ.get(k,'')
     print('%-22s set=%-5s len=%-3d tail=%s' % (k, bool(v), len(v), v[-4:]))
 "
@@ -171,7 +240,9 @@ What to look for:
 
 - `TWILIO_WHATSAPP_FROM` tail is **0032**. If it is **8886** you are still
   on the sandbox and Step 2 did not take.
-- All four `WA_TPL_*` show `len=34`. Any other length is a bad paste.
+- Each `WA_TPL_*` you set shows `len=34`. Any other length is a bad
+  paste. An intentionally empty one shows `len=0` — make sure that is a
+  decision carried over from the preconditions and not a missed line.
 - `TWILIO_AUTH_TOKEN` shows `set=True`. The value is never printed.
 
 Then confirm the modules *resolved* them, which is a different claim from
@@ -185,6 +256,11 @@ print('from tail    ', wa.TWILIO_WHATSAPP_FROM[-4:])
 print('templates ok ', {k: len(v)==34 for k,v in wa.WA_TEMPLATES.items()})
 "
 ```
+
+`WA_TEMPLATES` holds **four** keys — sos, escalation, brief, contractor.
+`True` for all of them is not a pass for this switchover. Visitor is checked
+below, and monitor needs the check that follows it, which before 17 Oct did
+not exist.
 
 And the visitor module, which has its own credential path:
 
@@ -203,6 +279,39 @@ environment wins, so nothing is broken, but find out how that file got
 there.
 
 Repeat all three of these against `octa-primera`.
+
+### And the monitor — added 17 Oct, because it was never checked
+
+This one runs on the **host**, not in a container, so it is not a
+`docker exec`. It asks the heartbeat's own resolution path what it would
+use, which is a different claim from the JSON containing the right string:
+
+```
+python3 -c "
+import json, sys
+sys.path.insert(0, '/opt/octa-ops')
+import site_heartbeat as hb
+cfg = json.load(open('/opt/octa-ops/heartbeat_config.json'))
+frm = hb._cred(cfg, 'twilio_from', 'TWILIO_WHATSAPP_FROM')
+tpl = hb._cred(cfg, 'wa_tpl_monitor', 'WA_TPL_MONITOR')
+print('from tail      ', frm[-4:])
+print('monitor tpl len', len(tpl))
+print('monitor tpl ok ', hb._template_sid_looks_real(tpl))
+"
+```
+
+Expect `from tail 0032`, `len 34`, `ok True`.
+
+If `ok` is `False` with a non-zero length, the SID is mistyped and the
+heartbeat will send freeform — which, on the production sender, means the
+site-dark alert cannot reach anyone. If the length is 0, `wa_tpl_monitor`
+is not in the JSON at all; that is the state this runbook shipped in from
+1 Oct to 17 Oct.
+
+If a `NOTE: WA_TPL_MONITOR is set in both the environment and
+heartbeat_config.json and they disagree` line appears, the environment is
+winning. Remove the key from the JSON or fix the export — do not leave two
+sources of truth for the alert that reports an outage.
 
 ---
 
