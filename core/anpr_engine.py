@@ -39,6 +39,14 @@ STATE_CODES = {
     "PB": "Punjab",          "RJ": "Rajasthan",          "SK": "Sikkim",
     "TN": "Tamil Nadu",      "TS": "Telangana",          "TR": "Tripura",
     "UP": "Uttar Pradesh",   "UK": "Uttarakhand",        "WB": "West Bengal",
+    "LA": "Ladakh",
+    # Superseded codes still legally on the road. A 2009 Odisha
+    # vehicle carries OR, not OD; rejecting it would be wrong.
+    "OR": "Odisha (old series)",
+    "UA": "Uttarakhand (old series)",
+    "DH": "Dadra & Nagar Haveli (old series)",
+    "CT": "Chhattisgarh (alt series)",
+    "TG": "Telangana (alt series)",
 }
 VALID_STATE_CODES = set(STATE_CODES.keys())
 
@@ -47,6 +55,9 @@ VALID_STATE_CODES = set(STATE_CODES.keys())
 # ---------------------------------------------------------------------------
 BH_PATTERN  = re.compile(r"^(\d{2})(BH)(\d{4})([A-Z]{1,2})$")
 OLD_PATTERN = re.compile(r"^([A-Z]{2})(\d{1,2})([A-Z]{1,3})(\d{4})$")
+# Pre-2000 and rural plates: the letter series may be absent and the
+# number may be shorter than four digits (PB101234, HR26A123).
+LEGACY_PATTERN = re.compile(r"^([A-Z]{2})(\d{1,2})([A-Z]{0,3})(\d{1,4})$")
 
 # ---------------------------------------------------------------------------
 # Character confusion map — characters commonly mixed up by OCR
@@ -223,27 +234,66 @@ def correct_plate_text(raw: str) -> tuple:
 
     return best_result, best_format, best_score
 
-def is_valid_indian_plate(text):
+def plate_reject_reason(text):
+    """Why this read cannot be a real Indian plate, or None if it could be.
 
-    text = re.sub(r"[^A-Z0-9]", "", text.upper())
+    OCT-169. This replaced a check that passed anything 8-12 characters long
+    with two leading letters and two digits anywhere. ZZ8HG5174, LZ8HG5174,
+    OF53OV9006, RP8AA7777 and the eleven-character MHR26DO5554 all satisfied
+    that and were written to vehicle_events with a confidence score, from a
+    code path that had already looked ZZ up in STATE_CODES, got "Unknown",
+    and stored it anyway.
+
+    Rejecting is the useful outcome. A read the engine refuses costs the
+    guard ten seconds of typing. A read it accepts wrongly enters the
+    vehicle history, the blacklist comparison and the overnight-stay
+    report -- and HP8AA7777 is the dangerous shape, because HP is Himachal
+    Pradesh, so a wrong plate looks entirely legitimate forever.
+
+    Safe to reject hard here because correct_plate_text() has already tried
+    to repair an unrecognised state code through the CONFUSION map before
+    this runs. Anything still unrecognised could not be repaired into any
+    real code.
+    """
+    text = re.sub(r"[^A-Z0-9]", "", (text or "").upper())
 
     if len(text) < 8:
-        return False
+        return "too short"
+    # XX 00 ABC 0000 is the longest real old-format plate: 11 characters.
+    # The previous limit of 12 is what let MHR26DO5554 through.
+    if len(text) > 11:
+        return "too long"
+    if sum(c.isdigit() for c in text) < 2:
+        return "not enough digits"
 
-    if len(text) > 12:
-        return False
+    # BH series is 00 BH 0000 XX -- digits first, no state code.
+    if BH_PATTERN.match(text):
+        return None
 
-    # Must contain at least 2 digits
-    digit_count = sum(c.isdigit() for c in text)
-
-    if digit_count < 2:
-        return False
-
-    # First 2 chars should be letters
     if not text[:2].isalpha():
-        return False
+        return "does not start with a state code"
 
-    return True
+    # Shape. OLD_PATTERN requires a letter series and exactly 4 trailing
+    # digits; LEGACY_PATTERN also admits older plates with no letter series
+    # or fewer than four digits, which do still arrive at a village gate.
+    if not (OLD_PATTERN.match(text) or LEGACY_PATTERN.match(text)):
+        return "not a plate shape"
+
+    state = text[:2]
+    if state not in VALID_STATE_CODES:
+        return f"{state} is not an Indian state code"
+
+    return None
+
+
+def is_valid_indian_plate(text):
+    """Kept returning a plain bool on purpose.
+
+    Its one caller does `if not is_valid_indian_plate(corrected): continue`.
+    Returning a reason tuple here would make every rejection truthy and
+    silently accept everything, so the reason lives in its own function.
+    """
+    return plate_reject_reason(text) is None
 
 
 def classify_plate_color(roi: np.ndarray):
