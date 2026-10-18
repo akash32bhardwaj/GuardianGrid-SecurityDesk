@@ -91,16 +91,112 @@ def _clean_plate(p: str) -> str:
     return re.sub(r"[^A-Z0-9]", "", (p or "").upper())[:12]
 
 
-def _lookup(plate: str) -> dict:
-    """Resident lookup — defensive import so this file works standalone."""
+_MISS = {"found": False, "status": "UNKNOWN"}
+
+
+def _resident_db():
+    """The resident_db singleton, or None. Never raises."""
     try:
+        from resident_db import db
+        return db
+    except Exception as e:                  # module genuinely unavailable
+        logger.warning(f"resident_db unavailable: {e}")
+        return None
+
+
+def _lookup(plate: str) -> dict:
+    """Resident lookup, in the dict shape send_vehicle_alert expects.
+
+    OCT-171. This used to be:
+
         from resident_db import lookup_plate
         r = lookup_plate(plate)
         if isinstance(r, dict):
             return r
-    except Exception:
-        pass
-    return {"found": False, "status": "UNKNOWN"}
+
+    which is the same mistake OCT-77 fixed in canvas_routes.py, left in
+    place here for three months. There is no `lookup_plate` in resident_db
+    -- the module exposes a ResidentDatabase class and a singleton `db` --
+    so the import raised ImportError on EVERY call, the bare
+    `except Exception: pass` swallowed it, and this function returned
+    "not found" for every vehicle ever logged from the Gate Console.
+
+    What that cost, in order of seriousness:
+
+      * send_vehicle_alert() takes this dict as `resident_info` and gates
+        the blacklist branch on `found and status == "BLACKLISTED"`.
+        `found` was always False, so a BLACKLISTED vehicle logged by a
+        guard sent NO security alert and ignored no quiet hours. Meanwhile
+        commit_vehicle_event does its own lookup, so the database row says
+        BLACKLIST while nobody was told -- the record shows the system
+        knew and said nothing, which is the worst of the two states.
+      * the KNOWN branch never fired either, so a resident was never
+        notified that their own vehicle had entered.
+      * /api/gate/capture returned lookup=not-found always, so the guard
+        was never shown whose car it was.
+
+    The except now guards the LOOKUP rather than the import, so a real
+    failure is logged instead of being indistinguishable from "no such
+    plate".
+    """
+    db = _resident_db()
+    if db is None:
+        return dict(_MISS)
+    try:
+        r = db.lookup(plate)
+    except Exception as e:
+        logger.warning(f"resident lookup failed for {plate!r}: {e}")
+        return dict(_MISS)
+    if r is None:
+        return dict(_MISS)
+    out = r.to_dict()
+    out["found"] = True
+    out.setdefault("status", "KNOWN")
+    return out
+
+
+def _near_miss(plate: str):
+    """A registered plate one character from this read, or None.
+
+    OCT-171. Measured against the 91 captures in output/webcam (OCT-169),
+    the errors this engine makes are overwhelmingly single-character:
+    MH12BP8265 read as MH62BP8265, DL3CAB5678 as DL5CAB5078. The state-code
+    whitelist cannot catch those -- they are well-formed plates. A read one
+    edit from a REGISTERED vehicle almost certainly is that vehicle.
+
+    SUGGESTED, NEVER APPLIED, and that is deliberate.
+
+    The camera path in api_server.py does auto-snap to the registered
+    plate, and that is right there: residents pass repeatedly and
+    PlateVoter has already taken a majority across frames. Here there is
+    one photo, no consensus, and a guard standing at the gate -- and a
+    genuine visitor's plate can legitimately be one character from a
+    resident's. Auto-correcting would log a stranger as a resident, mark
+    an unknown vehicle KNOWN and skip the alert, which is worse than the
+    misread.
+
+    The same applies to BLACKLISTED matches, harder. A fuzzy hit does NOT
+    fire the blacklist alert: that would summon security to an innocent
+    person whose plate happens to be one character off. It is returned
+    with its status so the guard -- who can read the actual plate -- is
+    told to look twice.
+    """
+    db = _resident_db()
+    if db is None:
+        return None
+    try:
+        r = db.fuzzy_lookup(plate, max_distance=1)
+    except Exception as e:
+        logger.warning(f"fuzzy lookup failed for {plate!r}: {e}")
+        return None
+    if r is None or r.plate_number == plate:
+        return None
+    return {
+        "plate":    r.plate_number,
+        "resident": r.display_name,
+        "status":   r.status,
+        "distance": 1,
+    }
 
 
 def _save_upload(file, kind: str):
@@ -141,7 +237,8 @@ def gate_capture():
     path = _save_upload(f, kind)
     rel = os.path.relpath(path, _BASE_DIR)
     out = {"success": True, "image": rel, "kind": kind,
-           "plate": None, "confidence": 0, "lookup": None}
+           "plate": None, "confidence": 0, "lookup": None,
+           "suggest": None}
 
     if kind == "vehicle":
         plate, conf = _try_ocr(path)
@@ -149,6 +246,10 @@ def gate_capture():
         out["confidence"] = round(conf, 2)
         if plate:
             out["lookup"] = _lookup(plate)
+            # Only when the exact plate is not registered. A read that
+            # matches a resident exactly needs no second guess.
+            if not out["lookup"].get("found"):
+                out["suggest"] = _near_miss(plate)
     return jsonify(out)
 
 
