@@ -1932,8 +1932,46 @@ def notices_add():
     con = _con()
     cur = con.execute("INSERT INTO resident_notices (title, body, author, created_at, expires_at) "
                       "VALUES (?,?,?,?,?)", (title, body, author, _now_str(), exp))
-    con.commit(); nid = cur.lastrowid; con.close()
-    return jsonify({"success": True, "id": nid})
+    con.commit(); nid = cur.lastrowid
+
+    # OCT-165. A notice reaches phones only when the committee ASKS, per
+    # notice. The composer's checkbox is unchecked by default and this flag
+    # is absent-means-no, so the quiet path is the one you get by not
+    # thinking about it.
+    #
+    # Why it is not automatic: a committee that can buzz every handset will,
+    # residents mute the app, and then they miss the gate arrival ask and the
+    # panic acknowledgement -- the two things this product exists for. Spending
+    # the notification budget on "tanker at 6:30" is how the channel that
+    # matters gets turned off.
+    #
+    # Recipients come from resident_push, which only holds a row for someone
+    # who turned Instant notifications ON in the app. So this cannot reach a
+    # resident who never asked for notifications, and no new preference is
+    # needed to make that true.
+    phones = []
+    if data.get("notify"):
+        try:
+            phones = [r["phone"] for r in con.execute(
+                "SELECT DISTINCT phone FROM resident_push WHERE phone IS NOT NULL")]
+        except sqlite3.Error:
+            phones = []          # no subscriptions table yet: nobody to tell
+    con.close()
+    sent = len(phones)
+
+    if phones:
+        _push_to_phones(phones, {
+            "title": f"\U0001F4E2 {title}",
+            "body": (body or f"A notice from {_site_name()}")[:140],
+            "tag": f"notice-{nid}",
+            "url": "/resident",
+        })
+
+    # The count goes back so the composer can say where it went. "Posted"
+    # with no number cannot distinguish "sent to nine phones" from "sent to
+    # nobody because nobody has notifications on", and those need different
+    # reactions from the person who just clicked.
+    return jsonify({"success": True, "id": nid, "notified": sent})
 
 
 @resident_app_bp.route("/api/gate/notices/<int:nid>", methods=["DELETE"])

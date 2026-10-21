@@ -108,6 +108,33 @@ if s_max_days is not None and spans and max(spans) > s_max_days:
     fails.append("a chip offers %d days but the server clamps to %d"
                  % (max(spans), s_max_days))
 
+# ── the notify flag: OFF by default, same name on both sides ────────
+# The regression that matters is somebody changing useState(false) to true,
+# or "remembering" the last choice. Then "notify when it matters" quietly
+# becomes "notify always", residents mute the app, and they stop seeing the
+# gate arrival ask and the panic acknowledgement with it.
+if "data.get(\"notify\")" not in block:
+    fails.append("the server no longer reads a `notify` flag in notices_add()")
+if "notify" not in (re.search(r"body: JSON\.stringify\(\{(.*?)\}\)", jsx) or
+                    type("", (), {"group": lambda s, n: ""})()).group(1):
+    fails.append("the composer does not send `notify` in the POST body")
+
+m_def = re.search(r"const \[notify, setNotify\] = useState\((\w+)\)", jsx)
+if not m_def:
+    fails.append("could not find the notify state in CommitteeNotices.jsx")
+elif m_def.group(1) != "false":
+    fails.append("notify defaults to %s -- it must default to false, or every "
+                 "notice buzzes every phone by accident" % m_def.group(1))
+else:
+    print("  notify:  server reads it, composer sends it, default false")
+
+if "setNotify(false)" not in jsx:
+    fails.append("notify is not reset after a post -- the checkbox would stay "
+                 "armed and the next notice would notify without being asked")
+else:
+    print("  notify:  reset after each post, so it cannot stay armed")
+
+print()
 if fails:
     print("FAIL")
     for f in fails:
