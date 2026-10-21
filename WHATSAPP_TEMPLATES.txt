@@ -29,10 +29,47 @@ WA_TPL_SOS          resident_sos_alert    HX94bacbb39552d1ccd9767d5f52dc69a7   A
 WA_TPL_ESCALATION   guard_escalation      HX15cc176aeebc992ed6cbdc464bdb563f   APPROVED
 WA_TPL_BRIEF        resident_morning_brief HX360bae40df9c4b31ec689c7ef396e3bf  APPROVED
 WA_TPL_VISITOR      visitor_at_gate       HX1047e6ea862699667d5f320d3807f830   APPROVED
-WA_TPL_CONTRACTOR   contractor_movement   (awaiting approval)                  SUBMITTED 16 Oct
-WA_TPL_MONITOR      site_monitor          (awaiting approval)                  SUBMITTED 16 Oct
+WA_TPL_CONTRACTOR   contractor_movement_v2   HXff7c5e46414e3bff38e2ef84e4328a0c   SUBMITTED 21 Oct
+WA_TPL_MONITOR      site_monitor_v2          HX91bf5a6d3da345e1cdc868126a1253dc   SUBMITTED 21 Oct
 
-The four approved ones were created 1 Oct and confirmed on 16 Oct:
+SUPERSEDED - rejected 16 Oct, do not configure these:
+  (contractor_movement)   HX102131acbb4e8cc95897c1862c9d9bef   REJECTED
+  (site_monitor)          HXdca7e5ba3bc60eaa08dc90c0a17130a7   REJECTED
+
+The v2 pair was created 21 Oct through the Content API, not the
+Content Template Builder UI: the editor's brace auto-pairing turned a
+pasted {{3}} into a malformed placeholder and then counted it as a
+fifth variable, refusing to save without a fifth sample. A template
+expecting five values when the caller passes four fails on every real
+send. The API takes the body as exact JSON and cannot mangle it.
+
+Same four variables, same order as the originals. Only the body text
+is longer, which is what Meta's rejection asked for. Nothing in the
+code changes when these are approved - only the two SIDs above.
+
+FOUR of six are approved. contractor_movement and site_monitor are
+REJECTED and have been since 16 Oct 13:03 -- within minutes of submission,
+never pending. Meta's reason, identical for both:
+
+  "This template has too many variables for its length. Reduce the number
+   of variables or increase the message length."  (subCode 2388293)
+
+Both carry 4 variables in a short body. The fix is to LENGTHEN the body,
+not to change the variable count, because the caller's argument order is
+fixed and documented below.
+
+Also found 20 Oct and NOT previously recorded: resident_morning_brief is
+category MARKETING, not UTILITY. The claim further down this file that
+every template is utility is false for that one. Marketing templates cost
+more in India, need marketing opt-in, and are throttled to users who have
+not given it.
+
+This file said APPROVED for all six for about an hour on 20 Oct, written
+from a verbal confirmation rather than from the per-template detail view.
+The Twilio LIST view has now misled three separate times. The only
+trustworthy source is the ApprovalRequests API or the detail page.
+
+Original note on the first four:
 "WhatsApp approval status: Approved", category Utility, and channel
 eligibility includes WhatsApp BUSINESS INITIATED — which is the mode that
 matters. User-initiated only works inside the 24-hour window the sandbox
