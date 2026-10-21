@@ -519,18 +519,96 @@ def residents_summary():
     return jsonify(out)
 
 
+TEMPLATE_COLUMNS = ["Block", "Flat", "Owner Name", "Mobile",
+                    "Vehicle 1", "Vehicle 2", "Vehicle 3", "Model", "Color"]
+
+# Kept on the NOTES sheet, not the data sheet. See build_template_workbook.
+TEMPLATE_EXAMPLE = [
+    ["B", "302", "Rohit Sharma", "9876543210", "PB08EY5332", "", "", "Hyundai i20", "White"],
+    ["A", "105", "Gurpreet Kaur", "9810012345", "PB10AB2025", "PB10CD7788", "", "Swift / City", "Grey"],
+    ["", "C-204", "Simran Bedi", "9812233445", "", "", "", "", ""],
+]
+
+TEMPLATE_NOTES = [
+    ("One row per flat.", "Put that flat's cars in Vehicle 1, Vehicle 2, Vehicle 3. "
+     "If a flat has more, just add a Vehicle 4 column -- every column whose name "
+     "mentions a vehicle is read."),
+    ("Or one row per vehicle.", "Repeating the same flat on several rows also works. "
+     "Use whichever is easier to type."),
+    ("The flat may include the block.", "\"C-204\" in the Flat column is fine -- then "
+     "leave Block empty. Both forms end up the same."),
+    ("Mobile is the login.", "10 digits. This is the number the resident logs into the "
+     "app with -- there is no password. A wrong number means that resident cannot get "
+     "in, so it is the one column worth double-checking."),
+    ("Only Flat is required.", "A flat with no car and no mobile still belongs in the "
+     "list, like C-204 below. It can be filled in later."),
+    ("Column names are matched loosely.", "Case, spaces and underscores are ignored, and "
+     "common alternatives work: Tower or Wing for Block, Unit for Flat, WhatsApp or "
+     "Contact for Mobile."),
+    ("Plate spacing does not matter.", "PB 08 EY 5332 and PB08EY5332 are stored as the "
+     "same plate."),
+    ("A partial list is useful.", "Send what you have. Importing again later adds to it "
+     "rather than starting over."),
+]
+
+
+def build_template_workbook():
+    """The resident/vehicle collection sheet.
+
+    OCT-172. The data sheet carries HEADERS ONLY, deliberately. It used to
+    ship with two filled example rows, and a committee member who types
+    underneath them and forgets to delete them imports a stranger into a
+    real society's vehicle registry -- a perfectly valid row that no
+    validation would ever flag. The worked example moved to the Notes
+    sheet, which parse_sheet never sees because _read_rows reads
+    wb.active only.
+    """
+    import openpyxl
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Residents"
+    ws.append(TEMPLATE_COLUMNS)
+    for c in ws[1]:
+        c.font = Font(bold=True, color="FFFFFF")
+        c.fill = PatternFill("solid", fgColor="0E7490")
+    ws.freeze_panes = "A2"
+    for col, w in zip("ABCDEFGHI", (8, 10, 24, 14, 14, 14, 14, 20, 12)):
+        ws.column_dimensions[col].width = w
+
+    nt = wb.create_sheet("Notes")
+    nt["A1"] = "How to fill in the Residents sheet"
+    nt["A1"].font = Font(bold=True, size=13, color="0E7490")
+    row = 3
+    for head, body in TEMPLATE_NOTES:
+        nt.cell(row=row, column=1, value=head).font = Font(bold=True)
+        c = nt.cell(row=row, column=2, value=body)
+        c.alignment = Alignment(wrap_text=True, vertical="top")
+        row += 2
+    row += 1
+    nt.cell(row=row, column=1, value="Worked example").font = Font(bold=True, size=12)
+    row += 1
+    nt.append([])
+    for c, name in enumerate(TEMPLATE_COLUMNS, start=1):
+        cell = nt.cell(row=row, column=c, value=name)
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="334155")
+    for ex in TEMPLATE_EXAMPLE:
+        row += 1
+        for c, v in enumerate(ex, start=1):
+            nt.cell(row=row, column=c, value=v)
+    nt.column_dimensions["A"].width = 30
+    nt.column_dimensions["B"].width = 78
+
+    # _read_rows() uses wb.active, so the data sheet must be the active one.
+    wb.active = 0
+    return wb
+
+
 @resident_import_bp.route("/api/admin/residents/template")
 def residents_template():
-    import openpyxl
-    from openpyxl.styles import Font, PatternFill
-    wb = openpyxl.Workbook(); ws = wb.active; ws.title = "Residents"
-    ws.append(["Block", "Flat", "Owner Name", "Mobile", "Vehicle 1", "Vehicle 2", "Vehicle 3", "Model"])
-    for c in ws[1]:
-        c.font = Font(bold=True, color="FFFFFF"); c.fill = PatternFill("solid", fgColor="0E7490")
-    ws.append(["B", "302", "Akash Singh", "9876543210", "PB08EY5332", "", "", "Hyundai i20"])
-    ws.append(["A", "105", "Gurpreet Kaur", "9810012345", "PB10AB2025", "PB10CD7788", "", "Swift / City"])
-    for col, w in zip("ABCDEFGH", (8, 8, 24, 14, 14, 14, 14, 20)):
-        ws.column_dimensions[col].width = w
+    wb = build_template_workbook()
     b = io.BytesIO(); wb.save(b); b.seek(0)
     return send_file(b, as_attachment=True, download_name="DefenderOcta_Residents_Template.xlsx",
                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
