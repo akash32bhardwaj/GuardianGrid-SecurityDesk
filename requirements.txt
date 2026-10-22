@@ -13,6 +13,7 @@ cuda-pathfinder==1.6.0
 cuda-toolkit==13.0.3.0
 cycler==0.12.1
 easyocr==1.7.2
+fast-plate-ocr==1.1.0   # OCT-179: plate-trained CCT models, 8.6MB, ~23ms
 et_xmlfile==2.0.0
 filelock==3.32.0
 Flask==3.1.3

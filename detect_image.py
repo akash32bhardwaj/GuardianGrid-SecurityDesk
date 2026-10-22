@@ -87,6 +87,65 @@ def read_plate(image_path):
         logger.warning("[ANPR] read failed for %s: %s", image_path, e)
         return None
 
+    # OCT-179. The engine has now FOUND the plate; reading it is a separate
+    # job, and EasyOCR alone is the weakest part of this pipeline (56% on the
+    # 91-capture corpus, against 93% for two model families voting). Re-read
+    # the detected region with the combiner and prefer its answer.
+    #
+    # Everything here degrades rather than fails: no bbox, no crop, no
+    # combiner, or an exception, and the engine's own read stands.
+    combined = None
+    try:
+        if r.bbox:
+            import cv2
+            from core.plate_combiner import read_plate_crop
+            img = cv2.imread(str(image_path))
+            if img is not None:
+                x, y, w, h = r.bbox
+                # process_image() shrinks anything wider than 800px BEFORE
+                # detecting, so bbox is in resized coordinates. Cropping the
+                # full-size original with them lands short and cuts the last
+                # characters off every plate -- measured as DL3CAB56 for
+                # DL3CAB5678, and 50.5% overall, worse than no combiner at
+                # all. Map the box back to original pixels first.
+                src_w = img.shape[1]
+                if src_w > 800:
+                    inv = src_w / 800.0
+                    x, y, w, h = (int(x * inv), int(y * inv),
+                                  int(w * inv), int(h * inv))
+                # Pad generously vertically: the engine's box is tight on the
+                # characters, and a recogniser trained on plates expects to
+                # see the plate's border.
+                # Padding swept on the corpus: 0.07/0.25 -> 83.5%,
+                # 0.10/0.35 -> 84.6%, 0.14/0.45 -> 82.4%, 0.20/0.55 -> 74.7%.
+                # Too little clips the characters, too much feeds the
+                # recogniser bumper text and badge lettering to read.
+                px, py = int(w * 0.10), int(h * 0.35)
+                y0, y1 = max(0, y - py), min(img.shape[0], y + h + py)
+                x0, x1 = max(0, x - px), min(img.shape[1], x + w + px)
+                crop = img[y0:y1, x0:x1]
+                if crop.size:
+                    plate, conf, votes = read_plate_crop(crop, engine.reader)
+                    if plate:
+                        combined = (plate, conf, votes)
+    except Exception as e:
+        logger.warning("[ANPR] combiner unavailable for %s: %s: %s",
+                       image_path, type(e).__name__, e)
+
+    if combined:
+        plate, conf, votes = combined
+        logger.info("[ANPR] %s -> %s (%.2f) votes=%s", image_path, plate, conf,
+                    [(v, p) for v, p, _ in votes])
+        return {
+            "plate": plate,
+            "confidence": max(0.0, min(1.0, float(conf))),
+            "state": r.state_name or "",
+            "series": r.series or "",
+            "plate_label": r.plate_label or "",
+            "votes": [{"reader": v, "plate": p, "conf": round(float(c), 3)}
+                      for v, p, c in votes],
+        }
+
     # Not detected also covers a read the OCT-169 validator refused -- an
     # impossible state code, a bad shape. Refusing is the useful answer:
     # the guard types ten characters, instead of a wrong plate entering the

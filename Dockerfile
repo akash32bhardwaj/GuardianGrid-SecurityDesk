@@ -25,6 +25,19 @@ RUN grep -v -E -i 'cuda|nvidia|^torch([<>=!~].*)?$|^torchvision([<>=!~].*)?$' re
         --index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir -r req-clean.txt
 
+# OCT-179. Bake the plate-recognition models into the image (8.6MB total).
+# They would otherwise download on first use -- at a gate, with a guard
+# waiting, over whatever egress the client site happens to allow. A model
+# that downloads at request time is a model that is sometimes absent.
+RUN python -c "from fast_plate_ocr import LicensePlateRecognizer; \
+    [LicensePlateRecognizer(m) for m in \
+     ('cct-xs-v2-global-model', 'cct-s-v2-global-model')]" \
+ && python -c "import pathlib; from fast_plate_ocr.inference import hub; \
+    d = pathlib.Path(str(hub.MODEL_CACHE_DIR)); \
+    n = sum(1 for f in d.rglob('*.onnx')); \
+    print(f'[build] {n} plate model(s) cached in the image'); \
+    raise SystemExit(0 if n >= 2 else 1)"
+
 COPY . /app
 RUN mkdir -p /data
 

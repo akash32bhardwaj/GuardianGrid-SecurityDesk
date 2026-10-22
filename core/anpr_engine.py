@@ -356,6 +356,13 @@ class PlateResult:
 # ---------------------------------------------------------------------------
 # Preprocessing variants — generate several enhanced versions of a crop
 # ---------------------------------------------------------------------------
+# OCT-179 — see _detect_and_read for the measurement behind these.
+SEARCH_BOTTOM_FRACTION = 0.40   # scene photos: ignore the top of the frame
+PLATE_CROP_ASPECT = 2.2         # wider than this and the frame IS a plate
+                                # (an Indian single-row plate is ~4.5:1; the
+                                #  scanner crops at 3.2:1; a 16:9 scene is 1.78)
+
+
 def generate_variants(roi: np.ndarray) -> list:
     """Return list of preprocessed images (numpy arrays) to try OCR on.
     Reduced to 2 fast variants — speed matters for live video."""
@@ -432,7 +439,21 @@ class ANPREngine:
     # ----------------------------------------------------------------
     def _detect_and_read(self, img: np.ndarray) -> PlateResult:
         h_img, w_img = img.shape[:2]
-        bottom_start = int(h_img * 0.40)
+        # OCT-179. Searching only the bottom 60% is a POLE-CAMERA heuristic:
+        # in a driveway frame the vehicle sits low and ignoring the sky
+        # removes noise. The tablet scanner (OCT-175) sends a tight,
+        # plate-SHAPED crop -- the whole frame is the plate -- and cutting
+        # its top 40% removes the upper half of every character.
+        #
+        # Measured on the same 84 plates, both ways:
+        #     full photo         61.9%
+        #     tight plate crop    4.8%   <- what the tablet was sending
+        #     tight crop, this fix  57.1%
+        #
+        # So: keep the heuristic for scene photos, never apply it to an
+        # image that is already plate-shaped.
+        aspect = w_img / max(1, h_img)
+        bottom_start = 0 if aspect >= PLATE_CROP_ASPECT else int(h_img * SEARCH_BOTTOM_FRACTION)
         search_area  = img[bottom_start:, :]
 
         # Color-based candidates first — most accurate for Indian
