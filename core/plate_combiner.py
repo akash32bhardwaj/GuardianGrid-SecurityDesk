@@ -201,8 +201,36 @@ def read_plate_crop(crop, easyocr_reader):
     total = sum(score.values()) or 1.0
     share = score[best] / total
     agree = len(backers[best])
-    # Confidence is dominance, lifted by independent agreement.  On the
-    # corpus, every case where all readers agreed was correct; the cases
-    # with no majority are exactly the ones a guard should look at.
-    conf = min(1.0, share * (0.70 + 0.10 * agree))
-    return best, conf, votes
+    raw = min(1.0, share * (0.70 + 0.10 * agree))
+    return best, _calibrate(raw), votes
+
+
+# Measured on the 91 captures, raw dominance score against whether the read
+# was actually right:
+#
+#     raw < 0.40     4 reads,   0 correct      0.0%
+#     raw >= 0.40   79 reads,  77 correct     97.5%
+#
+# Dominance is not a probability: a correct read that two of four readers
+# disputed scores ~0.52, and the UI's amber floor (OCT-177) was calibrated
+# at 0.70 against EasyOCR's OWN confidence, which means something else
+# entirely. Shipping the raw number would have turned almost every correct
+# read amber -- and a warning that fires on everything is a warning nobody
+# reads.
+#
+# So the scale is mapped here, where the measurement lives, rather than by
+# changing the floor in the dashboard. 0.40 raw lands exactly on 0.70, the
+# existing floor, and the UI needs no change. It also keeps the fallback
+# honest: if the plate models are missing, detect_image returns EasyOCR's
+# own confidence untouched, on the scale the floor was built for.
+#
+# What this is NOT: a promise. Two wrong reads scored 0.76 and 0.80 after
+# calibration. Above the floor means "usually right", never "verified" --
+# the same rule OCT-177 states.
+CALIB_KNEE = 0.40
+
+
+def _calibrate(raw):
+    if raw < CALIB_KNEE:
+        return round(0.35 * (raw / CALIB_KNEE), 3)
+    return round(0.70 + 0.30 * min(1.0, (raw - CALIB_KNEE) / 0.50), 3)
