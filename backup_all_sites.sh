@@ -64,9 +64,21 @@ while IFS='|' read -r slug port data_dir config_dir env_file; do
   # bucket cannot even advertise what is in it. The passphrases are in
   # /root/.rclone.conf AND in a password manager off this machine --
   # a backup whose key dies with the server is not a backup.
-  TODAY="$(date +%F)"
-  SRC="${data_dir}/backups/backup_${TODAY}"
-  DEST="${OFFSITE_REMOTE}/${slug}/backup_${TODAY}"
+  # NO DATE ARITHMETIC HERE, deliberately. The first version of this step
+  # uploaded "backup_$(date +%F)" computed on the HOST, which runs UTC,
+  # while the container names its folder from its own clock, which is IST.
+  # Between 00:00 and 05:30 IST those are different days -- and the backup
+  # cron fires at 02:30 IST, inside that window every single night. It
+  # uploaded yesterday's folder, reported "3 file(s) verified", and exited
+  # 0. The off-site copy would have been permanently one day stale, and the
+  # missing day would have been the most recent one.
+  #
+  # That is OCT-24b's shape for the fourth time: two clocks, one boundary,
+  # and whatever stood outside the fix kept its own time. The cure is not a
+  # better timezone conversion. It is to copy the whole directory and let
+  # rclone work out what is new -- the entire tree is under 10MB.
+  SRC="${data_dir}/backups"
+  DEST="${OFFSITE_REMOTE}${slug}"
 
   if [ -z "${OFFSITE_REMOTE:-}" ]; then
     echo "!! OFFSITE_REMOTE unset — local copy only, nothing left this host" >&2
@@ -81,7 +93,7 @@ while IFS='|' read -r slug port data_dir config_dir env_file; do
     # Verify by READING IT BACK, not by trusting the exit code. A copy
     # that silently wrote nothing exits 0.
     want=$(find "$SRC" -type f | wc -l)
-    got=$(rclone lsf "$DEST" 2>/dev/null | wc -l)
+    got=$(rclone lsf -R --files-only "$DEST" 2>/dev/null | wc -l)
     if [ "$want" -eq 0 ] || [ "$want" -ne "$got" ]; then
       echo "!! $slug: off-site verify FAILED — $want file(s) local, $got off-site" >&2
       rc=1
@@ -89,8 +101,7 @@ while IFS='|' read -r slug port data_dir config_dir env_file; do
       echo "   off-site: $got file(s) verified at $DEST"
       # Prune old off-site copies. --min-age matches the local keep_days so
       # the two sides do not quietly diverge.
-      rclone delete "${OFFSITE_REMOTE}/${slug}" --min-age "${KEEP_DAYS}d" \
-        --rmdirs 2>/dev/null || true
+      rclone delete "$DEST" --min-age "${KEEP_DAYS}d" --rmdirs 2>/dev/null || true
     fi
   fi
 done < "$SITES_CONF"
