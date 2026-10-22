@@ -22,6 +22,12 @@ set -uo pipefail
 SITES_CONF="${SITES_CONF:-/opt/octa-ops/sites.conf}"
 KEEP_DAYS="${1:-14}"
 
+# The rclone remote that holds the off-site copy. "octa:" is a crypt remote
+# wrapping b2raw:octa-backups-sn/octa, so everything written through it is
+# encrypted before it leaves this machine. Set to empty to disable, which
+# makes this script fail loudly rather than silently keeping one copy.
+OFFSITE_REMOTE="${OFFSITE_REMOTE-octa:}"
+
 [ -r "$SITES_CONF" ] || { echo "!! cannot read $SITES_CONF" >&2; exit 2; }
 
 rc=0
@@ -44,6 +50,48 @@ while IFS='|' read -r slug port data_dir config_dir env_file; do
   if ! docker exec "$container" python /app/backup.py --keep-days "$KEEP_DAYS"; then
     echo "!! $container: backup failed" >&2
     rc=1
+    continue
+  fi
+
+  # ── off-site copy ────────────────────────────────────────────────
+  # OCT-178. Everything above produces a copy on the SAME DISK as the
+  # original. That is not a backup; it is a second file. This step is the
+  # only part of the chain that survives the droplet.
+  #
+  # Encrypted before it leaves: the archive holds residents' names, phone
+  # numbers, flat numbers and vehicle plates, which is personal data under
+  # DPDP. rclone's crypt remote encrypts contents AND filenames, so the
+  # bucket cannot even advertise what is in it. The passphrases are in
+  # /root/.rclone.conf AND in a password manager off this machine --
+  # a backup whose key dies with the server is not a backup.
+  TODAY="$(date +%F)"
+  SRC="${data_dir}/backups/backup_${TODAY}"
+  DEST="${OFFSITE_REMOTE}/${slug}/backup_${TODAY}"
+
+  if [ -z "${OFFSITE_REMOTE:-}" ]; then
+    echo "!! OFFSITE_REMOTE unset — local copy only, nothing left this host" >&2
+    rc=1
+  elif [ ! -d "$SRC" ]; then
+    echo "!! $slug: no local backup at $SRC to upload" >&2
+    rc=1
+  elif ! rclone copy "$SRC" "$DEST" --transfers 2 --retries 3 2>&1; then
+    echo "!! $slug: off-site upload failed" >&2
+    rc=1
+  else
+    # Verify by READING IT BACK, not by trusting the exit code. A copy
+    # that silently wrote nothing exits 0.
+    want=$(find "$SRC" -type f | wc -l)
+    got=$(rclone lsf "$DEST" 2>/dev/null | wc -l)
+    if [ "$want" -eq 0 ] || [ "$want" -ne "$got" ]; then
+      echo "!! $slug: off-site verify FAILED — $want file(s) local, $got off-site" >&2
+      rc=1
+    else
+      echo "   off-site: $got file(s) verified at $DEST"
+      # Prune old off-site copies. --min-age matches the local keep_days so
+      # the two sides do not quietly diverge.
+      rclone delete "${OFFSITE_REMOTE}/${slug}" --min-age "${KEEP_DAYS}d" \
+        --rmdirs 2>/dev/null || true
+    fi
   fi
 done < "$SITES_CONF"
 
