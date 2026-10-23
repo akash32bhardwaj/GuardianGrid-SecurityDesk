@@ -1655,9 +1655,87 @@ def cameras_route():
 @app.route("/cameras/ai_status")
 def cameras_ai_status():
     """Per-camera AI attention state for the patrol widget:
-    tier (continuous/motion), awake, wakes (today), online, counts."""
+    tier (continuous/motion), awake, wakes (today), online, counts.
+
+    On a demo site (site_config "demo": {"demo_mode": true}) with no real
+    cameras configured, this returns a sample camera fleet instead, so the
+    Guardian AI patrol panel has something to show prospects. Every sample
+    row carries "simulated": true. A real site is never affected: the sample
+    is only used when demo_mode is on AND no real camera is configured.
+    """
     from rtmp_proxy import get_all_cam_stats
-    return jsonify(get_all_cam_stats())
+    real = get_all_cam_stats()
+    if _demo_mode_on() and not any(c.get("configured") for c in real):
+        return jsonify(_demo_patrol_fleet())
+    return jsonify(real)
+
+
+# ── Demo-only sample camera fleet for the Guardian AI patrol panel ──
+# Names match the gates seed_demo.py writes events for, so the per-camera
+# "events logged today" counts in the panel come from the real demo rows.
+# (name, tier, base wakes by end of day)
+_DEMO_PATROL_CAMS = [
+    ("Main Gate",              "continuous", 0),
+    ("Basement Entry",         "continuous", 0),
+    ("Garden Gate",            "motion",     38),
+    ("Visitor Parking",        "motion",     24),
+    ("Clubhouse Lobby",        "motion",     17),
+    ("Perimeter - North Wall", "motion",     9),
+]
+
+
+def _demo_mode_on() -> bool:
+    try:
+        from site_config import resolve_site_config_path
+        with open(resolve_site_config_path(), encoding="utf-8") as f:
+            cfg = json.load(f)
+        return bool((cfg.get("demo") or {}).get("demo_mode", False))
+    except Exception:
+        return False
+
+
+def _demo_patrol_fleet() -> list:
+    """Plausible, slowly changing AI state for the sample cameras.
+
+    - Tier 1 cameras are always awake (full AI every cycle).
+    - Tier 2 cameras sleep when quiet and wake on movement: each one is
+      awake for roughly a third of the time, in a rotating pattern that
+      changes every couple of minutes, so the panel looks alive.
+    - Wake counts climb through the day (none overnight beyond a few),
+      plus extra wakes for each event the demo data logged at that gate.
+    """
+    now = datetime.now()
+    mins = now.hour * 60 + now.minute
+    # share of the day's movement that has happened by now (busy 7am-10pm)
+    day_share = min(1.0, max(0.05, (mins - 6 * 60) / (16 * 60)))
+    try:
+        from db import camera_heat
+        counts = {}
+        for r in camera_heat():
+            counts[r["camera"]] = counts.get(r["camera"], 0) + (r.get("n") or 0)
+    except Exception:
+        counts = {}
+
+    fleet = []
+    for i, (name, tier, base) in enumerate(_DEMO_PATROL_CAMS, start=1):
+        motion = tier == "motion"
+        events = counts.get(name, 0)
+        wakes = int(base * day_share) + events * 2 + (i % 3) if motion else 0
+        awake = True if not motion else ((mins // 2 + i) % 3 == 0)
+        fleet.append({
+            "cam_id": i,
+            "name": name,
+            "ai_mode": "anpr" if name == "Main Gate" else "",
+            "tier": tier,
+            "awake": awake,
+            "wakes": wakes,
+            "configured": True,
+            "online": True,
+            "persons": 0,
+            "vehicles": events,
+            "simulated": True,
+        })
+    return fleet
 
 @app.route("/api/reports")
 @feature_required("pdf_reports")
