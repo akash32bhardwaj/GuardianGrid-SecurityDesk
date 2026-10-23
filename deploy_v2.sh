@@ -228,6 +228,11 @@ install_script /opt/octa/deploy_v2.sh   /opt/octa/deploy.sh
 install_script /opt/octa/reset_demo.sh  /opt/octa/reset_demo.sh
 install_script /opt/octa/run_job.sh     /opt/octa/run_job.sh
 install_script /opt/octa/new_site.sh    /opt/octa-ops/new_site.sh
+# OCT-181. Retiring a site was three edits in three places done from
+# memory, and the one that got missed kept the monitor alerting on a
+# client who had already left. Installed here so the script that undoes
+# new_site.sh lands in the same directory as new_site.sh.
+install_script /opt/octa/retire_site.sh /opt/octa-ops/retire_site.sh
 # OCT-118. Left off this list when it was written, so it arrived through the
 # git pull as -rw-r--r-- and `sudo /opt/octa/set_site_password.sh` answered
 # "command not found" -- for a file plainly sitting there. Git does not
