@@ -111,7 +111,7 @@ def _canon(raw):
     return cand if is_valid_indian_plate(cand) else None
 
 
-def _easy_votes(reader, crop):
+def _easy_votes(reader, crop, want_dets=False):
     """EasyOCR, once per preprocessing variant.
 
     Candidate assembly matters more than preprocessing: Indian plates carry
@@ -121,6 +121,7 @@ def _easy_votes(reader, crop):
     best VALID candidate, is worth about 11 points on its own.
     """
     out = []
+    first_dets, first_scale = [], 1.0
     variants = [("color", 120)] if FAST_PROFILE else [("color", 120), ("sharp", 120)]
     for mode, target_h in variants:
         img = crop
@@ -150,7 +151,9 @@ def _easy_votes(reader, crop):
                     best = (cand, conf)
         if best:
             out.append(("easy-" + mode, best[0], best[1]))
-    return out
+        if mode == "color":
+            first_dets, first_scale = dets, target_h / crop.shape[0]
+    return (out, first_dets, first_scale) if want_dets else out
 
 
 def _fpo_votes(crop):
@@ -178,6 +181,49 @@ def _fpo_votes(crop):
     return out
 
 
+def _plate_box_crop(crop, dets, scale, pad_x=0.06, pad_y=0.22):
+    """Localise the plate INSIDE a loose crop, using EasyOCR's own text boxes.
+
+    OCT-182. The engine's detector returns a horizontal band of the vehicle,
+    not a plate: on a real photo of a car it handed back the whole front
+    bumper -- grille, fog lamp, part of the next car -- with the plate about
+    a quarter of the width. EasyOCR copes, because it runs text detection
+    inside whatever it is given. The CCT models cannot: they are
+    RECOGNISERS, trained on images that are just a plate, so a bumper
+    returns an empty string and the vote silently drops to EasyOCR alone --
+    which is the 56% engine, not the 93% one.
+
+    So the text detector we are already paying for is used to find the
+    plate, and the plate-trained models are handed a plate.
+    """
+    if crop is None or not dets or scale <= 0:
+        return None
+    s = scale
+    cands = [d for d in dets if len(_clean(d[1])) >= 2]
+    if not cands:
+        return None
+    # The longest run of characters anchors the plate; anything sitting on
+    # the same horizontal band belongs to it. A plate is one line of text,
+    # so this rejects the model badge above it and the bumper text below.
+    cands.sort(key=lambda d: -len(_clean(d[1])))
+    anchor = cands[0]
+    ay = sum(p[1] for p in anchor[0]) / 4.0
+    ah = max(p[1] for p in anchor[0]) - min(p[1] for p in anchor[0])
+    band = [d for d in cands
+            if abs(sum(p[1] for p in d[0]) / 4.0 - ay) < max(ah * 0.8, 8)]
+    xs = [p[0] for d in band for p in d[0]]
+    ys = [p[1] for d in band for p in d[0]]
+    x0, x1 = min(xs) / s, max(xs) / s
+    y0, y1 = min(ys) / s, max(ys) / s
+    bw, bh = x1 - x0, y1 - y0
+    if bw < 12 or bh < 6:
+        return None
+    x0 = int(max(0, x0 - bw * pad_x)); x1 = int(min(crop.shape[1], x1 + bw * pad_x))
+    y0 = int(max(0, y0 - bh * pad_y)); y1 = int(min(crop.shape[0], y1 + bh * pad_y))
+    out = crop[y0:y1, x0:x1]
+    return out if out.size else None
+
+
 def read_plate_crop(crop, easyocr_reader):
     """Read a plate from a tight crop.
 
@@ -187,7 +233,11 @@ def read_plate_crop(crop, easyocr_reader):
     """
     if crop is None or getattr(crop, "size", 0) == 0:
         return None, 0.0, []
-    votes = _easy_votes(easyocr_reader, crop) + _fpo_votes(crop)
+    # The plate-trained models get a tightly localised plate; EasyOCR gets
+    # the original crop, where its own detector does the localising.
+    ev, dets, scale = _easy_votes(easyocr_reader, crop, want_dets=True)
+    tight = _plate_box_crop(crop, dets, scale)
+    votes = ev + _fpo_votes(tight if tight is not None else crop)
     if not votes:
         return None, 0.0, []
 
