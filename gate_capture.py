@@ -216,7 +216,58 @@ def _save_upload(file, kind: str):
     os.makedirs(folder, exist_ok=True)
     path = os.path.join(folder, name)
     file.save(path)
+    _shrink_for_delivery(path)
     return path
+
+
+# A tablet photographs at 12 megapixels. The pole cameras this code was
+# written for produced ~130KB snapshots, so nothing ever needed shrinking.
+MAX_EDGE = 1600
+JPEG_QUALITY = 85
+
+
+def _shrink_for_delivery(path: str):
+    """Downscale an oversized capture in place. Never raises.
+
+    OCT-183. A guard's photo arrived at 3072x4096, 5.7MB. The alert fired
+    correctly, the plate was read correctly, and WhatsApp refused the
+    message:
+
+        [WA-VERIFY] ALERT NOT DELIVERED ... status=failed error=63019
+
+    63019 is "media failed to download" -- WhatsApp caps images at 5MB and
+    Twilio could not fetch it. So the one alert that matters, with the
+    evidence photo attached, is exactly the one that fails, and it fails
+    AFTER everything upstream has succeeded.
+
+    1600px on the long edge at q85 takes that file to 0.41MB -- fourteen
+    times smaller. Measured on the same photo: the plate read is identical
+    at 3072px, 2000px, 1600px and 1280px, so nothing is lost by this. It
+    also cuts the upload-to-answer time, which was 11 seconds, and stops
+    output/webcam growing by 6MB per scan.
+    """
+    try:
+        import cv2
+        img = cv2.imread(path)
+        if img is None:
+            return
+        h, w = img.shape[:2]
+        if max(h, w) <= MAX_EDGE and os.path.getsize(path) < 4_000_000:
+            return
+        scale = MAX_EDGE / max(h, w)
+        if scale < 1:
+            img = cv2.resize(img, None, fx=scale, fy=scale,
+                             interpolation=cv2.INTER_AREA)
+        cv2.imwrite(path, img, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
+        logger.info("[CAPTURE] %s shrunk %dx%d -> %dx%d, %.2fMB",
+                    os.path.basename(path), w, h,
+                    img.shape[1], img.shape[0], os.path.getsize(path) / 1e6)
+    except Exception as e:
+        # A capture that cannot be shrunk is still a capture. The alert may
+        # fail to attach it, which is the condition this function exists to
+        # prevent, but losing the photo entirely is worse.
+        logger.warning("[CAPTURE] could not shrink %s: %s: %s",
+                       path, type(e).__name__, e)
 
 
 # ── Routes ──────────────────────────────────────────────────────────
