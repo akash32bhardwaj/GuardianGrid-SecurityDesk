@@ -615,8 +615,8 @@ def residents_template():
 
 
 def _welcome_text(site, flat, name, link=""):
-    return (f"👋 *Defender Octa* — {site}\n\n"
-            f"Hi {name or 'there'}, your society has switched on Defender Octa, the AI gate "
+    return (f"👋 *GuardianGrid* — {site}\n\n"
+            f"Hi {name or 'there'}, your society has switched on GuardianGrid, the AI gate "
             f"security system. Flat {flat} now has its own app:\n\n"
             f"🔗 {link or _app_link()}\n\n"
             f"See who came to your flat, pre-approve guests with a gate pass, approve "

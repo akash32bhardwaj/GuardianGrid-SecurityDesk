@@ -1,5 +1,5 @@
 {
-  "_comment": "Defender Octa — TEMPLATE. Copy this file to site_config.json on each machine/site and fill in real values. The real site_config.json is git-ignored and must never be committed.",
+  "_comment": "GuardianGrid — TEMPLATE. Copy this file to site_config.json on each machine/site and fill in real values. The real site_config.json is git-ignored and must never be committed.",
 
   "society": {
     "name": "EXAMPLE Society Name",

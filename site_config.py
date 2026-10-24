@@ -112,7 +112,7 @@ CONFIG_PATH = resolve_site_config_path()
 
 # Safe defaults — used if the file is missing or a key is absent.
 _DEFAULTS = {
-    "society":   {"name": "Defender Octa", "site_id": "site-000", "location": ""},
+    "society":   {"name": "GuardianGrid Demo", "site_id": "site-000", "location": ""},
     "server":    {"port": 5000, "host": "0.0.0.0"},
     "camera":    {"enabled": True, "index": 0},
     "rtsp_cameras": [],

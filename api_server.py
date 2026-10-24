@@ -1400,7 +1400,7 @@ def generate_report():
     body = styles["BodyText"]
     story = []
 
-    story.append(Paragraph("DEFENDER OCTA — Daily Security Report", h1))
+    story.append(Paragraph("GuardianGrid — Daily Security Report", h1))
     story.append(Paragraph(f"S&N GuardianGrid Technologies · {day} · Generated {datetime.now().strftime('%d %b %Y, %H:%M')}", body))
     story.append(Spacer(1, 14))
 
@@ -3145,7 +3145,7 @@ def bootstrap():
     init_rtsp_cams(app)
 
     print(f"\n{'='*50}")
-    print(f"  DEFENDER OCTA — {CONFIG.society_name}")
+    print(f"  GUARDIANGRID — {CONFIG.society_name}")
     print(f"  Site: {CONFIG.site_id}  |  {CONFIG.location}")
     print(f"{'='*50}")
     print(f"  Dashboard : http://localhost:{CONFIG.port}")

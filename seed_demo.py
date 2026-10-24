@@ -165,7 +165,7 @@ def seed(days: int = 1):
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser(description="Seed or clear Defender Octa demo data")
+    ap = argparse.ArgumentParser(description="Seed or clear GuardianGrid demo data")
     ap.add_argument("--days", type=int, default=1, help="how many days back to seed")
     ap.add_argument("--clear", action="store_true", help="remove all demo rows")
     args = ap.parse_args()

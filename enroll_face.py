@@ -117,7 +117,7 @@ def remove(name):
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser(description="Enrol faces for Defender Octa")
+    ap = argparse.ArgumentParser(description="Enrol faces for GuardianGrid")
     ap.add_argument("--name", help="person's name")
     ap.add_argument("--flat", default="", help="flat/unit number")
     ap.add_argument("--watchlist", action="store_true",

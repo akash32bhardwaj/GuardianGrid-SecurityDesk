@@ -55,9 +55,9 @@ def _site_name():
             cfg = json.load(f)
         soc = cfg.get("society") or {}
         return (soc.get("name") or cfg.get("site_name")
-                or cfg.get("name") or "Defender Octa Site")
+                or cfg.get("name") or "GuardianGrid Site")
     except Exception:
-        return "Defender Octa Site"
+        return "GuardianGrid Site"
 
 
 def _gather(iid: str):
@@ -165,7 +165,7 @@ def generate_pdf(iid: str, out_path: str) -> bool:
     el = []
     el.append(Paragraph("INCIDENT REPORT", h1))
     el.append(Paragraph(
-        f"{_site_name()} · DEFENDER OCTA by S&amp;N GuardianGrid · "
+        f"{_site_name()} · S&amp;N GuardianGrid Technologies · "
         f"Generated {datetime.now():%d %b %Y, %H:%M}", sub))
     el.append(Spacer(1, 6))
 
@@ -286,7 +286,7 @@ def generate_pdf(iid: str, out_path: str) -> bool:
 
     el.append(Spacer(1, 10))
     el.append(Paragraph(
-        "This report was generated automatically by DEFENDER OCTA from "
+        "This report was generated automatically by GuardianGrid from "
         "tamper-resistant system records. Response times are measured by "
         "the platform, not self-reported.", sub))
 

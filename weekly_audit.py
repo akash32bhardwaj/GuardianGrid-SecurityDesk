@@ -72,7 +72,8 @@ def _site_name():
     try:
         from site_config import CONFIG
         name = (CONFIG.society_name or "").strip()
-        if name and name.lower() not in ("defender octa", "demo site"):
+        if name and name.lower() not in ("defender octa", "guardiangrid demo",
+                                         "demo site"):
             return name
     except Exception:
         pass
@@ -331,7 +332,7 @@ def render_pdf(w, out_path):
 
     c.setFillColor(HexColor(MUTED)); c.setFont(BODY, 7)
     c.drawString(18 * mm, 14 * mm,
-                 f"Generated automatically by Defender Octa \u00b7 {COMPANY} \u00b7 snguardiangrid.com")
+                 f"Generated automatically by GuardianGrid \u00b7 {COMPANY} \u00b7 snguardiangrid.com")
     c.save()
 
 # ------------------------------------------------------------------ main ---

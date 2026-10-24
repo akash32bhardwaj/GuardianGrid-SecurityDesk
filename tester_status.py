@@ -167,7 +167,7 @@ def main():
     status, ambiguous = resolve(TESTERS, rows)
 
     print()
-    print("  OCTA RESIDENT -- CLOSED TEST   (%s)" % now.strftime("%d %b %Y %H:%M"))
+    print("  GUARDIANGRID RESIDENT -- CLOSED TEST   (%s)" % now.strftime("%d %b %Y %H:%M"))
     print("  " + "-" * 88)
     print("  %-26s %-7s %-14s %-12s %s"
           % ("TESTER", "FLAT", "OPTED IN", "LAST OPENED", "NOTE"))

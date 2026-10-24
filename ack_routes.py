@@ -257,7 +257,7 @@ def _send_escalation_whatsapp(incident: dict, reason: str):
             logger.error(f"[ACK] escalation for {iid} has NO recipient "
                          f"configured - nobody will be told. Set "
                          f"SECURITY_WHATSAPP in this site's env file.")
-        msg = (f"\u26a0\ufe0f *DEFENDER OCTA \u2014 ESCALATION*\n\n"
+        msg = (f"\u26a0\ufe0f *GUARDIANGRID \u2014 ESCALATION*\n\n"
                f"\U0001F6A8 {incident.get('title', 'Incident')}\n"
                f"\U0001F4CD {incident.get('camera_name') or incident.get('camera') or 'site'}"
                f" \u00b7 {incident.get('severity', '')}\n"

@@ -42,7 +42,7 @@ def notify(message: str) -> bool:
             site = f"{CONFIG.society_name} ({CONFIG.site_id})"
         except Exception:
             pass
-        res = _send_whatsapp(to, f"⚠️ Defender Octa — {site}\n\n{message}")
+        res = _send_whatsapp(to, f"⚠️ GuardianGrid — {site}\n\n{message}")
         ok = bool((res or {}).get("success", res))
         print("[OPS] notification sent" if ok else f"[OPS] send failed: {res}")
         return ok

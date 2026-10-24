@@ -70,7 +70,7 @@ PHRASES = {
     "night_armed": {
         "hi": "रात्रि निगरानी सक्रिय। डिफेंडर ऑक्टा आपकी सुरक्षा में है।",
         "pa": "ਰਾਤ ਦੀ ਨਿਗਰਾਨੀ ਸਰਗਰਮ। ਡਿਫੈਂਡਰ ਔਕਟਾ ਤੁਹਾਡੀ ਸੁਰੱਖਿਆ ਵਿੱਚ ਹੈ।",
-        "en": "Night watch armed. Defender Octa is protecting this site.",
+        "en": "Night mode armed. GuardianGrid is protecting this site.",
     },
 }
 

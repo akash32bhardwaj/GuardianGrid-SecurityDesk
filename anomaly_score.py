@@ -248,7 +248,7 @@ def run_anomaly_check():
         to = getattr(cfg, "PATTERN_WHATSAPP", "") or \
             getattr(cfg, "SECURITY_WHATSAPP", "")
         from whatsapp_alerts import _send_whatsapp
-        msg = (f"\U0001F4C8 *DEFENDER OCTA \u2014 Activity anomaly*\n\n"
+        msg = (f"\U0001F4C8 *GUARDIANGRID \u2014 Activity anomaly*\n\n"
                f"{now_s['observed']} vehicle events this hour \u2014 "
                f"typical for this hour is {now_s['expected']:g}.\n"
                f"Deviation: {now_s['z']}\u03c3 ({now_s['band']})\n\n"

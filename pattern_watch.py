@@ -226,7 +226,7 @@ def _send_pattern_alert(finding) -> bool:
     if not to:
         return False
     msg = (f"{_ICONS.get(finding['pattern'], '⚠️')} "
-           f"*DEFENDER OCTA — Pattern detected*\n\n"
+           f"*GUARDIANGRID — Pattern detected*\n\n"
            f"*{_TITLES.get(finding['pattern'], finding['pattern'])}*\n"
            f"🚗 Plate: {finding['plate']}\n"
            f"📊 {finding['detail']}\n\n"

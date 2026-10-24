@@ -945,7 +945,7 @@ def otp_request():
     con.commit()
     con.close()
 
-    body = (f"🔐 *Defender Octa* — {_site_name()}\n\n"
+    body = (f"🔐 *GuardianGrid* — {_site_name()}\n\n"
             f"Your login code is *{otp}*\n"
             f"Valid for 5 minutes. Never share it — the guard or committee "
             f"will never ask for it.\n_S&N GuardianGrid_")
@@ -1459,7 +1459,7 @@ def create_pass():
         f"Flat: {res['flat_no']} ({res['name']})\n"
         f"Valid till {p['valid_to_h']}"
         + (f"\nVehicle: {plate}" if plate else "")
-        + "\nShow this code at the gate — Defender Octa")
+        + "\nShow this code at the gate — GuardianGrid")
     return jsonify({"success": True, "pass": p})
 
 
@@ -1649,7 +1649,7 @@ def gate_pass_use(code):
 
     # Tell the resident their guest is in (WhatsApp, background)
     def _notify():
-        msg = (f"✅ *Defender Octa* — {_site_name()}\n\n"
+        msg = (f"✅ *GuardianGrid* — {_site_name()}\n\n"
                f"{p['visitor_name']} ({p['visitor_type']}) entered on your pass "
                f"{p['code']} at {_fmt_time(now)}."
                + (f"\nVehicle: {plate_seen}" if plate_seen else "")
@@ -2044,7 +2044,7 @@ def sos():
             logger.error(f"[SOS] flat {flat} raised SOS and NO WhatsApp "
                          f"recipient is configured - nobody was messaged. "
                          f"Set SECURITY_WHATSAPP in this site's env file.")
-        msg = (f"🆘 *DEFENDER OCTA — RESIDENT SOS*\n\n"
+        msg = (f"🆘 *GUARDIANGRID — RESIDENT SOS*\n\n"
                f"🏠 Flat {flat} · {res['name']}\n"
                f"📞 {res['phone']}\n"
                f"🕒 {_fmt_time(_now_str())}"
@@ -2205,7 +2205,7 @@ def gate_arrival():
 
     def _nudge():
         phones = _flat_phones(flat)
-        msg = (f"🚪 *Defender Octa* — {_site_name()}\n\n"
+        msg = (f"🚪 *GuardianGrid* — {_site_name()}\n\n"
                f"{name}{' (' + purpose + ')' if purpose else ''} is at the gate for "
                f"flat {flat}.\nThe guard is holding them — open the app to "
                f"*Let in / Wait / Decline* within 3 minutes.")
@@ -2654,7 +2654,7 @@ def household_decide(rid, action):
             "body": f"Your request for flat {r['flat_no']} was {decided}.",
             "tag": f"household-{r['id']}", "url": "/resident"})
         if _resident_channels()["whatsapp"]:
-            msg = (f"{'✅' if action == 'approve' else '❌'} *Defender Octa* — {_site_name()}\n\n"
+            msg = (f"{'✅' if action == 'approve' else '❌'} *GuardianGrid* — {_site_name()}\n\n"
                    f"Your request to add {what} to flat {r['flat_no']} was "
                    f"{decided}.")
             _send_wa(r["resident_phone"], msg)
@@ -2771,7 +2771,7 @@ def _vehicle_alert_tick():
                                  "body": f"{r['camera'] or 'Gate'} · {_fmt_time(r['timestamp'])}",
                                  "tag": f"veh-{plate}", "url": "/resident"})
         if _resident_channels()["whatsapp"]:
-            msg = (f"🚗 *Defender Octa* — {_site_name()}\n\n"
+            msg = (f"🚗 *GuardianGrid* — {_site_name()}\n\n"
                    f"{plate} {verb} {r['camera'] or 'the gate'} at {_fmt_time(r['timestamp'])}."
                    f"\n_You asked to be told when your vehicle moves — turn this off in the app._")
             for ph in phones:
@@ -2800,7 +2800,7 @@ def _daily_brief_tick():
     text = _brief_text(reps[0]) if reps else "Quiet night — no incidents reported."
     score = reps[0].get("score") if reps else None
     if _resident_channels()["whatsapp"]:
-        msg = (f"☀️ *Defender Octa* — {_site_name()} morning brief\n\n{text}"
+        msg = (f"☀️ *GuardianGrid* — {_site_name()} morning brief\n\n{text}"
                + (f"\n\nSecurity score: {score}/100" if score is not None else "")
                + "\n_Daily brief — turn off in the app._")
         _bscore = f"{score}/100" if score is not None else "not scored yet"
@@ -2852,8 +2852,8 @@ ICON_512 = "iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6AAATWUlEQVR42u3dTU4b2xYG
 @resident_app_bp.route("/api/resident/manifest.webmanifest")
 def manifest():
     m = {
-        "name": f"Defender Octa — {_site_name()}",
-        "short_name": "Octa Resident",
+        "name": f"GuardianGrid — {_site_name()}",
+        "short_name": "GuardianGrid",
         "description": "Your society's gate, in your pocket.",
         "start_url": "/resident",
         "scope": "/resident",
@@ -3010,7 +3010,7 @@ self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 self.addEventListener('push', (event) => {
   let d = {};
   try { d = event.data ? event.data.json() : {}; } catch (e) {}
-  const title = d.title || 'Defender Octa';
+  const title = d.title || 'GuardianGrid';
   const opts = {
     body: d.body || '',
     icon: '/api/resident/icon-192.png',

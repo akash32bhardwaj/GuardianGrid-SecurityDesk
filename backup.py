@@ -175,7 +175,7 @@ def _prune(keep_days: int):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Back up a Defender Octa site")
+    ap = argparse.ArgumentParser(description="Back up a GuardianGrid site")
     ap.add_argument("--keep-days", type=int, default=14)
     ap.add_argument("--force", action="store_true",
                     help="retake today's backup even if it exists")

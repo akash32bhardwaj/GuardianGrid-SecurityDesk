@@ -77,7 +77,7 @@ def main():
     current = cfg.get("rtsp_cameras", [])
 
     print("=" * 55)
-    print("  DEFENDER OCTA - Add RTSP Cameras")
+    print("  GUARDIANGRID - Add RTSP Cameras")
     print("=" * 55)
     print("\nCurrent RTSP cameras in site_config.json:")
     show_current(current)
@@ -111,7 +111,7 @@ def main():
     print("  Saved. Final camera list:")
     show_current(cfg["rtsp_cameras"])
     print(f"\n  Backup of the old config: {bak.name}")
-    print("  Now (re)start Defender Octa to load the cameras.")
+    print("  Now (re)start GuardianGrid to load the cameras.")
     print("=" * 55)
 
 

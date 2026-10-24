@@ -51,9 +51,9 @@ def _site_name():
             cfg = json.load(f)
         soc = cfg.get("society") or {}
         return (soc.get("name") or cfg.get("site_name")
-                or cfg.get("name") or "Defender Octa Site")
+                or cfg.get("name") or "GuardianGrid Site")
     except (OSError, json.JSONDecodeError):
-        return "Defender Octa Site"
+        return "GuardianGrid Site"
 
 
 SITE_NAME    = _site_name()
@@ -628,7 +628,7 @@ def render_pdf(d, score, label, color, out_path):
     c.setFillColor(HexColor(MUTED))
     c.setFont("Helvetica", 7)
     c.drawString(18 * mm, 15 * mm,
-                 f"Generated automatically by Defender Octa · {COMPANY} · snguardiangrid.com")
+                 f"Generated automatically by GuardianGrid · {COMPANY} · snguardiangrid.com")
     c.save()
 
 # ------------------------------------------------------------- WhatsApp ----

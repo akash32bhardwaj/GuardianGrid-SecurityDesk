@@ -484,7 +484,7 @@ def _twiml(body: str, media_url: str = None) -> Response:
 # Routes
 # ════════════════════════════════════════════════════════════════════
 
-_HELP = ("🤖 *DEFENDER OCTA*\n"
+_HELP = ("🤖 *GUARDIANGRID*\n"
          "Reply with:\n"
          "▶️ *show* — video clip of the last alert\n"
          "📷 *photo* — snapshot of the last alert\n"

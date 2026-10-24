@@ -123,7 +123,7 @@ SSE_PING_SECONDS = 20
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Run Defender Octa via waitress.")
+    ap = argparse.ArgumentParser(description="Run GuardianGrid via waitress.")
     ap.add_argument("--host", default=None,
                     help="bind address (default: site_config.json)")
     ap.add_argument("--port", type=int, default=None,

@@ -86,7 +86,7 @@ def http_post(base, path, payload, timeout=8, _retry=True):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Defender Octa smoke test")
+    ap = argparse.ArgumentParser(description="GuardianGrid smoke test")
     ap.add_argument("--base", default="http://localhost:5000")
     ap.add_argument("--user", default=None,
                     help="admin username for the TARGET server (default: local config)")
@@ -101,7 +101,7 @@ def main():
     if "localhost" not in base and "127.0.0.1" not in base:
         args.remote = True
 
-    print(f"\n{C}Defender Octa smoke test · {base} · {TODAY}{N}\n")
+    print(f"\n{C}GuardianGrid smoke test · {base} · {TODAY}{N}\n")
 
     # ── 0. config & credentials ──────────────────────────────────
     print(f"{C}— Configuration —{N}")

@@ -204,12 +204,12 @@ con.close()
 if bad:
     sys.exit("Hash did not verify for: %s. Nothing printed." % ", ".join(bad))
 
-MSG = """Hi — the Octa Resident test is live. Three things, five minutes.
+MSG = """Hi — the GuardianGrid Resident test is live. Three things, five minutes.
 
 1) Tap this and accept, then install the app:
 {link}
 
-2) Open Octa Resident, tap "Just looking? Try the demo society",
+2) Open GuardianGrid Resident, tap "Just looking? Try the demo society",
    and enter society code DEMO.
 
 3) Log in with:

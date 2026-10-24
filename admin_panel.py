@@ -98,7 +98,7 @@ def index():
                 border:1px solid #f87171; }}
   .foot {{ color:#475569; font-size:12px; margin-top:18px; }}
 </style></head><body>
-<h1>Defender Octa &mdash; Demo Switchboard</h1>
+<h1>GuardianGrid &mdash; Demo Switchboard</h1>
 {rows}
 <div class="foot">Changes take ~15 seconds to reflect on the public URL.</div>
 </body></html>"""
