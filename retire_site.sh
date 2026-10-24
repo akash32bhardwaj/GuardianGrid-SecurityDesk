@@ -128,7 +128,7 @@ PORT="$(printf '%s' "$LINE" | cut -d'|' -f2 | tr -d ' ')"
 # ── 2) stop and remove the container ────────────────────────────────────────
 if docker inspect "$CONTAINER" >/dev/null 2>&1; then
   run "docker rm -f '$CONTAINER'"
-  echo "  ✅ container $CONTAINER removed"
+  [ "$DRY" = 0 ] && echo "  ✅ container $CONTAINER removed"
 else
   echo "  ·  no container named $CONTAINER"
 fi
@@ -275,11 +275,20 @@ else
   echo "       sudo $0 --purge $SLUG"
 fi
 
+if [ "$DRY" = 1 ]; then
+  HEADLINE="[dry-run] NOTHING WAS CHANGED. The above is what would happen."
+  REVERSIBLE="Run again without --dry-run to do it."
+else
+  HEADLINE="✅ $SLUG retired.${PORT:+  Port $PORT is now free.}"
+  REVERSIBLE="Reversible: the sites.conf line is commented, not deleted, and
+$HB_CONF.bak-$STAMP holds the monitor's previous state."
+fi
+
 # ── 6) what this script cannot reach ────────────────────────────────────────
 cat <<EOF
 
 ══════════════════════════════════════════════════════════════
-✅ $SLUG retired.${PORT:+  Port $PORT is now free.}
+$HEADLINE
 
 STILL MANUAL -- nothing here can do these for you:
   1. Cloudflare tunnel: remove the public hostname
@@ -290,8 +299,6 @@ STILL MANUAL -- nothing here can do these for you:
   3. The client's Pi, if one was installed: it will keep trying
      to reach a container that no longer exists.
 
-Reversible: the sites.conf line is commented, not deleted, and
-$HB_CONF.bak-$STAMP holds the monitor's
-previous state.
+$REVERSIBLE
 ══════════════════════════════════════════════════════════════
 EOF
